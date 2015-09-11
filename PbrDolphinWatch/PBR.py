@@ -11,6 +11,13 @@ import gevent, random
 
 from addresses import Locations
 from values import *
+from guiStateDistinguisher import Distinguisher, PbrGuis, PbrStates
+
+Side = enum(
+    BLUE = 0,
+    RED  = 1,
+    DRAW = 2,
+)
 
 def _reconnect(watcher, reason):
     if (reason == DisconnectReason.CONNECTION_CLOSED_BY_HOST):
@@ -21,97 +28,219 @@ def _reconnect(watcher, reason):
         # just tried to establish a connection, give it a break
         gevent.sleep(3)
     watcher.connect()
+
+# TODO for sideways remote, fix?    
+padValues = [WiimoteButton.RIGHT, WiimoteButton.DOWN, WiimoteButton.UP, WiimoteButton.LEFT]
     
 class PBR():
     def __init__(self):
+        self._distinguisher = Distinguisher(self._distinguishGui)
         self.watcher = DolphinWatch("localhost", 6000)
         self.watcher.onDisconnect(_reconnect)
-        self.watcher.onConnect(self.init)
+        self.watcher.onConnect(self._initDolphinWatch)
+        
+        # event callbacks
+        self._onWin = None
+        self._onState = None
+        self._onGui = None
+        self._onAttack = None
+        self._onDown = None
+        
+        self.moveBlueUsed = 0
+        self.moveRedUsed = 0
+        
+        self.state = 1234
+        self.stage = 0 # TODO set all this
+        self.pkmnBlue = {}
+        self.pkmnRed = {}
+        self.gui = PbrGuis.MENU_MAIN # last gui, for info
+        self._reset()
+        
+    def connect(self):
         self.watcher.connect()
         
-        #working data
-        self._occupiedPkmn = []
+    def _initDolphinWatch(self, watcher):
+        
+        # subscribing to all indicators of interest. mostly gui
+        self._subscribe(Locations.WHICH_PLAYER,           self._distinguishPlayer)
+        self._subscribe(Locations.GUI_STATE_MATCH,        self._distinguisher.distinguishMatch)
+        self._subscribe(Locations.GUI_STATE_BP,           self._distinguisher.distinguishBp)
+        self._subscribe(Locations.GUI_STATE_MENU,         self._distinguisher.distinguishMenu)
+        self._subscribe(Locations.GUI_STATE_RULES,        self._distinguisher.distinguishRules)
+        self._subscribe(Locations.GUI_STATE_ORDER,        self._distinguisher.distinguishOrder)
+        self._subscribe(Locations.GUI_STATE_BP_SELECTION, self._distinguisher.distinguishBpSelect)
+        self._subscribe(Locations.POPUP_BOX,              self._distinguisher.distinguishPopup)
+        self._subscribe(Locations.ORDER_LOCK_BLUE,        self._distinguishOrderLock)
+        self._subscribe(Locations.ORDER_LOCK_RED,         self._distinguishOrderLock)
+        self._subscribe(Locations.CURSOR_POS,             self._distinguishCursorPos)
+        self._subscribe(Locations.WINNER,                 self._distinguishWinner)
+        self._subscribe(Locations.IDLE_TIMER,             self._distinguishTimer)
+        self._subscribe(Locations.ATTACKING_MON,          self._distinguishMonAttack)
+        
+        # initially paused, because in state WAITING_FOR_NEW
+        self.watcher.pause()
+        self._setState(PbrStates.WAITING_FOR_NEW)
+        
+    def _subscribe(self, loc, callback):
+        self.watcher._subscribe(loc.length*8, loc.addr, callback)
+        
+    def _reset(self):
+        self.currentBlue = 0
+        self.currentRed = 0
+        self.bluesTurn = True
+        self.startsignal = False
+        self.newsignal = False
+        
+        # working data
+        self._bp_offset = 0
+        self._timerPrev = 0
+        self._posBlues = []
+        self._posReds = []
+        self._fClearedBp = False
+        self._fSelectedSingleBattle = False
+        self._fBlueSelectedBP = False
+        self._fBlueChoseOrder = False
+        
         self._cursorevents = {}
         self._scheduledEvent = None
         self._scheduledTime = 0
         self._scheduledArgs = None
-                
-        #counters
-        self._downBlue = 0
-        self._downRed = 0
-        self._selectedBox = 0
-        self._pkmnNumBlue = 0
-        self._pkmnNumRed = 0
-        self._pkmnToSelect = 3
-        self._bp_offset = 0
-        self._stage = 0
-        self._timerPrev = 0
-        self._stucks = 0
+    
+    ########################################################
+    ### The below functions are presented to the outside ###
+    ###         Use these to control the PBR API         ###
+    ########################################################
+            
+    def start(self):
+        self.startsignal = True
+        if self.state == PbrStates.WAITING_FOR_START:
+            self._setState(PbrStates.MATCH_RUNNING)
+            self.watcher.resume()
         
-        #flags
-        self._blueSelecting = True
-        self._changedToSingleBattle = False
-        self._randomizedBlue = False
-        self._randomizedRed = False
-        self._bpHelper = False
-        self._removePkmn = True
-        self._bpSelectEnabled = True
-        self._watchStuck = True
-        #self._confirmOrder = False
+    def new(self, stage, pkmnBlue, pkmnRed):
+        print("new match on stage %d" % stage)
+        print("blue: %s" % [p["name"] for p in pkmnBlue])
+        print("red: %s" % [p["name"] for p in pkmnRed])
+        self.newsignal = True
+        self.stage = stage
+        self.pkmnBlue = pkmnBlue
+        self.pkmnRed = pkmnRed
+        self._posBlues = [int(p["position"]) for p in pkmnBlue]
+        self._posReds = [int(p["position"]) for p in pkmnRed]
+        if self.state == PbrStates.WAITING_FOR_NEW:
+            self._setState(PbrStates.PREPARING_BP1)
+            self.watcher.resume()
+            #self._distinguishGui(self.gui) # wake, do whatever again
+            #self._pressTwo()
+            
+    def onWin(self, callback):
+        self._onWin = callback
         
-
-    def init(self, watcher):
-        self.subscribe(Locations.WHICH_PLAYER,           self.onWhichPlayer)
-        self.subscribe(Locations.GUI_STATE_MATCH,        self.onGuiMatch)
-        self.subscribe(Locations.GUI_STATE_BP,           self.onGuiBp)
-        self.subscribe(Locations.GUI_STATE_MENU,         self.onGuiMenu)
-        self.subscribe(Locations.GUI_STATE_RULES,        self.onGuiRules)
-        self.subscribe(Locations.GUI_STATE_ORDER,        self.onGuiOrder)
-        self.subscribe(Locations.GUI_STATE_BP_SELECTION, self.onGuiBpSelect)
-        self.subscribe(Locations.ORDER_LOCK_BLUE,        self.onOrderLock)
-        self.subscribe(Locations.ORDER_LOCK_RED,         self.onOrderLock)
-        self.subscribe(Locations.CURSOR_POS,             self.onCursorPos)
-        self.subscribe(Locations.WINNER,                 self.onWin)
-        self.subscribe(Locations.IDLE_TIMER,             self.onTimer)
-        self.subscribe(Locations.ATTACKING_MON,          self.onMonAttack)
-        self.subscribe(Locations.POPUP_BOX,              self.onPopup)
+    def onState(self, callback):
+        self._onState = callback
         
-    def subscribe(self, loc, callback):
-        self.watcher.subscribe(loc.length*8, loc.addr, callback)
+    def onGui(self, callback):
+        self._onGui = callback
         
-    def setCursor(self, val):
+    def onAttack(self, callback):
+        self._onAttack = callback
+        
+    def onDown(self, callback):
+        self._onDown = callback
+    
+    ###########################################################
+    ###             Below are helper functions.             ###
+    ### They are just bundling or abstracting functionality ###
+    ###########################################################
+        
+    def _setCursor(self, val):
         self.watcher.write16(Locations.CURSOR_POS.addr, val)
         
-    def pressButton(self, button):
+    def _pressButton(self, button):
         self.watcher.wiiButton(0, button)
-        if self._watchStuck: self.resetUnstuck()
         
-    def select(self, index):
-        self.setCursor(index)
-        self.pressButton(WiimoteButton.TWO)
+    def _select(self, index):
+        self._setCursor(index)
+        self._pressButton(WiimoteButton.TWO)
         
-    def pressTwo(self):
-        self.pressButton(WiimoteButton.TWO)
+    def _pressTwo(self):
+        self._pressButton(WiimoteButton.TWO)
         
-    def setCursorevent(self, value, callback):
+    def _pressOne(self):
+        self._pressButton(WiimoteButton.ONE)
+        
+    def _wake(self):
+        self._distinguishGui(self.gui)
+        
+    def _setState(self, state):
+        self.state = state
+        if self._onState:
+            self._onState(state)
+    
+    ################################################
+    ### The below functions are for timed inputs ###
+    ###        or processing "raw events"        ###
+    ################################################
+    
+    def _setCursorevent(self, value, callback):
         self._cursorevents[value] = callback
         
-    def schedule(self, ms, callback, *args):
-        self.watcher.write16(Locations.IDLE_TIMER.addr, 0)
+    def _schedule(self, ms, callback, *args):
+        #self.watcher.write16(Locations.IDLE_TIMER.addr, 0)
         self._scheduledEvent = callback
         self._scheduledTime = int(ms * 0.27)
         self._scheduledArgs = args
         
-    def unstuck(self):
-        self._stucks += 1
-        print("STUCK #%d! Trying to unstuck..." % self._stucks)
-        self.pressButton(WiimoteButton.ONE | WiimoteButton.RIGHT)
+    def _confirmPkmn(self):
+        self._pressTwo()
+        self._bp_offset += 1
+        if self.state == PbrStates.PREPARING_BP1:
+            self._posBlues.pop(0)
+        else:
+            self._posReds.pop(0)
+        cursor = CursorOffsets.BP_SLOTS - 1 + self._bp_offset
+        self._setCursorevent(cursor, self._distinguishBpSlots)
         
-    def resetUnstuck(self):
-        self.schedule(20000, self.unstuck)
+    def _initMatch(self):
+        if self.startsignal:
+            self._setState(PbrStates.MATCH_RUNNING)
+        else:
+            self.watcher.pause()
+            self._setState(PbrStates.WAITING_FOR_START)
         
-    def onTimer(self, val):
+    def _matchOver(self, winner):
+        self._setCursorevent(1, self._endBattle)
+        self._setState(PbrStates.MATCH_ENDED)
+        self.newsignal = False
+        if self._onWin: self._onWin(winner)
+        
+    def _endBattle(self):
+        self._select(3)
+        if self.newsignal:
+            self._setState(PbrStates.PREPARING_BP1)
+        else:
+            self.watcher.pause()
+            self._setState(PbrStates.WAITING_FOR_NEW)
+      
+    ##################################################
+    ### Below are callbacks for the subscriptions. ###
+    ###   It's really ugly, I know, don't judge.   ###
+    ##################################################
+        
+    def _distinguishWinner(self, val):
+        if val & 0xff00 == 0: return
+        winner = val & 0xff
+        if winner == 0:
+            self._matchOver(0)
+        elif winner == 1:
+            self._matchOver(1)
+        elif winner == 2:
+            self._matchOver(2)
+        
+    def _distinguishTimer(self, val):
         delta = max(0, val - self._timerPrev)
+        if delta == 0: return
+        
         self._timerPrev = val
         if not self._scheduledEvent: return
         self._scheduledTime -= delta
@@ -119,223 +248,193 @@ class PBR():
             self._scheduledEvent(*self._scheduledArgs)
             self._scheduledEvent = None
         
-    def onCursorPos(self, val):
+    def _distinguishCursorPos(self, val):
         try:
             self._cursorevents[val]()
             del self._cursorevents[val]
         except:
             pass
         
-    def endBattle(self):
-        self.select(3)
-        print ("--- new match ---")
-        self._watchStuck = True
-        
-    def onPopup(self, val):
-        if val == StatePopupBox.AWAIT_INPUT:
-            self.pressTwo()
-        
-    def someoneWon(self, who):
-        print(["Blue", "Red", "Neither corner"][who] + " won!")
-        self.setCursorevent(1, self.endBattle)
-        self._randomizedBlue = False
-        self._randomizedRed = False
-        
-    def onWin(self, val):
-        if val & 0xff00 == 0: return
-        winner = val & 0xff
-        if winner == 0:
-            self.someoneWon(0)
-        elif winner == 1:
-            self.someoneWon(1)
-        elif winner == 2:
-            self.someoneWon(2)
-        
-    def onMonAttack(self, val):
+    def _distinguishMonAttack(self, val):
+        if not self._onAttack: return
         if val == ord("R"):
-            print ("Red Attacking.")
+            self._onAttack(Side.RED, self.moveRedUsed)
         elif val == ord("B"):
-            print ("Blue Attacking.")
+            self._onAttack(Side.BLUE, self.moveBlueUsed)
+
+    def _distinguishOrderLock(self, val):
+        if val == 1:
+            self._pressOne()
+
+    def _distinguishPlayer(self, val):
+        self.bluesTurn = (val == 0)
+
+    def _distinguishBpSlots(self):
+        if (self.state == PbrStates.PREPARING_BP1 and not self._posBlues)\
+        or (self.state == PbrStates.PREPARING_BP2 and not self._posReds):
+            self._setState(self.state + 1)
+            self._fClearedBp = False
+            self._pressOne()
+        elif self._fClearedBp:
+            self._select(CursorOffsets.BP_SLOTS + 5)
+        else:
+            self._select(CursorOffsets.BP_SLOTS)
+
+    def _distinguishGui(self, gui):
+        if not gui: return
         
-    def onGuiOrder(self, val):
-        if val == GuiStateOrderSelection.SELECT:
-            self.pressButton(WiimoteButton.RIGHT)
-            # TODO fix sideways remote
-        elif val == GuiStateOrderSelection.CONFIRM:
-            self._downBlue = 0
-            self._downRed = 0
-            if self._blueSelecting:
-                self.watcher.write32(Locations.ORDER_BLUE.addr, 0x01020304)
+        # skip if in waiting mode
+        if self.state in [PbrStates.WAITING_FOR_NEW, PbrStates.WAITING_FOR_START]:
+            return
+        
+        # BIG switch incoming :(
+        # what to do on each screen
+        
+        if gui == PbrGuis.MENU_MAIN:
+            if self.state < PbrStates.PREPARING_STAGE:
+                self._select(CursorPosMenu.BP)
             else:
-                self.watcher.write32(Locations.ORDER_RED.addr, 0x01020304)
-            self._blueSelecting = not self._blueSelecting
-            self.pressTwo()
+                self._select(CursorPosMenu.BATTLE)
+        elif gui == PbrGuis.MENU_BATTLE_TYPE:
+            if self.state < PbrStates.PREPARING_STAGE:
+                self._pressOne()
+            else:
+                self._select(2)
+        elif gui == PbrGuis.MENU_BATTLE_PASS:
+            if self.state < PbrStates.PREPARING_STAGE:
+                self._select(1)
+            else:
+                self._pressOne()
+        elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
+            self._select(2)
+        elif gui == PbrGuis.MENU_BATTLE_REMOTES:
+            self._select(1)
             
-    def onGuiBpSelect(self, val):
-        #print("onGuiBpSelect %d" %val)
-        if val == GuiStateBpSelection.BP_SELECTION_CUSTOM and self._bpSelectEnabled:
-            if self._blueSelecting:
-                cursor = CursorPosBP.BP_1
-                self._blueSelecting = False
-            else:
-                cursor = CursorPosBP.BP_2
-                self._blueSelecting = True
-            self.select(cursor)
-        elif val == GuiStateBpSelection.BP_CONFIRM:
-            self.pressTwo()
-
-    def onGuiRules(self, val):
-        if val == GuiStateRules.STAGE_SELECTION:
-            if self._stage > 5:
-                self._stage -= 1
-                self.select(CursorPosMenu.STAGE_DOWN)
-            else:
-                self.select(CursorOffsets.STAGE + self._stage)
-        elif val == GuiStateRules.OVERVIEW:
-            if self._changedToSingleBattle:
-                self.select(3)
-                self._changedToSingleBattle = False
-            else:
-                self.select(2)
-                self._changedToSingleBattle = True
-        elif val == GuiStateRules.BATTLE_STYLE:
-            self.select(1)
-            self._blueSelecting = True
-        elif val == GuiStateRules.BP_CONFIRM:
-            self.pressTwo()
-
-    def onGuiMenu(self, val):
-        if self._randomizedBlue and self._randomizedRed:
-            # navigate towards battle
-            if val == GuiStateMenu.MAIN_MENU:
-                self.select(CursorPosMenu.BATTLE)
-            elif val == GuiStateMenu.BATTLE_PASS:
-                self.pressButton(WiimoteButton.ONE)
-            elif val == GuiStateMenu.BATTLE_TYPE:
-                self.select(2)
-            elif val == GuiStateMenu.BATTLE_PLAYERS:
-                self.select(2)
-            elif val == GuiStateMenu.BATTLE_REMOTES:
-                self.select(1)
-                self._bpSelectEnabled = True
-                self._stage = random.randint(0, 9)
-                print ("Selecting stage #%d" %self._stage)
-        else:
-            # navigate towards battle passes
-            if val == GuiStateMenu.MAIN_MENU:
-                self.select(CursorPosMenu.BP)
-            elif val == GuiStateMenu.BATTLE_PASS:
-                self.select(1)
-                self._blueSelecting = True
-                self._bpSelectEnabled = False
-            elif val == GuiStateMenu.BATTLE_TYPE:
-                self.pressButton(WiimoteButton.ONE)
-                print("Refilling battle passes...")
-
-    def onGuiBpSlotSelection(self):
-        if (self._blueSelecting and self._randomizedBlue) or (not self._blueSelecting and self._randomizedRed):
-            self.pressButton(WiimoteButton.ONE)
-        elif self._removePkmn:
-            self.select(CursorOffsets.BP_SLOTS)
-        else:
-            self.select(CursorOffsets.BP_SLOTS + 5)
-            
-    def confirmPkmn(self):
-        self.pressTwo()
-        self._pkmnToSelect -= 1
-        self._bp_offset += 1
-        if self._pkmnToSelect <=0:
-            if self._blueSelecting: self._randomizedBlue = True
-            else: self._randomizedRed = True
-        cursor = CursorOffsets.BP_SLOTS - 1 + self._bp_offset
-        self.setCursorevent(cursor, self.onGuiBpSlotSelection)
-
-    def onGuiBp(self, val):
-        #print("onGuiBp %d, blue %s, red %s" % (val, self._randomizedBlue, self._randomizedRed))
-        if val == GuiStateBP.BP_SELECTION:
+        elif gui == PbrGuis.BPS_SELECT and self.state < PbrStates.PREPARING_START:
             self._bp_offset = 0
-            self._removePkmn = True
-            if not self._randomizedBlue:
-                self.select(CursorPosBP.BP_1)
-                self._blueSelecting = True
-            elif not self._randomizedRed:
-                self.select(CursorPosBP.BP_2)
-                self._blueSelecting = False
+            if self.state <= PbrStates.PREPARING_BP1:
+                self._select(CursorPosBP.BP_1)
+                #self._distinguishBpSlots()
+            elif self.state == PbrStates.PREPARING_BP2:
+                self._select(CursorPosBP.BP_2)
+                #self._distinguishBpSlots()
             else:
-                self.pressButton(WiimoteButton.ONE)
-                self._blueSelecting = True
-                self._occupiedPkmn = []
-                return
-            self._pkmnToSelect = random.randint(3,3)
-            if self._blueSelecting:
-                self._pkmnNumBlue = self._pkmnToSelect
-                print ("Blue gets %d pokemon." % self._pkmnToSelect)
+                self._pressOne()
+        elif gui == PbrGuis.BPS_SLOTS and self.state < PbrStates.PREPARING_START:
+            if not self._fClearedBp:
+                self._distinguishBpSlots()
+        elif gui == PbrGuis.BPS_PKMN_GRABBED:
+            self._select(CursorPosBP.REMOVE)
+            #self._setCursorevent(CursorOffsets.BP_SLOTS, self._distinguishBpSlots)
+        elif gui == PbrGuis.BPS_BOXES and self.state < PbrStates.PREPARING_START:
+            self._fClearedBp = True
+            if self.state == PbrStates.PREPARING_BP1:
+                self._select(CursorOffsets.BOX + (self._posBlues[0] // 30))
             else:
-                self._pkmnNumRed = self._pkmnToSelect
-                print ("Red gets %d pokemon." % self._pkmnToSelect)
-            
-        elif val == GuiStateBP.BOX_SELECTION:
-            box = CursorOffsets.BOX + random.randint(0, 17)
-            self._selectedBox = box
-            self.select(box)
-            self._removePkmn = False
-            
-        elif val == GuiStateBP.PKMN_SELECTION:
-            pkmn = CursorOffsets.PKMN + random.randint(0, 29)
-            while (self._selectedBox, pkmn) in self._occupiedPkmn:
-                pkmn = CursorOffsets.PKMN + random.randint(0, 29)
-            self._occupiedPkmn.append((self._selectedBox, pkmn))
-            self.select(pkmn)
-            self.setCursorevent(1, self.confirmPkmn)
-            
-        elif val == GuiStateBP.PKMN_GRABBED:
-            self.select(CursorPosBP.REMOVE)
-            
-        elif val == GuiStateBP.CONFIRM:
+                self._select(CursorOffsets.BOX + (self._posReds[0] // 30))
+        elif gui == PbrGuis.BPS_PKMN and self.state < PbrStates.PREPARING_START:
+            if self.state == PbrStates.PREPARING_BP1:
+                self._select(CursorOffsets.PKMN + (self._posBlues[0] % 30))
+            else:
+                self._select(CursorOffsets.PKMN + (self._posReds[0] % 30))
+            self._setCursorevent(1, self._confirmPkmn)
+        elif gui == PbrGuis.BPS_PKMN_CONFIRM and self.state < PbrStates.PREPARING_START:
             # handled with cursorevent,
             # because the model loading delays and therefore breaks the indicator
             pass
-        elif val == GuiStateBP.SLOT_SELECTION:
-            self.onGuiBpSlotSelection()
-                
-    def onGuiMatch(self, val):
-        if val == GuiStateMatch.MOVES:
-            # left, right, down, up
-            self.watcher.write8(Locations.ATTACKING_MON.addr, 0)
-            move = random.randint(0, 3)
-            self.pressButton(1 << move)
-            # TODO for unstucking:
-            self.schedule(3000, self.pressButton, WiimoteButton.RIGHT) # TODO fix sideways wiimote
-            if self._blueSelecting:
-                print ("Blue's move. Chose #%d" % (move+1))
+        
+        elif gui == PbrGuis.RULES_STAGE:
+            if self.stage > 5:
+                self.stage -= 1
+                self._select(CursorPosMenu.STAGE_DOWN)
             else:
-                print ("Red's move. Chose #%d" % (move+1))
-        elif val == GuiStateMatch.PKMN:
-            # This gui does not allow inputs yet!
-            # schedule an event
-            # TODO find out who actually lives
-            if self._blueSelecting:
-                self._downBlue += 1
-                num_dead = self._downBlue
-                print("Blue's Pokemon #%d down." % self._downBlue)
+                self._select(CursorOffsets.STAGE + self.stage)
+                self._setState(PbrStates.PREPARING_START)
+        elif gui == PbrGuis.RULES_SETTINGS:
+            if self._fSelectedSingleBattle:
+                self._select(3)
+                self._fSelectedSingleBattle = False    
             else:
-                self._downRed += 1
-                num_dead = self._downRed
-                print("Red's Pokemon #%d down." % self._downRed)
-            # TODO check for sideways layout
-            if num_dead == 0: button = WiimoteButton.RIGHT
-            elif num_dead == 1: button = WiimoteButton.DOWN
-            elif num_dead == 2: button = WiimoteButton.UP
-            self.schedule(500, self.pressButton, button)
+                self._select(2)
+                self._fSelectedSingleBattle = True
+        elif gui == PbrGuis.RULES_BATTLE_STYLE:
+            self._select(1)
+        elif gui == PbrGuis.RULES_BPS_CONFIRM:
+            self._pressTwo()
             
-    def onOrderLock(self, val):
-        if val == 1:
-            self.pressButton(WiimoteButton.ONE)
-            print("Injected order into memory")
-            self._watchStuck = False # TODO not here
-    
-    def onWhichPlayer(self, val):
-        self._blueSelecting = (val == 0)
-
+        elif gui == PbrGuis.BPSELECT_SELECT and self.state >= PbrStates.PREPARING_START:
+            if self._fBlueSelectedBP:
+                self._select(CursorPosBP.BP_2)
+                self._fBlueSelectedBP = False
+            else:
+                self._select(CursorPosBP.BP_1)
+                self._fBlueSelectedBP = True
+        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state >= PbrStates.PREPARING_START:
+            self._pressTwo()
+            
+        elif gui == PbrGuis.ORDER_SELECT:
+            self._pressButton(WiimoteButton.RIGHT)
+            # TODO fix sideways remote
+        elif gui == PbrGuis.ORDER_CONFIRM:
+            if self._fBlueChoseOrder:
+                self._fBlueChoseOrder = False
+                self.watcher.write32(Locations.ORDER_RED.addr, 0x01020307)
+                self._pressTwo()
+                self._initMatch()
+            else:
+                self._fBlueChoseOrder = True
+                self.watcher.write32(Locations.ORDER_BLUE.addr, 0x01020307)
+                self._pressTwo()
+                
+        elif gui == PbrGuis.MATCH_MOVE_SELECT:
+            # erase this string so we get the event of it refilling
+            self.watcher.write8(Locations.ATTACKING_MON.addr, 0)
+            # overwrite RNG seed
+            self.watcher.write32(Locations.RNG_SEED.addr, random.getrandbits(32))
+            
+            move = random.randint(0, 3) # TODO check how many moves the pkmn has
+            # workaround:
+            # TODO for unstucking:
+            self._schedule(3000, self._pressButton, WiimoteButton.RIGHT)
+            # TODO fix sideways wiimote
+            
+            if self.bluesTurn: self.moveBlueUsed = move
+            else: self.moveRedUsed = move
+            
+            self._pressButton(padValues[move])
+            # TODO note which move got selected!
+        elif gui == PbrGuis.MATCH_PKMN_SELECT:
+            # assume a pokemon just died.
+            # TODO don't do that this way, find a better indicator!
+            nextPkmn = 0
+            if self.bluesTurn:
+                self.currentBlue += 1
+                nextPkmn = self.currentBlue
+                if self._onDown: self._onDown(Side.BLUE, self.currentBlue-1)
+            else:
+                self.currentRed += 1
+                nextPkmn = self.currentRed
+                if self._onDown: self._onDown(Side.RED, self.currentRed-1)
+            # TODO note which pokemon just died etc.
+            # TODO more intelligent pkmn selection pls.
+            if nextPkmn == 0: button = WiimoteButton.RIGHT
+            elif nextPkmn == 1: button = WiimoteButton.DOWN
+            elif nextPkmn == 2: button = WiimoteButton.UP
+            else:
+                print("CRITICAL ERROR: invalid next pokemon!")
+                print("nextPkmn: %d, blue's turn: %s" % (nextPkmn, self.bluesTurn))
+                print("Trying to resolve, but will propably get stuck...")
+                button = WiimoteButton.DOWN # will propably get stuck anyway
+            self._schedule(500, self._pressButton, button)
+        elif gui == PbrGuis.MATCH_IDLE:
+            pass # just accept for displaying
+        elif gui == PbrGuis.MATCH_POPUP and self.state == PbrStates.MATCH_RUNNING:
+            self._pressTwo()
+        else:
+            return
+        
+        self.gui = gui
+        if self._onGui: self._onGui(gui)
+        
 
 

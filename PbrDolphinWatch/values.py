@@ -65,7 +65,7 @@ CursorPosBP = enum(
 
 ##########################################
 # all necessary gui states.
-# hook events to there states!
+# hook events to these states!
 
 GuiStateBP = enum(
     CONFIRM        = 0x00,
