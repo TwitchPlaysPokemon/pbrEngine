@@ -27,7 +27,28 @@ WiimoteButton = enum(
 ##########################################
 # uncategorized stuff
 
-# none :)
+TrainerStyle = enum(
+    YOUNG_BOY_A   = 0x00,
+    COOL_BOY_A    = 0x01,
+    MUSCLE_MAN_A  = 0x02,
+    YOUNG_GIRL_A  = 0x03,
+    COOL_GIRL_A   = 0x04,
+    LITTLE_GIRL_A = 0x05,
+    
+    YOUNG_BOY_B   = 0x06,
+    COOL_BOY_B    = 0x07,
+    MUSCLE_MAN_B  = 0x08,
+    YOUNG_GIRL_B  = 0x09,
+    COOL_GIRL_B   = 0x0A,
+    LITTLE_GIRL_B = 0x0B,
+    
+    YOUNG_BOY_C   = 0x0C,
+    COOL_BOY_C    = 0x0D,
+    MUSCLE_MAN_C  = 0x0E,
+    YOUNG_GIRL_C  = 0x0F,
+    COOL_GIRL_C   = 0x10,
+    LITTLE_GIRL_C = 0x11,
+)
 
 ##########################################
 # cursor positions to click on stuff
@@ -68,12 +89,17 @@ CursorPosBP = enum(
 # hook events to these states!
 
 GuiStateBP = enum(
-    CONFIRM        = 0x00,
-    BP_SELECTION   = 0x0C,
-    SLOT_SELECTION = 0x06,
-    BOX_SELECTION  = 0x1C,
-    PKMN_SELECTION = 0x27,
-    PKMN_GRABBED   = 0x09,
+    CONFIRM         = 0x00040000,
+    BP_SELECTION    = 0x0002000C,
+    SLOT_SELECTION  = 0x00020006,
+    BOX_SELECTION   = 0x001d001C,
+    PKMN_SELECTION  = 0x00000027,
+    PKMN_GRABBED    = 0x00020009,
+    APPEARANCE_MENU = 0x00060006,
+    APPEARANCE_EDIT = 0x0004000D,
+    APPEARANCE_CHAR_CURRENT = 0x0003000D,
+    APPEARANCE_CHAR = 0x00030004,
+    ACCESOIRES      = 0x000A000C,
 )
 
 GuiStateMenu = enum(

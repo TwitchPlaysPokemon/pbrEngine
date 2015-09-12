@@ -29,7 +29,7 @@ Locations = enum(
     CURSOR_POS       = Loc(0x63eb9a, 2),
     ATTACK_TEAM_TEXT = Loc(0x47a579, 1),
     GUI_STATE_MATCH  = Loc(0x478499, 1),
-    GUI_STATE_BP     = Loc(0x47694b, 1),
+    GUI_STATE_BP     = Loc(0x476948, 4),
     GUI_STATE_MENU   = Loc(0x480e1f, 1),
     GUI_STATE_RULES  = Loc(0x48118b, 1),
     GUI_STATE_ORDER  = Loc(0x487445, 1),
@@ -42,8 +42,12 @@ Locations = enum(
     TOOLTIP_TOGGLE   = Loc(0x63ec10, 1),
     IDLE_TIMER       = Loc(0x476654, 2),
     ATTACK_TEXT      = Loc(0x47a570, 1), # actually a whole bunch of data, using this as "start pointer"
-    ATTACKING_MON    = Loc(0x47a57b, 1), # "R" from "RED" or "B" from "BLUE"
-    POPUP_BOX        = Loc(0x4fd011, 1), # weird, watch this
+    ATTACKING_MON    = Loc(0x47a57b, 1), # see above, "R" from "RED" or "B" from "BLUE"
+    POPUP_BOX        = Loc(0x4fd011, 1), # seems to work, but weird
+    INFO_BOX         = Loc(0x474f38, 80), # propably longer, but that's enough
+    #INFO_BOX_MON     = Loc(0x474f43, 1), # see above, "R" from "RED" or "B" from "BLUE"
+    #INFO_BOX_LINE2   = Loc(0x474f64, 4), 
+    STYLE_SELECTION  = Loc(0x63eedc, 1),
 )
 
 #def decode(loc, val):

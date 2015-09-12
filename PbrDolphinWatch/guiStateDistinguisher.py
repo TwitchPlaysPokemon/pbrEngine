@@ -15,13 +15,14 @@ from values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox
 PbrStates = enum(
     INIT              = 0,
     WAITING_FOR_NEW   = 1,
-    PREPARING_BP1     = 2,
-    PREPARING_BP2     = 3,
-    PREPARING_STAGE   = 4,
-    PREPARING_START   = 5,
-    WAITING_FOR_START = 6,
-    MATCH_RUNNING     = 7,
-    MATCH_ENDED       = 8,
+    EMPTYING_BP2      = 2,
+    PREPARING_BP1     = 4,
+    PREPARING_BP2     = 5,
+    PREPARING_STAGE   = 6,
+    PREPARING_START   = 7,
+    WAITING_FOR_START = 8,
+    MATCH_RUNNING     = 9,
+    MATCH_ENDED       = 10,
 )
 
 PbrGuis = enum(
