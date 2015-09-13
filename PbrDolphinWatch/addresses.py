@@ -29,6 +29,7 @@ Locations = enum(
     CURSOR_POS       = Loc(0x63eb9a, 2),
     ATTACK_TEAM_TEXT = Loc(0x47a579, 1),
     GUI_STATE_MATCH  = Loc(0x478499, 1),
+    GUI_STATE_MATCH_PKMN_MENU = Loc(0x47849b, 1),
     GUI_STATE_BP     = Loc(0x476948, 4),
     GUI_STATE_MENU   = Loc(0x480e1f, 1),
     GUI_STATE_RULES  = Loc(0x48118b, 1),

@@ -6,12 +6,12 @@ Created on 04.09.2015
 
 from __future__ import print_function, division
 
-from PBR import PBR, Side
+from PBR import PBR
 import gevent
 import json
 import random
 import os
-from guiStateDistinguisher import PbrStates, PbrGuis
+from states import PbrStates, PbrGuis
 
 with open("json.json") as f:
     data = json.load(f)
@@ -19,9 +19,13 @@ with open("json.json") as f:
     data = [d for d in data if not d["shiny"]]
     # TODO this is stupid
     # remove all utf-8, because windows console crashes otherwise
-    # should only affect nidorans
+    # should only affect nidorans, but better be safe
+    # TODO remove this again
+    # only keep certain moves
+    moves = ["Explosion", "Self-Destruct", "Whirlwind", "Roar", "Perish Song", "Destiny Bond", "Encore", "Metronome", "Me First", "Transform"]
+    data = [d for d in data if any(set(moves) & set([m["name"] for m in d["moves"]]))]
     for i, _ in enumerate(data):
-        data[i]["name"] = data[i]["name"].encode('ascii', 'replace')
+        data[i]["name"] = data[i]["name"].replace(u"\u2642", "(m)").replace(u"\u2640", "(f)").encode('ascii', 'replace')
         for j, _ in enumerate(data[i]["moves"]):
             data[i]["moves"][j]["name"] = data[i]["moves"][j]["name"].encode('ascii', 'replace')
     
@@ -44,7 +48,7 @@ colosseums = [
 
 def countdown():
     global timer
-    timer = 75
+    timer = 5#75
     while True:
         gevent.sleep(1)
         timer -= 1
@@ -103,60 +107,50 @@ def onState(state):
         gevent.sleep(1)
         random.shuffle(data)
         pbr.new(random.randint(0,9), data[0:3], data[3:6])
+        #pbr.new(random.randint(0,9), [data[99]], [data[100]])
         gevent.spawn(countdown)
         
 def onAttack(side, mon, moveindex, movename):
-    addEvent("%s (%s) uses %s." % (mon["name"], ("blue" if side == Side.BLUE else "red"), movename))
+    addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
         
-def onDown(side, pkmn):
-    if side == Side.BLUE:
-        addEvent("%s (blue) is down." % pbr.pkmnBlue[pkmn]["name"])
-    else:
-        addEvent("%s (red) is down." % pbr.pkmnRed[pkmn]["name"])
-
 def onWin(side):
-    if side == Side.BLUE:
-        addEvent("> Blue won the game! <")
-    elif side == Side.RED:
-        addEvent("> Red won the game! <")
+    if side != "draw":
+        addEvent("> %s won the game! <" % side.title())
     else:
         addEvent("> The game ended in a draw! <")
 
 def onError(text):
     addEvent("[ERROR] %s" % text)
+    with open("error.log", "a") as myfile:
+        myfile.write("[ERROR] %s" % text)
 
-def onDeath(side, mon):
-    if side == Side.BLUE:
-        addEvent("%s (blue) is down." % pbr.pkmnBlue[mon]["name"])
-    else:
-        addEvent("%s (red) is down." % pbr.pkmnRed[mon]["name"])
+def onDeath(side, mon, monindex):
+    addEvent("%s (%s) is down." % (mon["name"], side))
     
-def onSwitch(side, mon):
-    if side == Side.BLUE:
-        addEvent("%s (blue) is sent out." % pbr.pkmnBlue[mon]["name"])
-    else:
-        addEvent("%s (red) is sent out." % pbr.pkmnRed[mon]["name"])
+def onSwitch(side, mon, monindex):
+    addEvent("%s (%s) is sent out." % (mon["name"], side))
 
 def loop_reprint():
     while True:
         gevent.sleep(1)
         reprint()
 
-pbr = PBR()
-
-pbr.onState(onState)
-pbr.onWin(onWin)
-pbr.onGui(lambda x: reprint())
-pbr.onAttack(onAttack)
-pbr.onDown(onDown)
-pbr.onError(onError)
-pbr.onDeath(onDeath)
-pbr.onSwitch(onSwitch)
-pbr.connect()
-
-gevent.spawn(loop_reprint)
-
-#pbr.new(random.randint(0,9), data[0:1], data[3:4])
-#pbr.start()
-
-gevent.sleep(10000000000000000) # lol
+try:
+    pbr = PBR()
+    
+    pbr.onState(onState)
+    pbr.onWin(onWin)
+    pbr.onGui(lambda x: reprint())
+    pbr.onAttack(onAttack)
+    pbr.onError(onError)
+    pbr.onDeath(onDeath)
+    pbr.onSwitch(onSwitch)
+    pbr.connect()
+    
+    gevent.spawn(loop_reprint)
+    
+    gevent.sleep(10000000000000000) # lol
+except Exception as e:
+    with open("error.log", "a") as myfile:
+        myfile.write(str(e))
+        

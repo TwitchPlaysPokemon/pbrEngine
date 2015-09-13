@@ -10,16 +10,10 @@ from dolphinWatch import DolphinWatch, DisconnectReason
 import gevent, random, re, time
 
 from addresses import Locations
-from util import enum
-from values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP
-from guiStateDistinguisher import Distinguisher, PbrGuis, PbrStates
+from values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch
+from guiStateDistinguisher import Distinguisher
+from states import PbrGuis, PbrStates
 from _collections import deque
-
-Side = enum(
-    BLUE = 0,
-    RED  = 1,
-    DRAW = 2,
-)
 
 # TODO for sideways remote, fix?    
 padValues = [WiimoteButton.RIGHT, WiimoteButton.DOWN, WiimoteButton.UP, WiimoteButton.LEFT]
@@ -38,7 +32,6 @@ class PBR():
         self._onState = None
         self._onGui = None
         self._onAttack = None
-        self._onDown = None
         self._onError = None
         self._onDeath = None
         self._onSwitch = None
@@ -59,6 +52,7 @@ class PBR():
         # subscribing to all indicators of interest. mostly gui
         self._subscribe(Locations.WHICH_PLAYER,           self._distinguishPlayer)
         self._subscribe(Locations.GUI_STATE_MATCH,        self._distinguisher.distinguishMatch)
+        self._subscribe(Locations.GUI_STATE_MATCH_PKMN_MENU, self._distinguishPkmnMenu)
         self._subscribe(Locations.GUI_STATE_BP,           self._distinguisher.distinguishBp)
         self._subscribe(Locations.GUI_STATE_MENU,         self._distinguisher.distinguishMenu)
         self._subscribe(Locations.GUI_STATE_RULES,        self._distinguisher.distinguishRules)
@@ -123,6 +117,9 @@ class PBR():
         self._fClearedBpBlue = False
         self._fClearedBp = False
         self._fBackToRed = False # TODO improve this shit
+        self._fGuiPkmnUp = False
+        
+        self._lastMove = ("blue", "")
         
         self._cursorevents = {}
         
@@ -163,35 +160,96 @@ class PBR():
         '''
         Sets the callback that will be called if a winner is determined.
         Can be considered end of the match.
-        TODO change argument from enum to 
+        arg0: <winner> "blue" "red" "draw"
         '''
         self._onWin = callback
         
     def onState(self, callback):
+        '''
+        Sets the callback for state changes.
+        arg0: <state> see states.PbrStates
+        '''
         self._onState = callback
         
     def onGui(self, callback):
+        '''
+        Sets the callback for gui changes.
+        arg0: <gui> see states.PbrGuis
+        '''
         self._onGui = callback
         
     def onAttack(self, callback):
+        '''
+        Sets the callback for the event of a pokemon attacking.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <moveindex> 0-3, index of move used.
+              CAUTION: <mon> might not have a move with that index. (e.g. Ditto)
+        arg3: <movename> name of the move used.
+              CAUTION: <mon> might not have this attack. (e.g. Ditto, Metronome)
+        '''
         self._onAttack = callback
         
-    def onDown(self, callback):
-        self._onDown = callback
-        
     def onError(self, callback):
+        '''
+        Sets the callback for reporting awkward events.
+        These events do not necessarily mean that the game can't continue,
+        but are indicators of something going wrong.
+        Can be documented for debugging.
+        arg0: text describing the error.
+        '''
         self._onError = callback
         
     def onDeath(self, callback):
+        '''
+        Sets the callback for the event of a pokemon dying.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <monindex> 0-2, index of the dead pokemon
+        '''
         self._onDeath = callback
         
     def onSwitch(self, callback):
+        '''
+        Sets the callback for the event of a pokemon getting sent out.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <monindex> 0-2, index of the pokemon now fighting.
+        '''
         self._onSwitch = callback
     
     ###########################################################
     ###             Below are helper functions.             ###
     ### They are just bundling or abstracting functionality ###
     ###########################################################
+        
+    def _sleepNFrames(self, n):
+        finish = self.frame + n
+        while self.frame < finish:
+            gevent.sleep(0.05)
+            
+    def _sleepNFramesThen(self, n, then, *args):
+        self._sleepNFrames(n)
+        if args: then(*args)
+        else: then()
+        
+    def _inNFrames(self, n, job, *args):
+        gevent.spawn(self._sleepNFramesThen, n, job, args)
+        
+    def _checkWinner(self):
+        deadBlue = not any(self.aliveBlue)
+        deadRed = not any(self.aliveRed)
+        winner = "draw"
+        if deadBlue and deadRed:
+            # draw? check further
+            if self._lastMove[1] in ["Explosion", "Selfdestruct"]:
+                if self._lastMove[0] == "blue": winner = "red"
+                else: winner = "blue"
+        elif deadBlue:
+            winner = "red"
+        else:
+            winner = "blue"
+        self._matchOver(winner)
         
     def _setCursor(self, val):
         '''
@@ -201,8 +259,9 @@ class PBR():
         self.watcher.write16(Locations.CURSOR_POS.addr, val)
         
     def _pressButton(self, button):
-        #self._onError("button: %x" % button)
+        '''Propagates the button press to dolphinWatch. Often used, therefore bundled'''
         # send a clear report first. maybe this helps...
+        # TODO figure out actual cause of super-rare stucks
         self.watcher.wiiButton(0, 0x0)
         self.watcher.wiiButton(0, button)
         
@@ -212,15 +271,12 @@ class PBR():
         self._pressButton(WiimoteButton.TWO)
         
     def _pressTwo(self):
-        '''Presses Two. Is often used, therefore bundled.'''
+        '''Presses Two. Often used, therefore bundled.'''
         self._pressButton(WiimoteButton.TWO)
         
     def _pressOne(self):
-        '''Presses One. Is often used, therefore bundled.'''
+        '''Presses One. Often used, therefore bundled.'''
         self._pressButton(WiimoteButton.ONE)
-        
-    def _wake(self):
-        self._distinguishGui(self.gui)
         
     def _setState(self, state):
         '''
@@ -247,8 +303,14 @@ class PBR():
         and stopping at the first "0", because they are c-strings
         ''' 
         data = map(lambda x: x if x < 128 else "?", data)
-        data = data[:data.index(0)] # stop at first 0
-        return str(bytearray(data[1::2])).encode("ascii", "replace")
+        # remove paddings
+        data = data[1::2]
+        # stop at first 0
+        try:
+            data = data[:data.index(0)] 
+        except:
+            pass
+        return str(bytearray(data)).encode("ascii", "replace")
     
     def _swap(self, map_, i1, i2):
         '''Helper method to swap values at 2 indexes in a list'''
@@ -290,6 +352,7 @@ class PBR():
             self._setState(PbrStates.WAITING_FOR_START)
         
     def _matchOver(self, winner):
+        if self.state != PbrStates.MATCH_RUNNING: return
         self._setCursorevent(1, self._endBattle)
         self._setState(PbrStates.MATCH_ENDED)
         self.newsignal = False
@@ -308,14 +371,14 @@ class PBR():
         Is called when a pokemon has been switch with another one.
         Triggers the onSwitch event and fixes the switch-mappings
         '''
-        if side == Side.BLUE:
+        if side == "blue":
             self._swap(self._mapBlue, self.currentBlue, nextPkmn)
             self.currentBlue = nextPkmn
-            self._onSwitch(Side.BLUE, nextPkmn)
+            if self._onSwitch: self._onSwitch(side, self.pkmnBlue[nextPkmn], nextPkmn)
         else:
             self._swap(self._mapRed, self.currentRed, nextPkmn)
             self.currentRed = nextPkmn
-            self._onSwitch(Side.RED, nextPkmn)
+            if self._onSwitch: self._onSwitch(side, self.pkmnRed[nextPkmn], nextPkmn)
             
     def _nextPkmn(self):
         
@@ -338,24 +401,32 @@ class PBR():
             nextPkmn = random.choice(options)
         
         index = (self._mapBlue if self.bluesTurn else self._mapRed)[nextPkmn]  
-        self._switched(Side.BLUE if self.bluesTurn else Side.RED, nextPkmn)
 
         wasBluesTurn = self.bluesTurn
-          
-        while self.gui == PbrGuis.MATCH_PKMN_SELECT and self.bluesTurn == wasBluesTurn:
-            if fails >= 20:
-                if fails == 20:
-                    self._error("Pkmn selection screwing up...")
-                    self._error("Panic! Pressing random buttons")
+        
+        switched = True # flag to know if the switching was cancelled after all
+        # Gui can temporarily become "idle" if an popup ("Can't be switched out") appears. use custom flag!
+        while self._fGuiPkmnUp and self.bluesTurn == wasBluesTurn:
+            if fails >= 6:
+                switched = False
+                # A popup appears. Click it away and cancel move selection.
+                # Aborting the move selection should always be possible if a popup appears!
+                #if fails == 20:
+                #    self._error("Pkmn selection screwing up...")
+                #    self._error("Trying to exiting pkmn menu...")
+                # Alternate between pressing "2" and "One" to get back to the move selectio
                 if fails % 2: self._pressTwo()
-                else: self._pressButton(random.choice([WiimoteButton.RIGHT, WiimoteButton.DOWN, WiimoteButton.UP, WiimoteButton.MINUS]))
+                else: self._pressButton(WiimoteButton.MINUS)
+                #else: self._pressButton(random.choice([WiimoteButton.RIGHT, WiimoteButton.DOWN, WiimoteButton.UP, WiimoteButton.MINUS]))
             else:
                 # TODO fix sideways remote
                 button = [WiimoteButton.RIGHT, WiimoteButton.DOWN, WiimoteButton.UP][index]
                 self._pressButton(button)
               
             fails += 1
-            gevent.sleep(0.1)
+            self._sleepNFrames(20)
+            
+        if switched: self._switched("blue" if wasBluesTurn else "red", nextPkmn)
 
  
     def _nextMove(self):
@@ -365,8 +436,8 @@ class PBR():
             if canSwitch and random.random() < 0.1: # 10% switch Kappa
                 self._pressTwo()
             else:
-                move = random.choice([0, 0, 0, 0, 1, 1, 1, 2, 2, 3])
-                #move = random.choice([0, 1, 2, 3, 3, 3])
+                #move = random.choice([0, 0, 0, 0, 1, 1, 1, 2, 2, 3])
+                move = random.choice([0, 1, 2, 3])
                 #move = random.randint(0, 3) # TODO check how many moves the pkmn has
                 if self.bluesTurn:
                     self._moveBlueUsed = move
@@ -376,7 +447,7 @@ class PBR():
                     self._fSendNextRed = False
             
                 self._pressButton(padValues[move])
-            gevent.sleep(0.2)
+            self._sleepNFrames(20)
             
     def _skipIntro(self):
         '''
@@ -385,7 +456,7 @@ class PBR():
         '''
         while self.gui == PbrGuis.RULES_BPS_CONFIRM:
             self._pressTwo()
-            gevent.sleep(0.2)
+            self._sleepNFrames(20)
             
     ##################################################
     ### Below are callbacks for the subscriptions. ###
@@ -393,6 +464,15 @@ class PBR():
     ###   Their job is to know what to do when a   ###
     ###     certain gui is open, and when, etc.    ###
     ##################################################
+            
+    def _distinguishPkmnMenu(self, val):
+        self._fGuiPkmnUp = False
+        if self.state != PbrStates.MATCH_RUNNING: return
+        # custom value indicating if thepkmn menu is up.
+        # shall be used in _nextPkmn() as the flag for the loop
+        if val == GuiStateMatch.PKMN_2:
+            self._fGuiPkmnUp = True
+            
             
     def _distinguishAttack(self, data):
         # Gets called each time the attack-text changes (Team XYZ's pkmn used move)
@@ -408,10 +488,12 @@ class PBR():
         if match:
             # "used" => "uses" reset, so we get the event again if something changes!
             self.watcher.write8(Locations.ATTACK_TEXT.addr + 1 + 2*match.start(3), 0x73)
-            if match.group(1) == "Blue":
-                if self._onAttack: self._onAttack(Side.BLUE, self.pkmnBlue[self.currentBlue], self._moveBlueUsed, move)
+            side = match.group(1).lower()
+            self._lastMove = (side, move)
+            if side == "blue":
+                if self._onAttack: self._onAttack("blue", self.pkmnBlue[self.currentBlue], self._moveBlueUsed, move)
             else:
-                if self._onAttack: self._onAttack(Side.RED, self.pkmnRed[self.currentRed], self._moveRedUsed, move)
+                if self._onAttack: self._onAttack("red", self.pkmnRed[self.currentRed], self._moveRedUsed, move)
         
         
     def _distinguishInfo(self, data):
@@ -429,19 +511,19 @@ class PBR():
             # "fainted" => "Fainted" reset, so we get the event again if something changes!
             self.watcher.write8(Locations.INFO_TEXT.addr + 1 + 2*match.start(2), 0x46)
             
-            if match.group(1) == "Blue":
-                side = Side.BLUE
+            side = match.group(1).lower()
+            if side == "blue":
                 dead = self.currentBlue
                 self.aliveBlue[dead] = False
                 self._fSendNextBlue = True
+                if self._onDeath: self._onDeath(side, self.pkmnBlue[dead], dead)
             else:
-                side = Side.RED
                 dead = self.currentRed
                 self.aliveRed[dead] = False
                 self._fSendNextRed = True
-            if self._onDeath: self._onDeath(side, dead)
-            if not any(self.aliveBlue): self._matchOver(Side.RED)
-            elif not any(self.aliveRed): self._matchOver(Side.BLUE)
+                if self._onDeath: self._onDeath(side, self.pkmnRed[dead], dead)
+            if not any(self.aliveBlue) or not any(self.aliveRed):
+                self._inNFrames(500, self._checkWinner)
             return
         
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
@@ -450,13 +532,10 @@ class PBR():
             # "was" => "Was" reset, so we get the event again if something changes!
             self.watcher.write8(Locations.INFO_TEXT.addr + 1 + 2*match.start(3), 0x57)
             
-            if match.group(1) == "Blue":
-                side = Side.BLUE
-            else:
-                side = Side.RED
+            side = match.group(1).lower()
                 
             # check each pokemon if that is the one that was sent out
-            for i, v in enumerate(self.pkmnBlue if side == Side.BLUE else self.pkmnRed):
+            for i, v in enumerate(self.pkmnBlue if side == "blue" else self.pkmnRed):
                 # names are displayed in all-caps
                 name = v["name"].upper()
                 # match pkmn names with display name
@@ -542,16 +621,16 @@ class PBR():
                 self._select(CursorOffsets.BP_SLOTS)
 
     def _distinguishGui(self, gui):
-        # skip 0/None-guis (?, i am sure this had a deeper meaning I didn't document)
+        # might be None, if the guiStateDistinguisher didn't recognize the value
         if not gui: return
         
         # skip if in waiting mode
-        # EDIT: No, actually continue as normal. in those pauses the game is paused anyway.
+        # EDIT: No, actually continue as normal. in those phases the game is/should be paused anyway.
         # And else the script can't "wake up" on its own if you manually unpause the game
         #if self.state in [PbrStates.WAITING_FOR_NEW, PbrStates.WAITING_FOR_START]:
         #    return
         
-        # TODO do this better
+        # TODO do this better maybe?
         # The script uses self.gui for some comparisons, but if no if-elif-else
         # picks this gui up, don't trigger a gui change and return to the old state
         # Question: Why can't any gui be picked up safely?
@@ -616,7 +695,7 @@ class PBR():
         elif gui == PbrGuis.BPS_PKMN and self.state < PbrStates.PREPARING_START:
             # it soooometimes gets stuck, so wait
             # TODO remove this and find the very rare cause of stucks.
-            gevent.sleep(0.05)
+            # gevent.sleep(0.05)
             if self.state == PbrStates.PREPARING_BP1:
                 self._select(CursorOffsets.PKMN + (self._posBlues[0] % 30))
             else:
@@ -686,9 +765,11 @@ class PBR():
                 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
+            # we can safely assume we are in match state now
+            self._setState(PbrStates.MATCH_RUNNING)
             # erase the "xyz used move" string, so we get the event of it changing.
             # Change the character "R" or "B" to 0, so this change won't get picked up.
-            self.watcher.write8(Locations.ATTACKING_MON.addr, 0)
+            self.watcher.write8(Locations.ATTACK_TEXT.addr + 11, 0)
             # overwrite RNG seed
             self._newRng()
             # start the job that handles the complicated and dangerous process of move selection

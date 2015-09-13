@@ -4,10 +4,12 @@ Created on 09.09.2015
 @author: Felk
 '''
 
+from __future__ import print_function, division
+
 from util import enum
 
 ##########################################
-# buttons. concatenate to 16 bit integer with binary or
+# buttons. concatenate to 16 bit integer with binary OR
 
 WiimoteButton = enum(
     LEFT  = 0x0001,
@@ -138,14 +140,15 @@ GuiStateOrderSelection = enum(
 )
 
 GuiStateMatch = enum(
-    IDLE    = 0x8,
-    MOVES   = 0x3,
-    GIVE_IN = 0xb,
-    PKMN    = 0x5,     
+    IDLE    = 0x08,
+    MOVES   = 0x03,
+    GIVE_IN = 0x0b,
+    PKMN    = 0x05,
+    PKMN_2  = 0xfd, # 2nd indicator, actually at different address (2 bytes further)
 )
 
 StatePopupBox = enum(
-    AWAIT_INPUT = 0x67, # wtf
+    AWAIT_INPUT = 0x67, # wtf, but works
     # IDLE      = 0x01, and 0x02?
 )
 
