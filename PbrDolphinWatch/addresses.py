@@ -14,8 +14,8 @@ class Loc(object):
         self.addr = addr
         self.length = length
         self.baseaddr = _baseaddr(addr)
-        self._shift1 = 8*(addr - self.baseaddr)
-        self._shift2 = 32 - 8*length
+        #self._shift1 = 8*(addr - self.baseaddr)
+        #self._shift2 = 32 - 8*length
         
 Locations = enum(
     RNG_SEED         = Loc(0x6405e0, 4),
@@ -38,22 +38,16 @@ Locations = enum(
     ORDER_RED        = Loc(0x487468, 4), # actually 1-6
     ORDER_LOCK_BLUE  = Loc(0x487462, 1),
     ORDER_LOCK_RED   = Loc(0x48746e, 1),
-    WINNER           = Loc(0xbe96b2, 2), # CAREFUL! This address changes sometimes, so it's weird
+    #WINNER           = Loc(0xbe96b2, 2), # CAREFUL! This address changes sometimes, so it's weird. Don't use
     TOOLTIP_TOGGLE   = Loc(0x63ec10, 1),
     IDLE_TIMER       = Loc(0x476654, 2),
-    ATTACK_TEXT      = Loc(0x47a570, 1), # actually a whole bunch of data, using this as "start pointer"
-    ATTACKING_MON    = Loc(0x47a57b, 1), # see above, "R" from "RED" or "B" from "BLUE"
+    FRAMECOUNT       = Loc(0x63fc2c, 4), # goes up by 60 per second
+    ATTACK_TEXT      = Loc(0x47a570, 0x80), # 64 chars line1. 64 chars line2, maybe shorter.
     POPUP_BOX        = Loc(0x4fd011, 1), # seems to work, but weird
-    INFO_BOX         = Loc(0x474f38, 80), # propably longer, but that's enough
-    #INFO_BOX_MON     = Loc(0x474f43, 1), # see above, "R" from "RED" or "B" from "BLUE"
-    #INFO_BOX_LINE2   = Loc(0x474f64, 4), 
+    INFO_TEXT        = Loc(0x474f38, 80), # 40 chars. maybe longer, but that's enough
+    #INFO_BOX_MON    = Loc(0x474f43, 1), # see above, "R" from "RED" or "B" from "BLUE"
+    #INFO_BOX_LINE2  = Loc(0x474f64, 4), 
     STYLE_SELECTION  = Loc(0x63eedc, 1),
 )
 
-#def decode(loc, val):
-#    val = (val << loc._shift1) & 0xffffffff
-#    return val >> loc._shift2
 
-#def encode(loc, val):
-#    val = (val << loc._shift2) & 0xffffffff
-#    return val >> loc._shift1

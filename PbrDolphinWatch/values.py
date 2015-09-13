@@ -58,6 +58,7 @@ CursorOffsets = enum(
     PKMN     = 0x0a,
     BP_SLOTS = 0x15,
     STAGE    = 0x01,
+    RULESETS = 0x0a,
 )
 
 CursorPosMenu = enum(
@@ -73,6 +74,7 @@ CursorPosMenu = enum(
     BUTTON_3 = 0x03, # for generic guis
     BACK     = 0x63, # for whatever reason
     STAGE_DOWN = 0x08,
+    RULES_CONFIRM  = 0x0e,
 )
 
 CursorPosBP = enum(
@@ -117,6 +119,7 @@ GuiStateRules = enum(
     STAGE_SELECTION = 0x20,
     OVERVIEW        = 0x26,
     BATTLE_STYLE    = 0x2b, # single or double battle
+    RULESET         = 0x30, # "everything goes", "tpp" or other sets
     BP_SELECTION    = 0xb8, # use GuiStateBpSelection for better distinction
     BP_CONFIRM      = 0x3a,
     MATCH           = 0x3d, # also pre-match? useless

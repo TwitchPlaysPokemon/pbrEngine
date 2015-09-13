@@ -17,10 +17,9 @@ with open("json.json") as f:
     data = json.load(f)
     # reduce by shinies
     data = [d for d in data if not d["shiny"]]
-    # reduce by whirlwind and roar
-    #data = [d for d in data if all(x not in [n["name"] for n in d["moves"]] for x in ["Whirlwind", "Roar"])]
     # TODO this is stupid
     # remove all utf-8, because windows console crashes otherwise
+    # should only affect nidorans
     for i, _ in enumerate(data):
         data[i]["name"] = data[i]["name"].encode('ascii', 'replace')
         for j, _ in enumerate(data[i]["moves"]):
@@ -45,7 +44,7 @@ colosseums = [
 
 def countdown():
     global timer
-    timer = 65
+    timer = 75
     while True:
         gevent.sleep(1)
         timer -= 1
@@ -67,10 +66,11 @@ def reprint():
     os.system("cls" if os.name == "nt" else "clear")
     print("\n")
     print(" +---------------------------------------------+")
+    speed = sum(pbr.speeds)/len(pbr.speeds)
     if timer == 0:
-        print(" | Match in progress...                        |")
+        print(" | Speed: %5.1f%%       Match in progress...    |" % (100 * speed))
     else:
-        print(" | Match Starting in...                    %2ds |" % timer)
+        print(" | Speed: %5.1f%%       Match Starting in:  %2ds |" % (100 * speed, timer))
     print(" +---------------------------------------------+")
     print(" | Colosseum: %32s |" % colosseums[pbr.stage])
     print(" |     State: %32s |" % PbrStates.names[pbr.state])
@@ -105,13 +105,8 @@ def onState(state):
         pbr.new(random.randint(0,9), data[0:3], data[3:6])
         gevent.spawn(countdown)
         
-def onAttack(side, move):
-    if side == Side.BLUE:
-        mon = pbr.pkmnBlue[pbr.currentBlue]
-        addEvent("%s (blue) uses %s." % (mon["name"], mon["moves"][move]["name"]))
-    else:
-        mon = pbr.pkmnRed[pbr.currentRed]
-        addEvent("%s (red) uses %s." % (mon["name"], mon["moves"][move]["name"]))
+def onAttack(side, mon, moveindex, movename):
+    addEvent("%s (%s) uses %s." % (mon["name"], ("blue" if side == Side.BLUE else "red"), movename))
         
 def onDown(side, pkmn):
     if side == Side.BLUE:
@@ -142,6 +137,11 @@ def onSwitch(side, mon):
     else:
         addEvent("%s (red) is sent out." % pbr.pkmnRed[mon]["name"])
 
+def loop_reprint():
+    while True:
+        gevent.sleep(1)
+        reprint()
+
 pbr = PBR()
 
 pbr.onState(onState)
@@ -153,6 +153,8 @@ pbr.onError(onError)
 pbr.onDeath(onDeath)
 pbr.onSwitch(onSwitch)
 pbr.connect()
+
+gevent.spawn(loop_reprint)
 
 #pbr.new(random.randint(0,9), data[0:1], data[3:4])
 #pbr.start()

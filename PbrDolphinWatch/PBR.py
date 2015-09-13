@@ -7,12 +7,13 @@ Created on 09.09.2015
 from __future__ import print_function, division
 
 from dolphinWatch import DolphinWatch, DisconnectReason
-import gevent, random, re
+import gevent, random, re, time
 
 from addresses import Locations
 from util import enum
 from values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP
 from guiStateDistinguisher import Distinguisher, PbrGuis, PbrStates
+from _collections import deque
 
 Side = enum(
     BLUE = 0,
@@ -42,10 +43,8 @@ class PBR():
         self._onDeath = None
         self._onSwitch = None
         
-        self.moveBlueUsed = 0
-        self.moveRedUsed = 0
-        
-        self.state = 1234
+        self.frame = 0
+        self.state = 1234 # wat
         self.stage = 0 # TODO set all this
         self.pkmnBlue = {}
         self.pkmnRed = {}
@@ -69,10 +68,9 @@ class PBR():
         self._subscribe(Locations.ORDER_LOCK_BLUE,        self._distinguishOrderLock)
         self._subscribe(Locations.ORDER_LOCK_RED,         self._distinguishOrderLock)
         self._subscribe(Locations.CURSOR_POS,             self._distinguishCursorPos)
-        #self._subscribe(Locations.WINNER,                 self._distinguishWinner)
-        self._subscribe(Locations.IDLE_TIMER,             self._distinguishTimer)
-        self._subscribe(Locations.ATTACKING_MON,          self._distinguishMonAttack)
-        self._subscribeMulti(Locations.INFO_BOX,          self._distinguishInfo)
+        self._subscribe(Locations.FRAMECOUNT,             self._distinguishFramecount)
+        self._subscribeMulti(Locations.ATTACK_TEXT,       self._distinguishAttack)
+        self._subscribeMulti(Locations.INFO_TEXT,         self._distinguishInfo)
         
         # initially paused, because in state WAITING_FOR_NEW
         self.watcher.pause()
@@ -102,11 +100,15 @@ class PBR():
         self.bluesTurn = True
         self.startsignal = False
         self.newsignal = False
+        self.speeds = deque([1.0], 20)
         
         # working data
+        self._moveBlueUsed = 0
+        self._moveRedUsed = 0
         self._stage = 0
         self._bp_offset = 0
-        self._timerPrev = 0
+        self._framePrev = 0
+        self._timerPrev = time.time()
         self._posBlues = []
         self._posReds = []
         self._mapBlue = [0, 1, 2]
@@ -114,6 +116,7 @@ class PBR():
         self._fSendNextBlue = True
         self._fSendNextRed = True
         self._fSelectedSingleBattle = False
+        self._fSelectedTppRules = False
         self._fBlueSelectedBP = False
         self._fBlueChoseOrder = False
         self._fEnteredBp = False
@@ -122,9 +125,6 @@ class PBR():
         self._fBackToRed = False # TODO improve this shit
         
         self._cursorevents = {}
-        self._scheduledEvent = None
-        self._scheduledTime = 0
-        self._scheduledArgs = None
         
     def _load(self):
         self.watcher.load(savename)
@@ -143,7 +143,7 @@ class PBR():
     def new(self, stage, pkmnBlue, pkmnRed):
         self._reset()
         #self._load() # start from the savestate!
-        self._newRng() # avoid patterns (e.g. fog at courtyard)
+        self._newRng() # avoid patterns (e.g. always fog at courtyard)
         self.newsignal = True
         self.stage = stage
         self._stage = stage
@@ -160,6 +160,11 @@ class PBR():
             #self._pressTwo()
             
     def onWin(self, callback):
+        '''
+        Sets the callback that will be called if a winner is determined.
+        Can be considered end of the match.
+        TODO change argument from enum to 
+        '''
         self._onWin = callback
         
     def onState(self, callback):
@@ -189,6 +194,10 @@ class PBR():
     ###########################################################
         
     def _setCursor(self, val):
+        '''
+        Sets the game's selection cursor to a certain position.
+        used to minimize gui navigation and logic. Major speedup.
+        '''
         self.watcher.write16(Locations.CURSOR_POS.addr, val)
         
     def _pressButton(self, button):
@@ -198,47 +207,65 @@ class PBR():
         self.watcher.wiiButton(0, button)
         
     def _select(self, index):
+        '''Changes the cursor position and presses Two. Is often used, therefore bundled.'''
         self._setCursor(index)
         self._pressButton(WiimoteButton.TWO)
         
     def _pressTwo(self):
+        '''Presses Two. Is often used, therefore bundled.'''
         self._pressButton(WiimoteButton.TWO)
         
     def _pressOne(self):
+        '''Presses One. Is often used, therefore bundled.'''
         self._pressButton(WiimoteButton.ONE)
         
     def _wake(self):
         self._distinguishGui(self.gui)
         
     def _setState(self, state):
+        '''
+        Sets the current PBR state. Causes the onState event if it changed.
+        Always use this method to change the state, or events will be missed.
+        '''
         if self.state == state: return
         self.state = state
         if self._onState:
             self._onState(state)
             
     def _error(self, text):
+        '''reports an error to the "outer layer" by calling the onError event callback'''
         if self._onError: self._onError(text)
         
     def _newRng(self):
+        '''Helper method to replace PBR's RNG-seed with a random 32 bit value.'''
         self.watcher.write32(Locations.RNG_SEED.addr, random.getrandbits(32))
         
     def _bytesToString(self, data):
+        '''
+        Helper method to turn a list of bytes stripped from PBR's memory
+        into a string, replacing unknown/invalid characters with "?"
+        and stopping at the first "0", because they are c-strings
+        ''' 
         data = map(lambda x: x if x < 128 else "?", data)
+        data = data[:data.index(0)] # stop at first 0
         return str(bytearray(data[1::2])).encode("ascii", "replace")
     
+    def _swap(self, map_, i1, i2):
+        '''Helper method to swap values at 2 indexes in a list'''
+        map_[i1], map_[i2] = map_[i2], map_[i1]
+        
     ################################################
     ### The below functions are for timed inputs ###
     ###        or processing "raw events"        ###
     ################################################
     
-    def _setCursorevent(self, value, callback):
-        self._cursorevents[value] = callback
-        
-    def _schedule(self, ms, callback, *args):
-        #self.watcher.write16(Locations.IDLE_TIMER.addr, 0)
-        self._scheduledEvent = callback
-        self._scheduledTime = int(ms * 0.27)
-        self._scheduledArgs = args
+    def _setCursorevent(self, value, callback, *args):
+        '''
+        Adds a new cursorevent.
+        <callback> will be called once the game's selection-cursor is on <value>.
+        CAUTION: Might not trigger in time if the cursor position already has <value>.
+        '''
+        self._cursorevents[value] = (callback, args)
         
     def _confirmPkmn(self):
         self._pressTwo()
@@ -251,6 +278,11 @@ class PBR():
         self._setCursorevent(cursor, self._distinguishBpSlots)
         
     def _initMatch(self):
+        '''
+        Is called when a match start is initiated.
+        If the startsignal wasn't set yet (start() wasn't called),
+        the game will pause, resting in the state WAITING_FOR_START
+        '''
         if self.startsignal:
             self._setState(PbrStates.MATCH_RUNNING)
         else:
@@ -271,10 +303,11 @@ class PBR():
             self.watcher.pause()
             self._setState(PbrStates.WAITING_FOR_NEW)
             
-    def _swap(self, map_, i1, i2):
-        map_[i1], map_[i2] = map_[i2], map_[i1]
-        
     def _switched(self, side, nextPkmn):
+        '''
+        Is called when a pokemon has been switch with another one.
+        Triggers the onSwitch event and fixes the switch-mappings
+        '''
         if side == Side.BLUE:
             self._swap(self._mapBlue, self.currentBlue, nextPkmn)
             self.currentBlue = nextPkmn
@@ -336,16 +369,20 @@ class PBR():
                 #move = random.choice([0, 1, 2, 3, 3, 3])
                 #move = random.randint(0, 3) # TODO check how many moves the pkmn has
                 if self.bluesTurn:
-                    self.moveBlueUsed = move
+                    self._moveBlueUsed = move
                     self._fSendNextBlue = False
                 else:
-                    self.moveRedUsed = move
+                    self._moveRedUsed = move
                     self._fSendNextRed = False
             
                 self._pressButton(padValues[move])
             gevent.sleep(0.2)
             
     def _skipIntro(self):
+        '''
+        Started as a gevent job after the battle passes are confirmed.
+        Start spamming 2 to skip the intro before the order selection.
+        '''
         while self.gui == PbrGuis.RULES_BPS_CONFIRM:
             self._pressTwo()
             gevent.sleep(0.2)
@@ -353,15 +390,45 @@ class PBR():
     ##################################################
     ### Below are callbacks for the subscriptions. ###
     ###   It's really ugly, I know, don't judge.   ###
+    ###   Their job is to know what to do when a   ###
+    ###     certain gui is open, and when, etc.    ###
     ##################################################
+            
+    def _distinguishAttack(self, data):
+        # Gets called each time the attack-text changes (Team XYZ's pkmn used move)
+        
+        # Ignore these data changes when not in a match
+        if self.state != PbrStates.MATCH_RUNNING: return
+        
+        # 2nd line starts 0x40 bytes later and contains the move name only
+        line = self._bytesToString(data[:0x40]).strip()
+        move = self._bytesToString(data[0x40:]).strip()[:-1] # convert, then remove "!"
+        
+        match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
+        if match:
+            # "used" => "uses" reset, so we get the event again if something changes!
+            self.watcher.write8(Locations.ATTACK_TEXT.addr + 1 + 2*match.start(3), 0x73)
+            if match.group(1) == "Blue":
+                if self._onAttack: self._onAttack(Side.BLUE, self.pkmnBlue[self.currentBlue], self._moveBlueUsed, move)
+            else:
+                if self._onAttack: self._onAttack(Side.RED, self.pkmnRed[self.currentRed], self._moveRedUsed, move)
+        
         
     def _distinguishInfo(self, data):
+        # Gets called each time the text in the infobox (xyz fainted, abc hurt itself, etc.)
+        # changes and gets analyzed for possible events of interest.
+        
+        # Ignore these data changes when not in a match
         if self.state != PbrStates.MATCH_RUNNING: return
+        
         string = self._bytesToString(data)
-        match = re.search("^Team (Blue|Red)'s .+?(fainted)", string)
+        
+        # CASE 1: Someone fainted. Just distinguishing the side is enough, no name needed
+        match = re.search(r"^Team (Blue|Red)'s .+?(f)ainted", string)
         if match:
-            # "fainted" => "Fainted" reset, so we get the event again!
-            self.watcher.write8(Locations.INFO_BOX.addr + 1 + 2*match.start(2), 0x46)
+            # "fainted" => "Fainted" reset, so we get the event again if something changes!
+            self.watcher.write8(Locations.INFO_TEXT.addr + 1 + 2*match.start(2), 0x46)
+            
             if match.group(1) == "Blue":
                 side = Side.BLUE
                 dead = self.currentBlue
@@ -376,17 +443,21 @@ class PBR():
             if not any(self.aliveBlue): self._matchOver(Side.RED)
             elif not any(self.aliveRed): self._matchOver(Side.BLUE)
             return
-            
+        
+        # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search("^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?(was dragged out)", string)
         if match:
-            # "was" => "Was" reset, so we get the event again!
-            self.watcher.write8(Locations.INFO_BOX.addr + 1 + 2*match.start(3), 0x57)
+            # "was" => "Was" reset, so we get the event again if something changes!
+            self.watcher.write8(Locations.INFO_TEXT.addr + 1 + 2*match.start(3), 0x57)
+            
             if match.group(1) == "Blue":
                 side = Side.BLUE
             else:
                 side = Side.RED
-            # test
+                
+            # check each pokemon if that is the one that was sent out
             for i, v in enumerate(self.pkmnBlue if side == Side.BLUE else self.pkmnRed):
+                # names are displayed in all-caps
                 name = v["name"].upper()
                 # match pkmn names with display name
                 for fin, rep in {u"\u2642": "(M)", u"\u2640": "(F)", " (SHINY)": "-S"}.iteritems():
@@ -394,100 +465,104 @@ class PBR():
                 if name == "NIDORAN?" and v["gender"] == "m": name = "NIDORAN(M)"
                 elif name == "NIDORAN?" and v["gender"] == "f": name = "NIDORAN(F)"
                 if name == match.group(2):
-                    # this is it!
+                    # this is it! Calling _switched to trigger the switch event and fix the order-mapping.
                     self._switched(side, i)
                     break
             else:
-                # error! no pokemon matched
+                # error! no pokemon matched.
+                # This should never occur, unless the pokemon's name is written differently
+                # In that case: look above! Make sure the names in the .json and the display names can match up
                 self._onError('No pokemon matched "%s"' % match.group(2))
             return
-                    
+                      
+    def _distinguishFramecount(self, val):
+        delta = max(0, val - self._framePrev)
+        if delta <= 0: return
+        self.frame += delta
         
-    def _distinguishTimer(self, val):
-        delta = max(0, val - self._timerPrev)
-        if delta == 0: return
+        now = time.time()
+        deltaReal = now - self._timerPrev
         
-        self._timerPrev = val
-        if not self._scheduledEvent: return
-        self._scheduledTime -= delta
-        if self._scheduledTime <= 0:
-            self._scheduledEvent(*self._scheduledArgs)
-            self._scheduledEvent = None
+        self._timerPrev = now
+        self._framePrev = val
+        
+        delta /= 60.0 # frame count, increases by 60/s
+        speed = (delta / deltaReal) if deltaReal > 0 else 0 # wat
+        self.speeds.append(speed)
         
     def _distinguishCursorPos(self, val):
+        # Is called every time the cursor position changes
+        # (selection cursor, not wiimote cursor or anything)
+        # is very useful, because for some guis the indicator of being input-ready
+        # is the cursor being set to a specific position. 
         try:
-            self._cursorevents[val]()
+            event = self._cursorevents[val]
+            event[0](*event[1])
             del self._cursorevents[val]
         except:
             pass
-        
-    def _distinguishMonAttack(self, val):
-        if self.state != PbrStates.MATCH_RUNNING: return
-        
-        # TODO remove this joke
-        if val == ord("R"):
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+1, ord("D"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+3, ord("a"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+5, ord("r"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+7, ord("k"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+9, ord("V"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+11, ord("e")) # R
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+13, ord("x"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+15, ord("o"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+17, ord("n"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+19, ord("s"))
-            if self._onAttack: self._onAttack(Side.RED, self.moveRedUsed)
-        elif val == ord("B"):
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+1, ord(" "))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+3, ord("D"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+5, ord("a"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+7, ord("r"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+9, ord("k"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+11, ord("V")) # B
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+13, ord("e"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+15, ord("x"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+17, ord("o"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+19, ord("n"))
-            #self.watcher.write8(Locations.ATTACK_TEXT.addr+21, ord("s"))
-            if self._onAttack: self._onAttack(Side.BLUE, self.moveBlueUsed)
-
     def _distinguishOrderLock(self, val):
+        # This value becomes 1 if at least 1 pokemon has been selected for order. for both sides.
+        # Enables the gui to lock the order in. Bring up that gui by pressing 1
         if val == 1:
             self._pressOne()
 
     def _distinguishPlayer(self, val):
+        # this value is 0 or 1, depending on which player is inputting next
         self.bluesTurn = (val == 0)
 
     def _distinguishBpSlots(self):
+        # Decide what to do if we are looking at a battle pass...
+        # Chronologically: clear #2, clear #1, fill #1, fill #2
         if self.state <= PbrStates.EMPTYING_BP2:
+            # We are still in the state of clearing the 2nd battle pass
             if self._fClearedBp:
+                # There are no pokemon on this battle pass left
+                # Go back and start preparing battle pass #1
                 self._pressOne()
                 self._setState(PbrStates.PREPARING_BP1)
             else:
+                # There are still pokemon on the battle pass. Grab that.
+                # Triggers gui BPS_PKMN_GRABBED
                 self._select(CursorOffsets.BP_SLOTS)
         elif self.state <= PbrStates.PREPARING_BP2:
+            # We are in the state of preparing the battlepasses
             if (self.state == PbrStates.PREPARING_BP1 and not self._posBlues)\
             or (self.state == PbrStates.PREPARING_BP2 and not self._posReds):
+                # if the current battle pass has been filled with all pokemon:
+                # enter next state and go back
                 self._setState(self.state + 1)
                 self._pressOne()
             elif self._fClearedBp:
+                # The old pokemon have been cleared, click on last slot (#6) to fill
                 self._select(CursorOffsets.BP_SLOTS + 5)
             else:
+                # There are still old pokemon on blue's battle pass. Grab that.
+                # Triggers gui BPS_PKMN_GRABBED
                 self._select(CursorOffsets.BP_SLOTS)
 
     def _distinguishGui(self, gui):
+        # skip 0/None-guis (?, i am sure this had a deeper meaning I didn't document)
         if not gui: return
         
         # skip if in waiting mode
+        # EDIT: No, actually continue as normal. in those pauses the game is paused anyway.
+        # And else the script can't "wake up" on its own if you manually unpause the game
         #if self.state in [PbrStates.WAITING_FOR_NEW, PbrStates.WAITING_FOR_START]:
         #    return
         
+        # TODO do this better
+        # The script uses self.gui for some comparisons, but if no if-elif-else
+        # picks this gui up, don't trigger a gui change and return to the old state
+        # Question: Why can't any gui be picked up safely?
+        # Answer: Some values trigger random guis while in a completely different state, and those need filtering
         backup = self.gui # maybe the gui is faulty, then restore afterwards
         self.gui = gui
         
         # BIG switch incoming :(
         # what to do on each screen
         
+        # MAIN MENU
         if gui == PbrGuis.MENU_MAIN:
             if self.state < PbrStates.PREPARING_STAGE:
                 self._select(CursorPosMenu.BP)
@@ -508,7 +583,7 @@ class PBR():
         elif gui == PbrGuis.MENU_BATTLE_REMOTES:
             self._select(1)
             
-            
+        # BATTLE PASS MENU
         elif gui == PbrGuis.BPS_SELECT and self.state < PbrStates.PREPARING_START:
             self._bp_offset = 0
             self._fEnteredBp = False
@@ -540,6 +615,7 @@ class PBR():
                 self._setCursorevent(CursorOffsets.BP_SLOTS, self._distinguishBpSlots)
         elif gui == PbrGuis.BPS_PKMN and self.state < PbrStates.PREPARING_START:
             # it soooometimes gets stuck, so wait
+            # TODO remove this and find the very rare cause of stucks.
             gevent.sleep(0.05)
             if self.state == PbrStates.PREPARING_BP1:
                 self._select(CursorOffsets.PKMN + (self._posBlues[0] % 30))
@@ -551,7 +627,7 @@ class PBR():
             # because the model loading delays and therefore breaks the indicator
             pass
         
-        
+        # RULES MENU (stage, settings etc, but not battle pass selection)
         elif gui == PbrGuis.RULES_STAGE:
             if self._stage > 5:
                 self._stage -= 1
@@ -560,19 +636,29 @@ class PBR():
                 self._select(CursorOffsets.STAGE + self._stage)
                 self._setState(PbrStates.PREPARING_START)
         elif gui == PbrGuis.RULES_SETTINGS:
-            if self._fSelectedSingleBattle:
-                self._select(3)
-                self._fSelectedSingleBattle = False    
-            else:
+            if not self._fSelectedTppRules:
+                #cursorevents
+                self._setCursorevent(CursorOffsets.RULESETS, self._select, CursorOffsets.RULESETS+1)
+                self._setCursorevent(CursorPosMenu.RULES_CONFIRM, self._pressTwo)
+                self._select(1)
+                self._fSelectedTppRules = True
+            elif not self._fSelectedSingleBattle:
                 self._select(2)
                 self._fSelectedSingleBattle = True
+            else:
+                self._select(3)
+                self._fSelectedSingleBattle = False 
+                self._fSelectedTppRules = False   
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
             self._select(1)
         elif gui == PbrGuis.RULES_BPS_CONFIRM:
             self._pressTwo()
             # skip the followup match intro
             gevent.spawn_later(1, self._skipIntro)
-            
+        
+        # BATTLE PASS SELECTION (chronologically before PbrGuis.RULES_BPS_CONFIRM)
+        # overlaps with previous battle pass menu. Therefore the state check
+        # TODO improve that, maybe cluster it together?
         elif gui == PbrGuis.BPSELECT_SELECT and self.state >= PbrStates.PREPARING_START:
             if self._fBlueSelectedBP:
                 self._select(CursorPosBP.BP_2)
@@ -583,7 +669,7 @@ class PBR():
         elif gui == PbrGuis.BPSELECT_CONFIRM and self.state >= PbrStates.PREPARING_START:
             self._pressTwo()
             
-            
+        # PKMN ORDER SELECTION
         elif gui == PbrGuis.ORDER_SELECT:
             self._pressButton(WiimoteButton.RIGHT)
             # TODO fix sideways remote
@@ -598,14 +684,17 @@ class PBR():
                 self.watcher.write32(Locations.ORDER_BLUE.addr, 0x01020307)
                 self._pressTwo()
                 
-                
+        # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
-            # erase this string so we get the event of it refilling
+            # erase the "xyz used move" string, so we get the event of it changing.
+            # Change the character "R" or "B" to 0, so this change won't get picked up.
             self.watcher.write8(Locations.ATTACKING_MON.addr, 0)
             # overwrite RNG seed
             self._newRng()
+            # start the job that handles the complicated and dangerous process of move selection
             gevent.spawn(self._nextMove)
         elif gui == PbrGuis.MATCH_PKMN_SELECT:
+            # start the job that handles the complicated and dangerous process of pokemon selection
             gevent.spawn(self._nextPkmn)
         elif gui == PbrGuis.MATCH_IDLE:
             pass
@@ -613,9 +702,13 @@ class PBR():
         elif gui == PbrGuis.MATCH_POPUP and self.state == PbrStates.MATCH_RUNNING:
             self._pressTwo()
         else:
-            self.gui = backup # no gui match, restore old state
+            # This gui was not accepted. Restore the old gui state.
+            # unknown/uncategorized or filtered by state
+            self.gui = backup
+            # Don't trigger the onGui event
             return
         
+        # Trigger the onGui event now. The gui is consideren valid if we reach here
         if self._onGui: self._onGui(gui)
         
 
