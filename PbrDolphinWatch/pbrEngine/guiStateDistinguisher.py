@@ -5,14 +5,15 @@ Created on 10.09.2015
 
 This module represents the big "switch", which is supposed to
 turn all those weird and separated dolphinWatch state/gui events
-into uniform PBR states and events.
+into uniform abstracted PBR states and events.
 '''
 
 from __future__ import print_function, division
 
-from states import PbrGuis
-from values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
-from values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox 
+from .states import PbrGuis
+from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
+from .memorymap.values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox 
+from .util import bytesToString
 
 class Distinguisher(object):
     def __init__(self, callback):
@@ -39,6 +40,9 @@ class Distinguisher(object):
     def distinguishPopup(self, val):
         if val == StatePopupBox.AWAIT_INPUT:
             self._callback(PbrGuis.MATCH_POPUP)
+            
+    def distinguishStart(self, data):
+        self._callback(_map_start.get(bytesToString(data)))
 
 ### Main Menu
 _map_menu = {
@@ -47,8 +51,11 @@ _map_menu = {
     GuiStateMenu.BATTLE_TYPE   : PbrGuis.MENU_BATTLE_TYPE,
     GuiStateMenu.BATTLE_PLAYERS: PbrGuis.MENU_BATTLE_PLAYERS,
     GuiStateMenu.BATTLE_REMOTES: PbrGuis.MENU_BATTLE_REMOTES,
+    GuiStateMenu.SAVE          : PbrGuis.MENU_SAVE,
+    GuiStateMenu.SAVE_CONFIRM  : PbrGuis.MENU_SAVE_CONFIRM,
+    GuiStateMenu.SAVE_CONTINUE : PbrGuis.MENU_SAVE_CONTINUE,
+    GuiStateMenu.SAVE_TYP2     : PbrGuis.MENU_SAVE_TYP2,
 }
-
 
 ### Battle Pass Menu
 _map_bps = {
@@ -82,9 +89,20 @@ _map_order = {
 
 ### Match Gui
 _map_match = {
+    GuiStateMatch.FADE_IN: PbrGuis.MATCH_FADE_IN,
     GuiStateMatch.IDLE   : PbrGuis.MATCH_IDLE,
     GuiStateMatch.MOVES  : PbrGuis.MATCH_MOVE_SELECT,
     GuiStateMatch.PKMN   : PbrGuis.MATCH_PKMN_SELECT,
     GuiStateMatch.GIVE_IN: PbrGuis.MATCH_GIVE_IN,
 }
 
+### start menu
+_map_start = {
+    "Wii Remote Control Sideways": PbrGuis.START_WIIMOTE_INFO,
+    "Choose a Game Mode"         : PbrGuis.START_MENU,
+    "Choose Options"             : PbrGuis.START_OPTIONS,
+    "Save the changed options settings?": PbrGuis.START_OPTIONS_SAVE,
+    "Announcer's Voice"          : PbrGuis.START_VOICE,
+    "Colosseum Mode"             : PbrGuis.START_MODE,
+    "Continue"                   : PbrGuis.START_SAVEFILE, # doesn't work, but relying on unstucker anyway
+}

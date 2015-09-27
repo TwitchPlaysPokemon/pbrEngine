@@ -6,7 +6,7 @@ Created on 09.09.2015
 
 from __future__ import print_function, division
 
-from util import enum
+from ..util import enum, intToFloatRepr
 
 ##########################################
 # buttons. concatenate to 16 bit integer with binary OR
@@ -28,6 +28,35 @@ WiimoteButton = enum(
 
 ##########################################
 # uncategorized stuff
+
+BattleStyles = enum(
+    MULTI = 0x3B400000, # freeze, don't use
+    DOUBLE = 0x3B400001,
+    SINGLE = 0x3B400002,
+)
+
+Rulesets = enum(
+    EVERYTHING_ALLOWED = 0x3C000000,
+    All_LV_50 = 0x3C001000,
+    RULE_1 = 0x3C003000,
+    RULE_2 = 0x3C004000,
+    RULE_3 = 0x3C005000,
+)
+
+Colosseums = enum(
+    NONE        = 0,
+    GATEWAY     = 0x380003e8,
+    MAIN_STREET = 0x380003e9,
+    WATERFALL   = 0x380003ea,
+    NEON        = 0x380003eb,
+    CRYSTAL     = 0x380003ec,
+    SUNNY_PARK  = 0x380003ed,
+    MAGMA       = 0x380003ee,
+    COURTYARD   = 0x380003ef,
+    SUNSET      = 0x380003f0,
+    STARGAZER   = 0x380003f1,
+    LAGOON      = 0x380003f2,
+)
 
 TrainerStyle = enum(
     YOUNG_BOY_A   = 0x00,
@@ -52,12 +81,22 @@ TrainerStyle = enum(
     LITTLE_GIRL_C = 0x11,
 )
 
+DefaultValues = enum(
+    GUI_POS_X = intToFloatRepr(0xbe830304),
+    GUI_POS_Y = intToFloatRepr(0x41700000),
+    SPEED1    = 0x40a00015,
+    SPEED2    = 0x40a00000,
+    BLUR1     = 0x4b7fffff,
+    BLUR2     = 0x47c35000,
+)
+
 ##########################################
 # cursor positions to click on stuff
 
 CursorOffsets = enum(
     BOX      = 0x0b,
     PKMN     = 0x0a,
+    BPS      = 0x14,
     BP_SLOTS = 0x15,
     STAGE    = 0x01,
     RULESETS = 0x0a,
@@ -67,7 +106,7 @@ CursorPosMenu = enum(
     BP       = 0x01,
     BATTLE   = 0x02,
     PROFILE  = 0x03, #unused
-    SAVE     = 0x04, #unused
+    SAVE     = 0x04,
     STORAGE  = 0x05, #unused
     WFC      = 0x06, #unused
     SHOP     = 0x07, #unused
@@ -76,16 +115,17 @@ CursorPosMenu = enum(
     BUTTON_3 = 0x03, # for generic guis
     BACK     = 0x63, # for whatever reason
     STAGE_DOWN = 0x08,
-    RULES_CONFIRM  = 0x0e,
+    RULES_CONFIRM = 0x0e,
+    SAVE_CONFIRM = 0x03,
 )
 
 CursorPosBP = enum(
-    BP_1   = 0x14,
-    BP_2   = 0x15,
-    REMOVE = 0x09,
-    CUSTOM = 0x0d,
-    RENTAL = 0x0e,
-    FRIEND = 0x0f,
+    BP_NEXT = 0x02,
+    BP_PREV = 0x03,
+    REMOVE  = 0x09,
+    CUSTOM  = 0x0d,
+    RENTAL  = 0x0e,
+    FRIEND  = 0x0f,
 )
 
 ##########################################
@@ -115,13 +155,17 @@ GuiStateMenu = enum(
     BATTLE_REMOTES  = 0x8a,
     BATTLE_RULES    = 0x90, # unfortunately stage selection AND rules
                             # use GuiStateRules for better distinction
+    SAVE            = 0x61,
+    SAVE_CONFIRM    = 0x69,
+    SAVE_CONTINUE   = 0x26c,
+    SAVE_TYP2       = 0x26f, # thank you press 2
 )
 
 GuiStateRules = enum(
     STAGE_SELECTION = 0x20,
     OVERVIEW        = 0x26,
     BATTLE_STYLE    = 0x2b, # single or double battle
-    RULESET         = 0x30, # "everything goes", "tpp" or other sets
+    RULESET         = 0x30, # "everything goes", "tpp" or other rulesets
     BP_SELECTION    = 0xb8, # use GuiStateBpSelection for better distinction
     BP_CONFIRM      = 0x3a,
     MATCH           = 0x3d, # also pre-match? useless
@@ -140,6 +184,7 @@ GuiStateOrderSelection = enum(
 )
 
 GuiStateMatch = enum(
+    FADE_IN = 0x02,
     IDLE    = 0x08,
     MOVES   = 0x03,
     GIVE_IN = 0x0b,
@@ -155,10 +200,11 @@ StatePopupBox = enum(
 ##########################################
 # can stay unused by using inputs instead.
 GuiTarget = enum(
-    GIVE_IN       = 0xff,
-    SELECT_MOVE   = 0xfc,
-    SWITCH_PKMN   = 0xfd,
-    INSTA_GIVE_IN = 0xfe,
+    GIVE_IN       = 0x000400ff,
+    SELECT_MOVE   = 0x000400fc,
+    SWITCH_PKMN   = 0x000400fd,
+    CONFIRM_PKMN  = 0x000600fd,
+    INSTA_GIVE_IN = 0x000400fe,
 )
 MoveInput = enum(
     NONE  = 0xff,
