@@ -43,6 +43,7 @@ stages = [
     Stages.SUNSET,
     Stages.COURTYARD,
     Stages.STARGAZER,
+    #Stages.LAGOON,
 ]
 
 avatarsBlue = [
@@ -56,9 +57,6 @@ avatarsRed = [
     AvatarsRed.CENA,
     AvatarsRed.ROSE,
 ]
-    
-events = []
-max_events = 5
 
 logfile = "ishouldnotexist.txt"
 channel = "#_tppspoilbot_1443119161371" #"#FelkCraft"
@@ -118,13 +116,12 @@ def onSwitch(side, mon, monindex):
     display.addEvent("%s (%s) is sent out." % (mon["name"], side))
     
 def onMoveSelection(side, fails):
-
     if side == "blue" and fails == 0:
         pass#gevent.sleep(3)
     pbr.selectMove(random.randint(0, 3))
     #pbr.selectMove(0)
 
-_BASEPATH = "G:/PBR/teststream"
+_BASEPATH = "G:/TPP/rc1"
 def onCrash():
     display.addEvent("Dolphin unresponsive. Restarting...")
     # kill dolphin (caution: windows only solution because wynaut)
@@ -133,9 +130,8 @@ def onCrash():
     gevent.sleep(4)
     
     # restart dolphin
-    #cmd = '"%s/x64/Dolphin.exe" -e "%s/pbr.iso"' % (_BASEPATH, _BASEPATH)
-    cmd = '%s/start.bat' % _BASEPATH
-    #subprocess.call(cmd) # DOES NOT WORK FOR SOME REASON DON'T USE PLZ!
+    cmd = '%s/crashrestart.bat' % _BASEPATH
+    #subprocess.call(cmd) # DOES NOT WORK FOR SOME REASON DON'T USE PLZ! needs to run independently bc. sockets propably.
     os.startfile(cmd)
     
     # wait for the new Dolphin instance to fully boot, hopefully
@@ -170,6 +166,8 @@ if __name__ == "__main__":
     pbr.onMoveSelection(onMoveSelection)
     pbr.connect()
     pbr.onGui(lambda x: display.reprint())
+    pbr.setVolume(0)
+    pbr.setFov(0.7)
     
     # don't terminate please
     gevent.sleep(100000000000)

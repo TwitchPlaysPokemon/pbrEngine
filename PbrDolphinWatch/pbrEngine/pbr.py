@@ -61,6 +61,10 @@ class PBR():
         gevent.spawn(self._stuckChecker)
         
     def connect(self):
+        '''
+        Connects do Dolphin with dolphinWatch.
+        Should be called when the initialization (setting listeners etc.) is done.
+        '''
         self._dolphin.connect()
         
     def _initDolphinWatch(self, watcher):
@@ -192,7 +196,7 @@ class PBR():
         self._dolphin.resume()
         if not self._dolphin.load(savefile1 if announcer else savefile2):
             self._setState(PbrStates.CREATING_SAVE1)
-        self.setAnimSpeed(self._increasedSpeed)
+        self._setAnimSpeed(self._increasedSpeed)
         
         self._newRng() # avoid patterns (e.g. always fog at courtyard)
         self._dolphin.volume(0)
@@ -214,24 +218,6 @@ class PBR():
         self.volume = v
         if self.state == PbrStates.MATCH_RUNNING:
             self._dolphin.volume(v)
-
-    def setAnimSpeed(self, val):
-        '''
-        Sets the game's animation speed.
-        Does not influence frame-based "animations" like text box speeds.
-        Does not influence loading times.
-        Is automatically increased during selection as a speed improvement.
-        :param v: float describing speed
-        '''
-        self._dolphin.write32(Locations.SPEED_1.addr, 0)
-        self._dolphin.write32(Locations.SPEED_2.addr, floatToIntRepr(val))
-        
-    def _resetAnimSpeed(self):
-        '''
-        Sets the game's animation speed back to its default.
-        '''
-        self._dolphin.write32(Locations.SPEED_1.addr, DefaultValues.SPEED1)
-        self._dolphin.write32(Locations.SPEED_2.addr, DefaultValues.SPEED2)
       
     def setFov(self, val=0.5):
         '''
@@ -246,21 +232,6 @@ class PBR():
         :param val=DefaultValues.GUI_POS_Y: integer, y-coordinate of gui
         '''
         self._dolphin.write32(Locations.GUI_POS_Y.addr, floatToIntRepr(val))
-        
-    def disableBlur(self):
-        '''
-        Disables the weird multirender-blur-thingy.
-        '''
-        self._dolphin.write32(Locations.BLUR1.addr, 0xffffffff)
-        self._dolphin.write32(Locations.BLUR2.addr, 0xffffffff)
-        
-    def _resetBlur(self):
-        '''
-        Resets the blur-values to their original.
-        This is necessary, because these values are used for something else during selection!
-        '''
-        self._dolphin.write32(Locations.BLUR1.addr, DefaultValues.BLUR1)
-        self._dolphin.write32(Locations.BLUR2.addr, DefaultValues.BLUR2)
       
     def onWin(self, callback):
         '''
@@ -357,7 +328,40 @@ class PBR():
     ###             Below are helper functions.             ###
     ### They are just bundling or abstracting functionality ###
     ###########################################################
+    
+    def _disableBlur(self):
+        '''
+        Disables the weird multirender-blur-thingy.
+        '''
+        self._dolphin.write32(Locations.BLUR1.addr, 0xffffffff)
+        self._dolphin.write32(Locations.BLUR2.addr, 0xffffffff)
         
+    def _resetBlur(self):
+        '''
+        Resets the blur-values to their original.
+        This is necessary, because these values are used for something else during selection!
+        '''
+        self._dolphin.write32(Locations.BLUR1.addr, DefaultValues.BLUR1)
+        self._dolphin.write32(Locations.BLUR2.addr, DefaultValues.BLUR2)
+    
+    def _setAnimSpeed(self, val):
+        '''
+        Sets the game's animation speed.
+        Does not influence frame-based "animations" like text box speeds.
+        Does not influence loading times.
+        Is automatically increased during selection as a speed improvement.
+        :param v: float describing speed
+        '''
+        self._dolphin.write32(Locations.SPEED_1.addr, 0)
+        self._dolphin.write32(Locations.SPEED_2.addr, floatToIntRepr(val))
+        
+    def _resetAnimSpeed(self):
+        '''
+        Sets the game's animation speed back to its default.
+        '''
+        self._dolphin.write32(Locations.SPEED_1.addr, DefaultValues.SPEED1)
+        self._dolphin.write32(Locations.SPEED_2.addr, DefaultValues.SPEED2)
+     
     def _switched(self, side, mon, monindex):
         if self._onSwitch: self._onSwitch(side, mon, monindex)
         self._matchlog("Team %s's %s is sent out." % (side.title(), mon["name"]))
@@ -375,7 +379,7 @@ class PBR():
             limit = 300
             if self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2] \
                     and self.gui not in [PbrGuis.MENU_MAIN, PbrGuis.MENU_BATTLE_PASS, PbrGuis.BPS_SELECT]:
-                limit = 90
+                limit = 80
             if (self.timer.frame - self._lastInputFrame) > limit:
                 self._pressButton(self._lastInput)
         
@@ -444,9 +448,8 @@ class PBR():
         the game will pause, resting in the state WAITING_FOR_START
         '''
         self._resetAnimSpeed()
-        self.setFov(0.7)
         self.timer.schedule(310, self._dolphin.volume, self.volume) # mute the "whoosh" as well
-        self.timer.schedule(450, self.disableBlur)
+        self.timer.schedule(450, self._disableBlur)
         if self.startsignal:
             self._setState(PbrStates.MATCH_RUNNING)
         else:
@@ -485,7 +488,7 @@ class PBR():
         self._dolphin.volume(0)
         self._resetBlur()
         self._select(3)
-        self.setAnimSpeed(self._increasedSpeed)
+        self._setAnimSpeed(self._increasedSpeed)
         # make sure this input gets processed before a potential savestate-load
         self.timer.schedule(30, self._waitForNew)
             
@@ -533,6 +536,8 @@ class PBR():
                 switched = False
                 # A popup appears. Click it away and cancel move selection.
                 # Aborting the move selection should always be possible if a popup appears!
+                # NO, ACTUALLY NOT: If a outroar'ed pokemon has the same name as another, that could fail.
+                # therefore the next pkmn selection might try to send the wrong pkmn out!
                 # Alternate between pressing "2" and "Minus" to get back to the move selectio
                 if fails % 2: self._pressTwo()
                 else: self._pressButton(WiimoteButton.MINUS)
@@ -777,7 +782,7 @@ class PBR():
         if self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2] and self._fSetAnnouncer:
             self._resetAnimSpeed()
             self._dolphin.save(savefile1 if self.announcer != (self.state == PbrStates.CREATING_SAVE1) else savefile2)
-            self.setAnimSpeed(self._increasedSpeed)
+            self._setAnimSpeed(self._increasedSpeed)
             self._fSetAnnouncer = False
             self._setState(self.state + 1)
             
@@ -835,7 +840,7 @@ class PBR():
             else:
                 self._select(1)
                 self._fBpPage2 = False
-            self.setAnimSpeed(self._increasedSpeed)
+            self._setAnimSpeed(self._increasedSpeed)
                 
         elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
             if self.state < PbrStates.PREPARING_STAGE:
@@ -873,7 +878,7 @@ class PBR():
             self._fSetAnnouncer = True
         elif gui in [PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE, PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO]:
             # START_SAVEFILE is not working, but I am relying on the unstucker anyway...
-            self.setAnimSpeed(self._increasedSpeed)
+            self._setAnimSpeed(self._increasedSpeed)
             self.timer.schedule(10, self._pressTwo)
             
         # BATTLE PASS MENU

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>PbrDolphinWatch</name>
+	<name>PbrEngine</name>
 	<comment></comment>
 	<projects>
 		<project>PyDolphinWatch</project>
