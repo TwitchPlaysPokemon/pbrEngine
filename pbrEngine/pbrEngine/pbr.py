@@ -51,8 +51,8 @@ class PBR():
         self.volume = 50
         self.state = PbrStates.INIT
         self.stage = 0
-        self.avatarBlue = AvatarsBlue.DEFAULT
-        self.avatarRed = AvatarsRed.DEFAULT
+        self.avatarBlue = AvatarsBlue.BLUE
+        self.avatarRed = AvatarsRed.RED
         self.announcer = True
         self.gui = PbrGuis.MENU_MAIN # most recent/last gui, for info
         self._reset()
@@ -164,7 +164,7 @@ class PBR():
             self._setState(PbrStates.MATCH_RUNNING)
             self._dolphin.resume()
         
-    def new(self, stage, pkmnBlue, pkmnRed, avatarBlue=AvatarsBlue.DEFAULT, avatarRed=AvatarsRed.DEFAULT, announcer=True):
+    def new(self, stage, pkmnBlue, pkmnRed, avatarBlue=AvatarsBlue.BLUE, avatarRed=AvatarsRed.RED, announcer=True):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated (state != WAITING_FOR_NEW),
@@ -173,8 +173,8 @@ class PBR():
         :param stage: TODO move colosseum enum
         :param pkmnBlue: array with dictionaries/json-objects of team blue's pokemon
         :param pkmnRed: array with dictionaries/json-objects of team red's pokemon 
-        :param avatarBlue=AvatarsBlue.DEFAULT: enum of the avatar to be chosen for blue
-        :param avatarRed=AvatarsRed.DEFAULT: enum of the avatar to be chosen for red
+        :param avatarBlue=AvatarsBlue.BLUE: enum of the avatar to be chosen for blue
+        :param avatarRed=AvatarsRed.RED: enum of the avatar to be chosen for red
         :param announcer=True: boolean if announcer's voice is enabled
         '''
         self._reset()

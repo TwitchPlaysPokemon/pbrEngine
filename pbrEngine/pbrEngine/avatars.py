@@ -9,13 +9,13 @@ from .util import enum
 # the enum's values are the actual battle pass numbers. They are not random!
 
 AvatarsBlue = enum(
-    DEFAULT = 0,
-    ROBIN   = 2,
-    OLIVER  = 4,
+    BLUE   = 0,
+    GREEN  = 2,
+    YELLOW = 4,
 )
 
 AvatarsRed = enum(
-    DEFAULT = 1,
-    CENA    = 3,
-    ROSE    = 5,
+    RED   = 1,
+    BLACK = 3,
+    PINK  = 5,
 )

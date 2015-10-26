@@ -47,15 +47,15 @@ stages = [
 ]
 
 avatarsBlue = [
-    AvatarsBlue.DEFAULT,
-    AvatarsBlue.ROBIN,
-    AvatarsBlue.OLIVER,
+    AvatarsBlue.BLUE,
+    AvatarsBlue.GREEN,
+    AvatarsBlue.YELLOW,
 ]
 
 avatarsRed = [
-    AvatarsRed.DEFAULT,
-    AvatarsRed.CENA,
-    AvatarsRed.ROSE,
+    AvatarsRed.RED,
+    AvatarsRed.BLACK,
+    AvatarsRed.PINK,
 ]
 
 logfile = "ishouldnotexist.txt"
