@@ -152,16 +152,21 @@ class PBR():
     ###         Use these to control the PBR API         ###
     ########################################################
             
-    def start(self):
+    def start(self, orderBlue=[1, 2, 3], orderRed=[1, 2, 3]):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason (state != WAITING_FOR_START),
         it will continue to prepare normally and start the match once it's ready.
         Otherwise calling start() will start the match by resuming the game.
+        :param orderBlue: pokemon order of blue team as list, e.g. [1, 2, 3]
+        :param orderRed: pokemon order of red team as list, e.g. [2, 1]
+        CAUTION: The list order of match.pkmnBlue and match.pkmnRed will be altered
         '''
+        self.match.orderBlue = orderBlue
+        self.match.orderRed = orderRed
         self.startsignal = True
         if self.state == PbrStates.WAITING_FOR_START:
-            self._setState(PbrStates.MATCH_RUNNING)
+            self._setState(PbrStates.SELECTING_ORDER)
             self._dolphin.resume()
         
     def new(self, stage, pkmnBlue, pkmnRed, avatarBlue=AvatarsBlue.BLUE, avatarRed=AvatarsRed.RED, announcer=True):
@@ -170,9 +175,10 @@ class PBR():
         If we are not waiting for a new match-setup to be initiated (state != WAITING_FOR_NEW),
         it will load the savestate anyway. If that fails, it will try to start preparing as soon as possible.
         CAUTION: issues a cancel() call first if the preparation reached the "point of no return".
-        :param stage: TODO move colosseum enum
+        :param stage: colosseum enum, see pbrEngine.stages 
         :param pkmnBlue: array with dictionaries/json-objects of team blue's pokemon
         :param pkmnRed: array with dictionaries/json-objects of team red's pokemon 
+        CAUTION: Currently only max. 3 pokemon per team supported.
         :param avatarBlue=AvatarsBlue.BLUE: enum of the avatar to be chosen for blue
         :param avatarRed=AvatarsRed.RED: enum of the avatar to be chosen for red
         :param announcer=True: boolean if announcer's voice is enabled
@@ -441,6 +447,13 @@ class PBR():
         cursor = CursorOffsets.BP_SLOTS - 1 + self._bp_offset
         self.cursor.addEvent(cursor, self._distinguishBpSlots)
         
+    def _initOrderSelection(self):
+        if self.startsignal:
+            self._setState(PbrStates.SELECTING_ORDER)
+        else:
+            self._dolphin.pause()
+            self._setState(PbrStates.WAITING_FOR_START)
+        
     def _initMatch(self):
         '''
         Is called when a match start is initiated.
@@ -450,11 +463,6 @@ class PBR():
         self._resetAnimSpeed()
         self.timer.schedule(310, self._dolphin.volume, self.volume) # mute the "whoosh" as well
         self.timer.schedule(450, self._disableBlur)
-        if self.startsignal:
-            self._setState(PbrStates.MATCH_RUNNING)
-        else:
-            self._dolphin.pause()
-            self._setState(PbrStates.WAITING_FOR_START)
         
     def _matchOver(self, winner):
         '''
@@ -962,17 +970,28 @@ class PBR():
             
         # PKMN ORDER SELECTION
         elif gui == PbrGuis.ORDER_SELECT:
-            self._pressButton(WiimoteButton.RIGHT)
+            if self.state < PbrStates.WAITING_FOR_START:
+                self._initOrderSelection()
             # TODO fix sideways remote
+            self._pressButton(WiimoteButton.RIGHT)
         elif gui == PbrGuis.ORDER_CONFIRM:
+            def orderToInts(order):
+                vals = [0x07]*6
+                for i, v in enumerate(order):
+                    vals[v-1] = i+1
+                return (vals[0]<<24 | vals[1]<<16 | vals[2]<<8 | vals[3], vals[4]<<8 | vals[5])
             if self._fBlueChoseOrder:
                 self._fBlueChoseOrder = False
-                self._dolphin.write32(Locations.ORDER_RED.addr, 0x01020307)
+                x1, x2 = orderToInts(self.match.orderRed)
+                self._dolphin.write32(Locations.ORDER_RED.addr, x1)
+                self._dolphin.write16(Locations.ORDER_RED.addr+4, x2)
                 self._pressTwo()
                 self._initMatch()
             else:
                 self._fBlueChoseOrder = True
-                self._dolphin.write32(Locations.ORDER_BLUE.addr, 0x01020307)
+                x1, x2 = orderToInts(self.match.orderBlue)
+                self._dolphin.write32(Locations.ORDER_BLUE.addr, x1)
+                self._dolphin.write16(Locations.ORDER_BLUE.addr+4, x2)
                 self._pressTwo()
                 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs

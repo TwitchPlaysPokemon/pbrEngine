@@ -13,6 +13,7 @@ from pbrEngine.states import PbrStates
 from pbrEngine.stages import Stages
 from pbrEngine.avatars import AvatarsBlue, AvatarsRed
 from tbot import Twitchbot
+from random import shuffle
 
 with open("json.json") as f:
     data = json.load(f)
@@ -43,7 +44,7 @@ stages = [
     Stages.SUNSET,
     Stages.COURTYARD,
     Stages.STARGAZER,
-    #Stages.LAGOON,
+    #Stages.LAGOON, # uncomment to include into pool
 ]
 
 avatarsBlue = [
@@ -63,13 +64,16 @@ channel = "#_tppspoilbot_1443119161371" #"#FelkCraft"
 logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn", channel, "192.16.64.180")
 
 def countdown(t=20):
-    t = 20
     while True:
         gevent.sleep(1)
         t -= 1
         if t <= 0:
             t = 0
-            pbr.start()
+            order1 = [1, 2, 3]
+            shuffle(order1)
+            order2 = [1, 2, 3]
+            shuffle(order2)
+            pbr.start(order1, order2)
             break
 
 def new():

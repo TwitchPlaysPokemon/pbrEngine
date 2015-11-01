@@ -8,7 +8,7 @@ from __future__ import print_function, division
 
 from .util import enum
 
-
+# must be gapless
 PbrStates = enum(
     INIT              = 0,
     WAITING_FOR_NEW   = 1,
@@ -23,9 +23,10 @@ PbrStates = enum(
     PREPARING_STAGE   = 8,
     PREPARING_START   = 9, # point of no return.
     WAITING_FOR_START = 10,
+    SELECTING_ORDER   = 11,
     
-    MATCH_RUNNING     = 11,
-    MATCH_ENDED       = 12,
+    MATCH_RUNNING     = 12,
+    MATCH_ENDED       = 13,
 )
 
 PbrGuis = enum(
