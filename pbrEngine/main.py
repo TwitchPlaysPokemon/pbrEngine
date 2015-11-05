@@ -60,7 +60,7 @@ avatarsRed = (
 )
 
 logfile = "ishouldnotexist.txt"
-channel = "#_tppspoilbot_1443119161371" #"#FelkCraft"
+channel = "#invalid"#"#_tppspoilbot_1443119161371" #"#FelkCraft"
 logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn", channel, "192.16.64.180")
 
 def countdown(t=20):

@@ -17,6 +17,7 @@ from .states import PbrGuis, PbrStates
 from .util import bytesToString, stringToBytes, floatToIntRepr
 from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
+from gevent.event import AsyncResult
 
 savefile1 = "saveWithAnnouncer.state"
 savefile2 = "saveWithoutAnnouncer.state"
@@ -131,6 +132,7 @@ class PBR():
         self._bp_offset = 0
         #self._invalidateTimeout = 0
         self._failsMoveSelection = 0
+        self._movesBlocked = [False, False, False, False]
         self._posBlues = []
         self._posReds = []
         self._fSelectedSingleBattle = False
@@ -570,9 +572,19 @@ class PBR():
         '''
         Selects a move. Should be called after the callback onMoveSelection was triggered.
         <num> must be 0, 1, 2 or 3 for up, left, right or down move.
-        Can fail and cause another onMoveSelection callback with incremented <fails> argument.
+        Can fail (instantly) and cause another onMoveSelection callback with incremented <fails> argument.
         '''
-        self._dolphin.write8(Locations.INPUT_MOVE.addr, num)
+        # early opt-out no-PP moves.
+        if self._movesBlocked[num]:
+            self._error("selected 0PP move. early opt-out")
+            self._failsMoveSelection += 1
+            if self._onMoveSelection:
+                self._onMoveSelection("blue" if self.bluesTurn else "red", self._failsMoveSelection-1)
+            else:
+                # no callback for move selection? Choose one by random
+                self.selectMove(random.randint(0, 3))
+        else:
+            self._dolphin.write8(Locations.INPUT_MOVE.addr, num)
  
     def _nextMove(self):
         '''
@@ -589,8 +601,21 @@ class PBR():
             self._matchOver("draw")
             return
         
+        # this instantly hides and locks the gui until a move was inputted.
+        # do this not now, but right as the move gets selected to keep the gui visible
         self._dolphin.write32(Locations.GUI_TARGET_MATCH.addr, GuiTarget.SELECT_MOVE)
         
+        # If this is the first try, retrieve PP
+        if self._failsMoveSelection == 0:
+            #res = AsyncResult()
+            #self._dolphin.read32(Locations.PP_BLUE.addr if self.bluesTurn else Locations.PP_RED.addr, res.set)
+            #val = res.get()
+            val = 0xffffffff
+            # TODO the PP addresses change, find the pattern
+            for i in range(4):
+                x = ((val >> 8*(3-i)) & 0xFF) == 0
+                self._movesBlocked[i] = x
+                
         if self._onMoveSelection:
             self._onMoveSelection("blue" if self.bluesTurn else "red", self._failsMoveSelection)
         else:
@@ -708,6 +733,11 @@ class PBR():
         # TODO remove elfifying maybe
         # skip if this text has been "consumed" already (or elf'd)
         if string.startswith("##") or string.endswith("FALLED"): return
+        
+        # TODO remove raichu's "fly animation"
+        if string.endswith("RAICHU flew up high!"):
+            self._dolphin.write32(0x642204, 0x3dcccccd)
+            self.timer.schedule(220, self._dolphin.write32, 0x642204, 0x80000000)
         
         # shift gui up a bit to fully see this
         self.setGuiPosY(DefaultValues.GUI_POS_Y + 20.0)
