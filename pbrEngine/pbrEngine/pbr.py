@@ -202,6 +202,8 @@ class PBR():
         self._dolphin.resume()
         if not self._dolphin.load(savefile1 if announcer else savefile2):
             self._setState(PbrStates.CREATING_SAVE1)
+        else:
+            self._setAnimSpeed(self._increasedSpeed)
         
         self._newRng() # avoid patterns (e.g. always fog at courtyard)
         self._dolphin.volume(0)
