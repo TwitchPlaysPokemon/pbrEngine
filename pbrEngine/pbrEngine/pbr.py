@@ -384,8 +384,8 @@ class PBR():
             # stuck limit: 5 seconds. No stuckchecker during match.
             if self.state == PbrStates.MATCH_RUNNING: continue
             limit = 300
-            if self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2] \
-                    and self.gui not in [PbrGuis.MENU_MAIN, PbrGuis.MENU_BATTLE_PASS, PbrGuis.BPS_SELECT]:
+            if self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2) \
+                    and self.gui not in (PbrGuis.MENU_MAIN, PbrGuis.MENU_BATTLE_PASS, PbrGuis.BPS_SELECT):
                 limit = 80
             if (self.timer.frame - self._lastInputFrame) > limit:
                 self._pressButton(self._lastInput)
@@ -788,7 +788,7 @@ class PBR():
     def _distinguishBpsSelect(self):
         self._bp_offset = 0
         self._fEnteredBp = False
-        if self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2] and self._fSetAnnouncer:
+        if self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2) and self._fSetAnnouncer:
             self._resetAnimSpeed()
             gevent.sleep(1) # wait for game to stabilize. maybe this causes the load fails.
             self._dolphin.save(savefile1 if self.announcer != (self.state == PbrStates.CREATING_SAVE1) else savefile2)
@@ -827,7 +827,7 @@ class PBR():
         
         # MAIN MENU
         if gui == PbrGuis.MENU_MAIN:
-            if not self._fSetAnnouncer and self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2]:
+            if not self._fSetAnnouncer and self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
                 self._select(CursorPosMenu.SAVE)
             elif self.state < PbrStates.PREPARING_STAGE:
                 self._select(CursorPosMenu.BP)
@@ -846,7 +846,7 @@ class PBR():
                 self._select(2)
         elif gui == PbrGuis.MENU_BATTLE_PASS:
             if self.state >= PbrStates.PREPARING_STAGE or \
-                (not self._fSetAnnouncer and self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2]):
+                (not self._fSetAnnouncer and self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2)):
                 self._pressOne()
             else:
                 self._select(1)
@@ -876,7 +876,7 @@ class PBR():
             
         # START MENU
         elif gui == PbrGuis.START_MENU:
-            if not self._fSetAnnouncer and self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2]:
+            if not self._fSetAnnouncer and self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
                 self.timer.schedule(10, self._select, 3) # options
             else:
                 self.timer.schedule(10, self._select, 1) # colosseum mode
@@ -887,7 +887,7 @@ class PBR():
                 self._dolphin.write8(Locations.ANNOUNCER_FLAG.addr, 0)
             self.timer.schedule(10, self._pressOne)
             self._fSetAnnouncer = True
-        elif gui in [PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE, PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO]:
+        elif gui in (PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE, PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO):
             # START_SAVEFILE is not working, but I am relying on the unstucker anyway...
             self._setAnimSpeed(self._increasedSpeed)
             self.timer.schedule(10, self._pressTwo)
