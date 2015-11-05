@@ -202,7 +202,6 @@ class PBR():
         self._dolphin.resume()
         if not self._dolphin.load(savefile1 if announcer else savefile2):
             self._setState(PbrStates.CREATING_SAVE1)
-        self._setAnimSpeed(self._increasedSpeed)
         
         self._newRng() # avoid patterns (e.g. always fog at courtyard)
         self._dolphin.volume(0)
@@ -789,7 +788,9 @@ class PBR():
         self._fEnteredBp = False
         if self.state in [PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2] and self._fSetAnnouncer:
             self._resetAnimSpeed()
+            gevent.sleep(1) # wait for game to stabilize. maybe this causes the load fails.
             self._dolphin.save(savefile1 if self.announcer != (self.state == PbrStates.CREATING_SAVE1) else savefile2)
+            gevent.sleep(0.5)
             self._setAnimSpeed(self._increasedSpeed)
             self._fSetAnnouncer = False
             self._setState(self.state + 1)

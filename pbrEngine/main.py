@@ -33,7 +33,7 @@ with open("json.json") as f:
             data[i]["moves"][j]["name"] = data[i]["moves"][j]["name"].encode('ascii', 'replace')
     
     
-stages = [
+stages = (
     Stages.GATEWAY,
     Stages.MAIN_STREET,
     Stages.WATERFALL,
@@ -45,19 +45,19 @@ stages = [
     Stages.COURTYARD,
     Stages.STARGAZER,
     #Stages.LAGOON, # uncomment to include into pool
-]
+)
 
-avatarsBlue = [
+avatarsBlue = (
     AvatarsBlue.BLUE,
     AvatarsBlue.GREEN,
     AvatarsBlue.YELLOW,
-]
+)
 
-avatarsRed = [
+avatarsRed = (
     AvatarsRed.RED,
     AvatarsRed.BLACK,
     AvatarsRed.PINK,
-]
+)
 
 logfile = "ishouldnotexist.txt"
 channel = "#_tppspoilbot_1443119161371" #"#FelkCraft"
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     pbr.onMoveSelection(onMoveSelection)
     pbr.connect()
     pbr.onGui(lambda x: display.reprint())
-    pbr.setVolume(0)
+    # pbr.setVolume(0)
     pbr.setFov(0.7)
     
     # don't terminate please
