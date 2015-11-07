@@ -8,8 +8,6 @@ turn all those weird and separated dolphinWatch state/gui events
 into uniform abstracted PBR states and events.
 '''
 
-from __future__ import print_function, division
-
 from .states import PbrGuis
 from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
 from .memorymap.values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox 

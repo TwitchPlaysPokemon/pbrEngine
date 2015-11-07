@@ -5,7 +5,6 @@ Created on 22.09.2015
 '''
 
 from ..util import invertSide, swap
-from argparse import ArgumentError
 
 class Match(object):
     def __init__(self, timer):
@@ -31,10 +30,10 @@ class Match(object):
         self.fSendNextBlue = True
         self.fSendNextRed = True
         # mappings from pkmn# to button#
-        self.mapBlue = range(len(pkmnBlue))
-        self.mapRed = range(len(pkmnRed))
-        self._orderBlue = range(1, 1+len(pkmnBlue))
-        self._orderRed = range(1, 1+len(pkmnRed))
+        self.mapBlue = list(range(len(pkmnBlue)))
+        self.mapRed = list(range(len(pkmnRed)))
+        self._orderBlue = list(range(1, 1+len(pkmnBlue)))
+        self._orderRed = list(range(1, 1+len(pkmnRed)))
 
     def getCurrentBlue(self):
         return self.pkmnBlue[self.currentBlue]
@@ -65,9 +64,9 @@ class Match(object):
         
     def _checkOrder(self, order, length):
         if max(order) != length:
-            raise ArgumentError("Length of order-list does not match number of pokemon: %s" % order)
-        if sorted(order) != range(1, 1+length):
-            raise ArgumentError("Order-list must contain numbers 1-n (amount of pokemon) only: %s" % order)
+            raise ValueError("Length of order-list does not match number of pokemon: %s " % order)
+        if sorted(order) != list(range(1, 1+length)):
+            raise ValueError("Order-list must contain numbers 1-n (amount of pokemon) only: %s " % order)
         
     @property
     def orderBlue(self):

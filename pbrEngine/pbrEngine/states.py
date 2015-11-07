@@ -4,8 +4,6 @@ Created on 13.09.2015
 @author: Felk
 '''
 
-from __future__ import print_function, division
-
 from .util import enum
 
 # must be gapless

@@ -4,8 +4,6 @@ Created on 14.09.2015
 @author: Felk
 '''
 
-from __future__ import print_function, division
-
 import gevent
 from pbrEngine.states import PbrStates
 

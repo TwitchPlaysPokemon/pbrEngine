@@ -9,7 +9,7 @@ import struct
 # http://stackoverflow.com/a/1695250/3688648
 def enum(*sequential, **named):
     enums = dict(zip(sequential, range(len(sequential))), **named)
-    reverse = dict((value, key) for key, value in enums.iteritems())
+    reverse = dict((value, key) for key, value in enums.items())
     enums['names'] = reverse
     return type('Enum', (), enums)
 
@@ -25,13 +25,13 @@ def bytesToString(data):
     # replace pbr's "newline" with a space
     data = [x if x!=0xfe else 0x20 for x in data]
     # eliminate invalid ascii points
-    data = filter(lambda x: x <= 0x7f, data)
+    data = [x for x in data if x <= 0x7f]
     # stop at first 0
     try:
         data = data[:data.index(0)] 
     except:
         pass
-    return str(bytearray(data)).encode("ascii", "replace")
+    return bytes(data).decode()
 
 def stringToBytes(string):
     '''

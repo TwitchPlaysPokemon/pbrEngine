@@ -4,8 +4,6 @@ Created on 26.09.2015
 @author: Felk
 '''
 
-from __future__ import print_function, division
-
 import os
 from pbrEngine.states import PbrStates, PbrGuis
 from pbrEngine.memorymap.values import Colosseums

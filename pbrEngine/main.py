@@ -4,8 +4,6 @@ Created on 04.09.2015
 @author: Felk
 '''
 
-from __future__ import print_function, division
-
 import gevent, json, random, os, sys, time
 import crashchecker, monitor
 from pbrEngine.pbr import PBR
@@ -28,9 +26,9 @@ with open("json.json") as f:
     # remove all utf-8, because windows console crashes otherwise
     # should only affect nidorans, but better be safe
     for i, _ in enumerate(data):
-        data[i]["name"] = data[i]["name"].replace(u"\u2642", "(m)").replace(u"\u2640", "(f)").encode('ascii', 'replace')
+        data[i]["name"] = data[i]["name"].replace(u"\u2642", "(m)").replace(u"\u2640", "(f)").encode('ascii', 'replace').decode()
         for j, _ in enumerate(data[i]["moves"]):
-            data[i]["moves"][j]["name"] = data[i]["moves"][j]["name"].encode('ascii', 'replace')
+            data[i]["moves"][j]["name"] = data[i]["moves"][j]["name"].encode('ascii', 'replace').decode()
     
     
 stages = (
@@ -84,8 +82,8 @@ def new():
     stage = random.choice(stages)
     
     logbot.send_message(channel, "--- NEW MATCH ---")
-    log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
-    log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
+    log("BLUE: %s" % ", ".join([str(p["name"]) for p in pkmn[:3]]))
+    log("RED: %s" % ", ".join([str(p["name"]) for p in pkmn[3:]]))
     log("STAGE: %s" % Stages.names[stage])
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
@@ -149,7 +147,7 @@ def log(text):
         f.write(text + "\n")
 
 if __name__ == "__main__":
-    sys.stderr = file("error.log", "a")
+    #sys.stderr = open("error.log", "a")
     
     # init the PBR engine and hook everything up
     pbr = PBR()

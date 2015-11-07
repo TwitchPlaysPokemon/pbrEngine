@@ -101,8 +101,8 @@ class Twitchbot(object):
                             return None
     
             except socket.error:
-                print "Socket died"
+                print("Socket died")
         
             except socket.timeout:
-                print "Socket timeout"
+                print("Socket timeout")
         

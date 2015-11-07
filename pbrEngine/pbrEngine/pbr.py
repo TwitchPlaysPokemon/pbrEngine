@@ -4,8 +4,6 @@ Created on 09.09.2015
 @author: Felk
 '''
 
-from __future__ import print_function, division
-
 import gevent, random, re
 from dolphinWatch.connection import DolphinConnection, DisconnectReason
 
@@ -72,15 +70,6 @@ class PBR():
         self._dolphin.volume(self.volume)
         
         ### subscribing to all indicators of interest. mostly gui
-        # de-multiplexing all these into single PbrGuis-enum using distinguisher
-        self._subscribe(Locations.GUI_STATE_MATCH,        self._distinguisher.distinguishMatch)
-        self._subscribe(Locations.GUI_STATE_BP,           self._distinguisher.distinguishBp)
-        self._subscribe(Locations.GUI_STATE_MENU,         self._distinguisher.distinguishMenu)
-        self._subscribe(Locations.GUI_STATE_RULES,        self._distinguisher.distinguishRules)
-        self._subscribe(Locations.GUI_STATE_ORDER,        self._distinguisher.distinguishOrder)
-        self._subscribe(Locations.GUI_STATE_BP_SELECTION, self._distinguisher.distinguishBpSelect)
-        self._subscribeMulti(Locations.GUI_TEMPTEXT,      self._distinguisher.distinguishStart)
-        self._subscribe(Locations.POPUP_BOX,              self._distinguisher.distinguishPopup)
         # misc. stuff processed here
         self._subscribe(Locations.WHICH_PLAYER,               self._distinguishPlayer)
         self._subscribe(Locations.GUI_STATE_MATCH_PKMN_MENU,  self._distinguishPkmnMenu)
@@ -91,9 +80,19 @@ class PBR():
         self._subscribe(Locations.HP_BLUE,                    self._distinguishHpBlue)
         self._subscribe(Locations.HP_RED,                     self._distinguishHpRed)
         self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT, self._distinguishEffective)
+        # de-multiplexing all these into single PbrGuis-enum using distinguisher
+        self._subscribe(Locations.GUI_STATE_MATCH,        self._distinguisher.distinguishMatch)
+        self._subscribe(Locations.GUI_STATE_BP,           self._distinguisher.distinguishBp)
+        self._subscribe(Locations.GUI_STATE_MENU,         self._distinguisher.distinguishMenu)
+        self._subscribe(Locations.GUI_STATE_RULES,        self._distinguisher.distinguishRules)
+        self._subscribe(Locations.GUI_STATE_ORDER,        self._distinguisher.distinguishOrder)
+        self._subscribe(Locations.GUI_STATE_BP_SELECTION, self._distinguisher.distinguishBpSelect)
+        self._subscribeMulti(Locations.GUI_TEMPTEXT,      self._distinguisher.distinguishStart)
+        self._subscribe(Locations.POPUP_BOX,              self._distinguisher.distinguishPopup)
         # stuff processed by abstractions
         self._subscribe(Locations.CURSOR_POS, self.cursor.updateCursorPos)
         self._subscribe(Locations.FRAMECOUNT, self.timer.updateFramecount)
+        #self._subscribe(Locations.FRAMECOUNT, print)
         ###
         
         # initially paused, because in state WAITING_FOR_NEW
@@ -464,7 +463,7 @@ class PBR():
         the game will pause, resting in the state WAITING_FOR_START
         '''
         self._resetAnimSpeed()
-        self.timer.schedule(310, self._dolphin.volume, self.volume) # mute the "whoosh" as well
+        self.timer.schedule(330, self._dolphin.volume, self.volume) # mute the "whoosh" as well
         self.timer.schedule(450, self._disableBlur)
         
     def _matchOver(self, winner):
@@ -514,13 +513,19 @@ class PBR():
         fails = 0
         
         options = self.match.aliveBlue if self.bluesTurn else self.match.aliveRed
-        options = zip(options, [0, 1, 2])
+        print("OPTIONS 1: %s" % options)
+        options = list(zip(options, [0, 1, 2]))
+        print("OPTIONS 2: %s" % options)
         # filter out current
+        print("bluesTurn: %s" % self.bluesTurn)
         del options[self.match.currentBlue if self.bluesTurn else self.match.currentRed]
+        print("OPTIONS 3: %s" % options)
         # filter out dead
         options = [o for o in options if o[0]]
+        print("OPTIONS 4: %s" % options)
         # get rid of the booleans
         options = [o[1] for o in options]
+        print("OPTIONS 5: %s" % options)
         
         # use the silent method that locks up if selection fails?
         silent = False
