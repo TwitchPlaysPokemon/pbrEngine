@@ -513,19 +513,13 @@ class PBR():
         fails = 0
         
         options = self.match.aliveBlue if self.bluesTurn else self.match.aliveRed
-        print("OPTIONS 1: %s" % options)
         options = list(zip(options, [0, 1, 2]))
-        print("OPTIONS 2: %s" % options)
         # filter out current
-        print("bluesTurn: %s" % self.bluesTurn)
         del options[self.match.currentBlue if self.bluesTurn else self.match.currentRed]
-        print("OPTIONS 3: %s" % options)
         # filter out dead
         options = [o for o in options if o[0]]
-        print("OPTIONS 4: %s" % options)
         # get rid of the booleans
         options = [o[1] for o in options]
-        print("OPTIONS 5: %s" % options)
         
         # use the silent method that locks up if selection fails?
         silent = False
@@ -735,15 +729,6 @@ class PBR():
         
         string = bytesToString(data)
         
-        # TODO remove elfifying maybe
-        # skip if this text has been "consumed" already (or elf'd)
-        if string.startswith("##") or string.endswith("FALLED"): return
-        
-        # TODO remove raichu's "fly animation"
-        if string.endswith("RAICHU flew up high!"):
-            self._dolphin.write32(0x642204, 0x3dcccccd)
-            self.timer.schedule(220, self._dolphin.write32, 0x642204, 0x80000000)
-        
         # shift gui up a bit to fully see this
         self.setGuiPosY(DefaultValues.GUI_POS_Y + 20.0)
         
@@ -763,8 +748,6 @@ class PBR():
         if match:
             side = match.group(1).lower()
             self.match.fainted(side)
-            # elfify
-            self._dolphin.writeMulti(Locations.INFO_TEXT.addr, stringToBytes("%s?\nFALLED" % match.group(2).upper()))
             return
         
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
