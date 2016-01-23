@@ -124,12 +124,12 @@ class Match(object):
             # names are displayed in all-caps
             name = v["name"].upper()
             # match pkmn names with display name
-            for fin, rep in {u"\u2642": "(M)", u"\u2640": "(F)", " (SHINY)": "-S"}.iteritems():
-                name = name.replace(fin, rep)
+            for old, new in {u"\u2642": "(M)", u"\u2640": "(F)", " (SHINY)": "-S"}.items():
+                name = name.replace(old, new)
             if name == "NIDORAN?" and v["gender"] == "m": name = "NIDORAN(M)"
             elif name == "NIDORAN?" and v["gender"] == "f": name = "NIDORAN(F)"
             if name == pkmnName:
-                # this is it! Calling _switched to trigger the switch event and fix the order-mapping.
+                # this is it! Calling switched to trigger the switch event and fix the order-mapping.
                 self.switched(side, i)
                 break
         else:
