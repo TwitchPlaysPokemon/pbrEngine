@@ -4,8 +4,18 @@ Created on 04.09.2015
 @author: Felk
 '''
 
-import gevent, json, random, os, sys, time
-import crashchecker, monitor
+from __future__ import division, print_function
+
+import gevent
+import json
+import random
+import os
+import time
+import logging
+
+import crashchecker
+import monitor
+
 from pbrEngine.pbr import PBR
 from pbrEngine.states import PbrStates
 from pbrEngine.stages import Stages
@@ -100,9 +110,9 @@ def onState(state):
 def onAttack(side, mon, moveindex, movename):
     display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
         
-def onWin(side):
-    if side != "draw":
-        display.addEvent("> %s won the game! <" % side.title())
+def onWin(winner):
+    if winner != "draw":
+        display.addEvent("> %s won the game! <" % winner.title())
     else:
         display.addEvent("> The game ended in a draw! <")
 
@@ -141,9 +151,8 @@ def log(text):
     with open(logfile, "a") as f:
         f.write(text + "\n")
 
-if __name__ == "__main__":
-    #sys.stderr = open("error.log", "a")
-    
+def main():
+    global checker, display, pbr
     # init the PBR engine and hook everything up
     pbr = PBR()
     
@@ -153,18 +162,23 @@ if __name__ == "__main__":
     # start the crash detection thingy
     checker = crashchecker.Checker(pbr, onCrash)
     
-    pbr.onState(onState)
-    pbr.onWin(onWin)
-    pbr.onAttack(onAttack)
-    pbr.onDeath(onDeath)
-    pbr.onSwitch(onSwitch)
-    pbr.onMatchlog(log)
-    pbr.onMoveSelection(onMoveSelection)
+    pbr.onState += onState
+    pbr.onWin += onWin
+    pbr.onAttack += onAttack
+    pbr.onDeath += onDeath
+    pbr.onSwitch += onSwitch
+    pbr.onMatchlog += log
+    pbr.onMoveSelection += onMoveSelection
     pbr.connect()
-    pbr.onGui(lambda x: display.reprint())
+    pbr.onGui += lambda gui: display.reprint()
     # pbr.setVolume(0)
     pbr.setFov(0.7)
     
     # don't terminate please
     gevent.sleep(100000000000)
-            
+
+if __name__ == "__main__":
+    try:
+        main()
+    except:
+        logging.exception("Uncaught exception")

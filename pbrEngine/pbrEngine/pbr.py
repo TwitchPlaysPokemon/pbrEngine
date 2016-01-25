@@ -15,7 +15,7 @@ from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
     CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
-from .util import bytesToString, floatToIntRepr
+from .util import bytesToString, floatToIntRepr, EventHook
 from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
 
@@ -33,18 +33,67 @@ class PBR():
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
-        self.match.onWin(self._matchOver)
-        self.match.onSwitch(self._switched)
+        self.match.onWin += self._matchOver
+        self.match.onSwitch += self._switched
         
         # event callbacks
-        self._onWin = None
-        self._onState = None
-        self._onGui = None
-        self._onAttack = None
-        self._onDeath = None
-        self._onSwitch = None
-        self._onMatchlog = None
-        self._onMoveSelection = None
+        '''
+        Event of the winner being determined.
+        Can be considered end of the match.
+        arg0: <winner> "blue" "red" "draw"
+        '''
+        self.onWin = EventHook(winner=str)
+        '''
+        Event for state changes.
+        Propably only useful for the debug monitor, not for production.
+        arg0: <state> see states.PbrStates
+        '''
+        self.onState = EventHook(state=PbrStates)
+        '''
+        Event of a gui changing.
+        Propably only useful for the debug monitor, not for production.
+        arg0: <gui> see states.PbrGuis
+        '''
+        self.onGui = EventHook(gui=PbrGuis)
+        '''
+        Event of a pokemon attacking.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <moveindex> 0-3, index of move used.
+              CAUTION: <mon> might not have a move with that index. (e.g. Ditto)
+        arg3: <movename> name of the move used.
+              CAUTION: <mon> might not have this attack. (e.g. Ditto, Metronome)
+        '''
+        self.onAttack = EventHook(side=str, mon=dict, moveindex=int, movename=str)
+        '''
+        Event of a pokemon dying.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <monindex> 0-2, index of the dead pokemon
+        '''
+        self.onDeath = EventHook(side=str, mon=dict, monindex=int)
+        '''
+        Event of a pokemon getting sent out.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <monindex> 0-2, index of the pokemon now fighting.
+        '''
+        self.onSwitch = EventHook(side=str, mon=dict, monindex=int)
+        '''
+        Event of information text appearing during a match.
+        Includes: a) texts from the black textbox in the corner (xyz fainted/But it failed/etc.)
+                  b) fly-by texts (Team Blue's Pokemon used Move/It's super effective!)
+                  c) non-displayed events (Pokemon is sent out/blue won)
+        arg0: <text> representation of the event. Actual in-game-text if possible.
+        '''
+        self.onMatchlog = EventHook(text=str)
+        '''
+        Event of a move needing to be selected.
+        Might get called again for the same move selection if the previous failed, e.g. if no such move, no pp or disabled.
+        arg0: <side> "blue" "red"
+        arg1: <fails> number of already failed attempts for this move selection. 0 if first try.
+        '''
+        self.onMoveSelection = EventHook(side=str, fails=int)
         
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
@@ -241,85 +290,6 @@ class PBR():
         :param val=DefaultValues.GUI_POS_Y: integer, y-coordinate of gui
         '''
         self._dolphin.write32(Locations.GUI_POS_Y.addr, floatToIntRepr(val))
-      
-    def onWin(self, callback):
-        '''
-        Sets the callback that will be called if a winner is determined.
-        Can be considered end of the match.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <winner> "blue" "red" "draw"
-        '''
-        self._onWin = callback
-        
-    def onState(self, callback):
-        '''
-        Sets the callback for state changes.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <state> see states.PbrStates
-        '''
-        self._onState = callback
-        
-    def onGui(self, callback):
-        '''
-        Sets the callback for gui changes.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <gui> see states.PbrGuis
-        '''
-        self._onGui = callback
-        
-    def onAttack(self, callback):
-        '''
-        Sets the callback for the event of a pokemon attacking.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
-        arg2: <moveindex> 0-3, index of move used.
-              CAUTION: <mon> might not have a move with that index. (e.g. Ditto)
-        arg3: <movename> name of the move used.
-              CAUTION: <mon> might not have this attack. (e.g. Ditto, Metronome)
-        '''
-        self._onAttack = callback
-        
-    def onDeath(self, callback):
-        '''
-        Sets the callback for the event of a pokemon dying.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
-        arg2: <monindex> 0-2, index of the dead pokemon
-        '''
-        self.match.onDeath(callback)
-        
-    def onSwitch(self, callback):
-        '''
-        Sets the callback for the event of a pokemon getting sent out.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
-        arg2: <monindex> 0-2, index of the pokemon now fighting.
-        '''
-        self._onSwitch = callback
-        
-    def onMatchlog(self, callback):
-        '''
-        Sets the callback that gets called with each information text that appears during a match.
-        Includes: a) texts from the black textbox in the corner (xyz fainted/But it failed/etc.)
-                  b) fly-by texts (Team Blue's Pokemon used Move/It's super effective!)
-                  c) non-displayed events (Pokemon is sent out/blue won)
-        :param callback: callable to be called, must have these parameters:
-        arg0: <text> representation of the event. Actual in-game-text if possible.
-        '''
-        self._onMatchlog = callback
-        
-    def onMoveSelection(self, callback):
-        '''
-        Sets the callback that gets called when a move needs to be selected.
-        Might get called again for the same move selection if the previous failed, e.g. if no such move, no pp or disabled.
-        :param callback: callable to be called, must have these parameters:
-        arg0: <side> "blue" "red"
-        arg1: <fails> number of already failed attempts for this move selection. 0 if first try.
-        '''
-        self._onMoveSelection = callback
     
     ###########################################################
     ###             Below are helper functions.             ###
@@ -360,8 +330,8 @@ class PBR():
         self._dolphin.write32(Locations.SPEED_2.addr, DefaultValues.SPEED2)
      
     def _switched(self, side, mon, monindex):
-        if self._onSwitch: self._onSwitch(side, mon, monindex)
-        self._matchlog("Team %s's %s is sent out." % (side.title(), mon["name"]))
+        self.onSwitch(side=side, mon=mon, monindex=monindex)
+        self.onMatchlog(text="Team %s's %s is sent out." % (side.title(), mon["name"]))
         
     def _stuckChecker(self):
         '''
@@ -406,8 +376,7 @@ class PBR():
         '''
         if self.state == state: return
         self.state = state
-        if self._onState:
-            self._onState(state)
+        self.onState(state=state)
             
     def _newRng(self):
         '''Helper method to replace PBR's RNG-seed with a random 32 bit value.'''
@@ -461,10 +430,9 @@ class PBR():
         self._fMatchCancelled = False # reset flag here
         self.cursor.addEvent(1, self._quitMatch)
         self._setState(PbrStates.MATCH_ENDED)
-        if self._onWin: self._onWin(winner)
-        if self._onMatchlog:
-            if winner == "draw": self._onMatchlog("The game ended in a draw!")
-            else: self._onMatchlog("%s won the game!" % winner.title())
+        self.onWin(winner=winner)
+        if winner == "draw": self.onMatchlog(text="The game ended in a draw!")
+        else: self.onMatchlog(text="%s won the game!" % winner.title())
         
     def _waitForNew(self):
         if not self._fSkipWaitForNew:
@@ -562,11 +530,7 @@ class PBR():
         if self._movesBlocked[num]:
             logger.info("selected 0PP move. early opt-out")
             self._failsMoveSelection += 1
-            if self._onMoveSelection:
-                self._onMoveSelection("blue" if self.bluesTurn else "red", self._failsMoveSelection-1)
-            else:
-                # no callback for move selection? Choose one by random
-                self.selectMove(random.randint(0, 3))
+            self.onMoveSelection(side="blue" if self.bluesTurn else "red", fails=self._failsMoveSelection-1)
         else:
             self._dolphin.write8(Locations.INPUT_MOVE.addr, num)
  
@@ -600,11 +564,7 @@ class PBR():
                 x = ((val >> 8*(3-i)) & 0xFF) == 0
                 self._movesBlocked[i] = x
                 
-        if self._onMoveSelection:
-            self._onMoveSelection("blue" if self.bluesTurn else "red", self._failsMoveSelection)
-        else:
-            # no callback for move selection? Choose one by random
-            self.selectMove(random.randint(0, 3))
+        self.onMoveSelection(side="blue" if self.bluesTurn else "red", fails=self._failsMoveSelection)
         self._failsMoveSelection += 1
         
     def _skipIntro(self):
@@ -616,9 +576,6 @@ class PBR():
             self._pressTwo()
             self.timer.sleep(20)
             
-    def _matchlog(self, text):
-        if self._onMatchlog: self._onMatchlog(text)
-          
     #def _invalidate(self):
     #    while self._invalidateTimeout > 0:
     #        frames = self._invalidateTimeout
@@ -653,18 +610,18 @@ class PBR():
  
     def _distinguishHpBlue(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING: return
-        self._matchlog("Team Blue's %s has %d/%d HP left." % (self.match.getCurrentBlue()["name"], val, self.match.getCurrentBlue()["stats"]["hp"]))
+        self.onMatchlog(text="Team Blue's %s has %d/%d HP left." % (self.match.getCurrentBlue()["name"], val, self.match.getCurrentBlue()["stats"]["hp"]))
     
     def _distinguishHpRed(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING: return
-        self._matchlog("Team Red's %s has %d/%d HP left." % (self.match.getCurrentRed()["name"], val, self.match.getCurrentRed()["stats"]["hp"]))
+        self.onMatchlog(text="Team Red's %s has %d/%d HP left." % (self.match.getCurrentRed()["name"], val, self.match.getCurrentRed()["stats"]["hp"]))
             
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit" EDIT: Can it actually? Weird, sometimes missing
         if self.state != PbrStates.MATCH_RUNNING: return
         text = bytesToString(data)
         if text.startswith("##"): return
-        self._matchlog(text)
+        self.onMatchlog(text=text)
         # change later. this text gets instantly changed, so change it after it's gone.
         # thise frames is a wild guess. longer than "A critical hit! It's super effective!"
         self.timer.schedule(240, self._invalidateEffTexts)
@@ -690,7 +647,7 @@ class PBR():
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
             # Log the whole thing
-            self._matchlog("%s %s" % (line, move))
+            self.onMatchlog(text="%s %s" % (line, move))
             
             # invalidate the little info boxes here.
             # I think there will always be an attack declared between 2 identical texts ("But it failed" for example)
@@ -701,9 +658,9 @@ class PBR():
             side = match.group(1).lower()
             self.match.setLastMove(side, move)
             if side == "blue":
-                if self._onAttack: self._onAttack("blue", self.match.pkmnBlue[self.match.currentBlue], self._moveBlueUsed, move)
+                self.onAttack(side="blue", mon=self.match.pkmnBlue[self.match.currentBlue], moveindex=self._moveBlueUsed, movename=move)
             else:
-                if self._onAttack: self._onAttack("red", self.match.pkmnRed[self.match.currentRed], self._moveRedUsed, move)
+                self.onAttack(side="red", mon=self.match.pkmnRed[self.match.currentRed], moveindex=self._moveRedUsed, movename=move)
         
     def _distinguishInfo(self, data):
         # Gets called each time the text in the infobox (xyz fainted, abc hurt itself, etc.)
@@ -726,7 +683,7 @@ class PBR():
         #    gevent.spawn(self._invalidate)
         
         # log the whole thing
-        self._matchlog(string)
+        self.onMatchlog(text=string)
         
         # CASE 1: Someone fainted.
         match = re.search(r"^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?fainted", string)
@@ -1033,6 +990,6 @@ class PBR():
             return
         
         # Trigger the onGui event now. The gui is consideren valid if we reach here
-        if self._onGui: self._onGui(gui)
+        self.onGui(gui=gui)
         
 

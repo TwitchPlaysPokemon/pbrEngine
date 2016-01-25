@@ -6,7 +6,7 @@ Created on 22.09.2015
 
 import logging
 
-from ..util import invertSide, swap
+from ..util import invertSide, swap, EventHook
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +15,15 @@ class Match(object):
         self._timer = timer
         self.new([], [])
         
-        self._onDeath = None
-        self._onWin = None
-        self._onSwitch = None
+        '''
+        Event of a pokemon dying.
+        arg0: <side> "blue" "red"
+        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
+        arg2: <monindex> 0-2, index of the dead pokemon
+        '''
+        self.onDeath = EventHook(side=str, mon=dict, monindex=int)
+        self.onWin = EventHook(winner=str)
+        self.onSwitch = EventHook(side=str, mon=dict, monindex=int)
         
         self._checkScheduled = False
         self._checkCancelled = False
@@ -43,21 +49,6 @@ class Match(object):
     
     def getCurrentRed(self):
         return self.pkmnRed[self.currentRed]
-
-    def onDeath(self, callback):
-        '''
-        Sets the callback for the event of a pokemon dying.
-        arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally submitted with new()
-        arg2: <monindex> 0-2, index of the dead pokemon
-        '''
-        self._onDeath = callback
-        
-    def onWin(self, callback):
-        self._onWin = callback
-        
-    def onSwitch(self, callback):
-        self._onSwitch = callback
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
@@ -93,12 +84,12 @@ class Match(object):
             dead = self.currentBlue
             self.aliveBlue[dead] = False
             self.fSendNextBlue = True
-            if self._onDeath: self._onDeath(side, self.pkmnBlue[dead], dead)
+            self.onDeath(side=side, mon=self.pkmnBlue[dead], monindex=dead)
         else:
             dead = self.currentRed
             self.aliveRed[dead] = False
             self.fSendNextRed = True
-            if self._onDeath: self._onDeath(side, self.pkmnRed[dead], dead)
+            self.onDeath(side=side, mon=self.pkmnRed[dead], monindex=dead)
         if not any(self.aliveBlue) or not any(self.aliveRed):
             if self._checkScheduled: self._checkCancelled = True
             self._checkScheduled = True
@@ -112,11 +103,11 @@ class Match(object):
         if side == "blue":
             swap(self.mapBlue, self.currentBlue, nextPkmn)
             self.currentBlue = nextPkmn
-            if self._onSwitch: self._onSwitch(side, self.pkmnBlue[nextPkmn], nextPkmn)
+            self.onSwitch(side=side, mon=self.pkmnBlue[nextPkmn], monindex=nextPkmn)
         else:
             swap(self.mapRed, self.currentRed, nextPkmn)
             self.currentRed = nextPkmn
-            if self._onSwitch: self._onSwitch(side, self.pkmnRed[nextPkmn], nextPkmn)
+            self.onSwitch(side=side, mon=self.pkmnRed[nextPkmn], monindex=nextPkmn)
           
     def draggedOut(self, side, pkmnName):
         # check each pokemon if that is the one that was sent out
@@ -162,6 +153,6 @@ class Match(object):
             winner = "red"
         else:
             winner = "blue"
-        if self._onWin: self._onWin(winner)
+        self.onWin(winner=winner)
         
 

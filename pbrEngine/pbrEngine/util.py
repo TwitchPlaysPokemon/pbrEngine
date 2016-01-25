@@ -5,6 +5,8 @@ Created on 04.09.2015
 '''
 
 import struct
+import inspect
+import gevent
 
 # http://stackoverflow.com/a/1695250/3688648
 def enum(*sequential, **named):
@@ -12,6 +14,46 @@ def enum(*sequential, **named):
     reverse = dict((value, key) for key, value in enums.items())
     enums['names'] = reverse
     return type('Enum', (), enums)
+
+class EventHook(object):
+    def __init__(self, **signature):
+        self.__signature = signature
+        self.__argnames = set(signature.keys())
+        self.__handlers = []
+        
+    def __kwargs_str(self):
+        return ", ".join(k+"="+v.__name__ for k, v in self.__signature.items())
+    
+    def __iadd__(self, handler):
+        params = inspect.signature(handler).parameters
+        valid = True
+        argnames = set(n for n in params.keys())
+        if argnames != self.__argnames:
+            valid = False
+        for p in params.values():
+            if p.kind == p.VAR_KEYWORD:
+                valid = True
+                break
+            if p.kind not in [p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY]:
+                valid = False
+                break
+        if not valid:
+            raise ValueError("Listener must have these arguments: (%s)" % self.__kwargs_str())
+        self.__handlers.append(handler)
+        return self
+        
+    def __isub__(self, handler):
+        self.__handlers.remove(handler)
+        return self
+    
+    def __call__(self, **kwargs):
+        if (set(kwargs.keys()) != self.__argnames):
+            raise ValueError("This EventHook must be called with these arguments: (%s)" % self.__kwargs_str())
+        for handler in self.__handlers:
+            gevent.spawn(handler, **kwargs)
+            
+    def __repr__(self):
+        return "EventHook(%s)" % self.__kwargs_str()
 
 def bytesToString(data):
     '''
