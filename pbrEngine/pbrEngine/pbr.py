@@ -4,19 +4,22 @@ Created on 09.09.2015
 @author: Felk
 '''
 
-import gevent, random, re
+import gevent
+import random
+import re
+import logging
 from dolphinWatch.connection import DolphinConnection, DisconnectReason
 
 from .memorymap.addresses import Locations
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch,\
-    GuiTarget, DefaultValues
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
+    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
-from .util import bytesToString, stringToBytes, floatToIntRepr
+from .util import bytesToString, floatToIntRepr
 from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
-from gevent.event import AsyncResult
 
+logger = logging.getLogger(__name__)
 savefile1 = "saveWithAnnouncer.state"
 savefile2 = "saveWithoutAnnouncer.state"
 
@@ -38,7 +41,6 @@ class PBR():
         self._onState = None
         self._onGui = None
         self._onAttack = None
-        self._onError = None
         self._onDeath = None
         self._onSwitch = None
         self._onMatchlog = None
@@ -92,7 +94,6 @@ class PBR():
         # stuff processed by abstractions
         self._subscribe(Locations.CURSOR_POS, self.cursor.updateCursorPos)
         self._subscribe(Locations.FRAMECOUNT, self.timer.updateFramecount)
-        #self._subscribe(Locations.FRAMECOUNT, print)
         ###
         
         # initially paused, because in state WAITING_FOR_NEW
@@ -115,7 +116,7 @@ class PBR():
         if (reason == DisconnectReason.CONNECTION_CLOSED_BY_HOST):
             # don't reconnect if we closed the connection on purpose
             return
-        self._error("DolphinConnection connection closed, reconnecting...")
+        logger.warning("DolphinConnection connection closed, reconnecting...")
         if (reason == DisconnectReason.CONNECTION_FAILED):
             # just tried to establish a connection, give it a break
             gevent.sleep(3)
@@ -279,18 +280,6 @@ class PBR():
         '''
         self._onAttack = callback
         
-    def onError(self, callback):
-        '''
-        Sets the callback for reporting awkward events.
-        These events do not necessarily mean that the game can't continue,
-        but are indicators of something going wrong.
-        Can be documented for debugging.
-        :param callback: callable to be called, must have these parameters:
-        arg0: text describing the error.
-        '''
-        self._onError = callback
-        self.match.onError(callback)
-        
     def onDeath(self, callback):
         '''
         Sets the callback for the event of a pokemon dying.
@@ -420,10 +409,6 @@ class PBR():
         if self._onState:
             self._onState(state)
             
-    def _error(self, text):
-        '''reports an error to the "outer layer" by calling the onError event callback'''
-        if self._onError: self._onError(text)
-        
     def _newRng(self):
         '''Helper method to replace PBR's RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.addr, random.getrandbits(32))
@@ -575,7 +560,7 @@ class PBR():
         '''
         # early opt-out no-PP moves.
         if self._movesBlocked[num]:
-            self._error("selected 0PP move. early opt-out")
+            logger.info("selected 0PP move. early opt-out")
             self._failsMoveSelection += 1
             if self._onMoveSelection:
                 self._onMoveSelection("blue" if self.bluesTurn else "red", self._failsMoveSelection-1)

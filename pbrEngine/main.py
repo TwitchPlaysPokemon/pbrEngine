@@ -82,8 +82,8 @@ def new():
     stage = random.choice(stages)
     
     logbot.send_message(channel, "--- NEW MATCH ---")
-    log("BLUE: %s" % ", ".join([str(p["name"]) for p in pkmn[:3]]))
-    log("RED: %s" % ", ".join([str(p["name"]) for p in pkmn[3:]]))
+    log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
+    log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
     log("STAGE: %s" % Stages.names[stage])
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
@@ -105,11 +105,6 @@ def onWin(side):
         display.addEvent("> %s won the game! <" % side.title())
     else:
         display.addEvent("> The game ended in a draw! <")
-
-def onError(text):
-    display.addEvent("[ERROR] %s" % text)
-    with open("error.log", "a") as myfile:
-        myfile.write("[ERROR] %s\n" % text)
 
 def onDeath(side, mon, monindex):
     display.addEvent("%s (%s) is down." % (mon["name"], side))
@@ -161,7 +156,6 @@ if __name__ == "__main__":
     pbr.onState(onState)
     pbr.onWin(onWin)
     pbr.onAttack(onAttack)
-    pbr.onError(onError)
     pbr.onDeath(onDeath)
     pbr.onSwitch(onSwitch)
     pbr.onMatchlog(log)

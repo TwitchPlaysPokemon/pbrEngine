@@ -4,7 +4,11 @@ Created on 22.09.2015
 @author: Felk
 '''
 
+import logging
+
 from ..util import invertSide, swap
+
+logger = logging.getLogger(__name__)
 
 class Match(object):
     def __init__(self, timer):
@@ -14,7 +18,6 @@ class Match(object):
         self._onDeath = None
         self._onWin = None
         self._onSwitch = None
-        self._onError = None
         
         self._checkScheduled = False
         self._checkCancelled = False
@@ -49,9 +52,6 @@ class Match(object):
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
         self._onDeath = callback
-        
-    def onError(self, callback):
-        self._onError = callback
         
     def onWin(self, callback):
         self._onWin = callback
@@ -137,9 +137,9 @@ class Match(object):
             # This should never occur, unless the pokemon's name is written differently
             # In that case: look above! Make sure the names in the .json and the display names can match up
             names = [p["name"].upper() for p in (self.pkmnBlue if side == "blue" else self.pkmnRed)]
-            if self._onError:
-                self._onError('No pokemon in Roar/Whirlwind message matched "%s"! Expected one of the following: %s'
-                          % (pkmnName, ", ".join(names)))
+            logger.critical('No pokemon in Roar/Whirlwind message matched "%s"! Expected one of the following: %s. ' + 
+                            'The engine will believe the wrong pokemon is out now.',
+                            pkmnName, ", ".join(names))
 
     def checkWinner(self):
         '''
