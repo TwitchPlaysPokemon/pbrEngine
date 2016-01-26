@@ -9,40 +9,43 @@ into uniform abstracted PBR states and events.
 '''
 
 from .states import PbrGuis
-from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
-from .memorymap.values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox 
+from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules,\
+                              GuiStateBpSelection
+from .memorymap.values import GuiStateOrderSelection, GuiStateMatch,\
+                              StatePopupBox
 from .util import bytesToString
+
 
 class Distinguisher(object):
     def __init__(self, callback):
         self._callback = callback
-        
+
     def distinguishMenu(self, val):
         self._callback(_map_menu.get(val))
-        
+
     def distinguishBp(self, val):
         self._callback(_map_bps.get(val))
-        
+
     def distinguishRules(self, val):
         self._callback(_map_rules.get(val))
-        
+
     def distinguishBpSelect(self, val):
         self._callback(_map_bp_select.get(val))
-        
+
     def distinguishOrder(self, val):
         self._callback(_map_order.get(val))
-        
+
     def distinguishMatch(self, val):
         self._callback(_map_match.get(val))
-        
+
     def distinguishPopup(self, val):
         if val == StatePopupBox.AWAIT_INPUT:
             self._callback(PbrGuis.MATCH_POPUP)
-            
+
     def distinguishStart(self, data):
         self._callback(_map_start.get(bytesToString(data)))
 
-### Main Menu
+# Main Menu
 _map_menu = {
     GuiStateMenu.MAIN_MENU     : PbrGuis.MENU_MAIN,
     GuiStateMenu.BATTLE_PASS   : PbrGuis.MENU_BATTLE_PASS,
@@ -55,7 +58,7 @@ _map_menu = {
     GuiStateMenu.SAVE_TYP2     : PbrGuis.MENU_SAVE_TYP2,
 }
 
-### Battle Pass Menu
+# Battle Pass Menu
 _map_bps = {
     GuiStateBP.CONFIRM       : PbrGuis.BPS_PKMN_CONFIRM,
     GuiStateBP.BP_SELECTION  : PbrGuis.BPS_SELECT,
@@ -65,7 +68,7 @@ _map_bps = {
     GuiStateBP.PKMN_GRABBED  : PbrGuis.BPS_PKMN_GRABBED,
 }
 
-### Rules Menu
+# Rules Menu
 _map_rules = {
     GuiStateRules.STAGE_SELECTION: PbrGuis.RULES_STAGE,
     GuiStateRules.OVERVIEW       : PbrGuis.RULES_SETTINGS,
@@ -73,19 +76,19 @@ _map_rules = {
     GuiStateRules.BP_CONFIRM     : PbrGuis.RULES_BPS_CONFIRM,
 }
 
-### Battle Pass Selection Menu (before match)
+# Battle Pass Selection Menu (before match)
 _map_bp_select = {
     GuiStateBpSelection.BP_SELECTION_CUSTOM: PbrGuis.BPSELECT_SELECT,
     GuiStateBpSelection.BP_CONFIRM         : PbrGuis.BPSELECT_CONFIRM,
 }
 
-### Order Selection Menu
+# Order Selection Menu
 _map_order = {
     GuiStateOrderSelection.SELECT : PbrGuis.ORDER_SELECT,
     GuiStateOrderSelection.CONFIRM: PbrGuis.ORDER_CONFIRM,
 }
 
-### Match Gui
+# Match Gui
 _map_match = {
     GuiStateMatch.FADE_IN: PbrGuis.MATCH_FADE_IN,
     GuiStateMatch.IDLE   : PbrGuis.MATCH_IDLE,
@@ -94,7 +97,7 @@ _map_match = {
     GuiStateMatch.GIVE_IN: PbrGuis.MATCH_GIVE_IN,
 }
 
-### start menu
+# start menu
 _map_start = {
     "Wii Remote Control Sideways": PbrGuis.START_WIIMOTE_INFO,
     "Choose a Game Mode"         : PbrGuis.START_MENU,

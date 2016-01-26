@@ -63,14 +63,14 @@ TrainerStyle = enum(
     YOUNG_GIRL_A  = 0x03,
     COOL_GIRL_A   = 0x04,
     LITTLE_GIRL_A = 0x05,
-    
+
     YOUNG_BOY_B   = 0x06,
     COOL_BOY_B    = 0x07,
     MUSCLE_MAN_B  = 0x08,
     YOUNG_GIRL_B  = 0x09,
     COOL_GIRL_B   = 0x0A,
     LITTLE_GIRL_B = 0x0B,
-    
+
     YOUNG_BOY_C   = 0x0C,
     COOL_BOY_C    = 0x0D,
     MUSCLE_MAN_C  = 0x0E,
@@ -211,4 +211,3 @@ MoveInput = enum(
     LEFT  = 2,
     DOWN  = 3,
 )
-

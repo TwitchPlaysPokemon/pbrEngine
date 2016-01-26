@@ -3,7 +3,10 @@ Created on 22.09.2015
 
 @author: Felk
 '''
-import gevent, time, collections
+import gevent
+import time
+import collections
+
 
 class Timer(object):
     def __init__(self):
@@ -20,7 +23,7 @@ class Timer(object):
         finish = self.frame + frames
         while self.frame < finish:
             gevent.sleep(0.05)
-            
+
     def sleepThen(self, frames, then, *args):
         '''
         Shall be used as combination of _sleepNFrames and a following action,
@@ -28,30 +31,30 @@ class Timer(object):
         '''
         self.sleep(frames)
         then(*args)
-        
+
     def schedule(self, frames, job, *args):
         '''
         Spawns a new greenlet that performs an action in a given time,
         based on ingame frames as a timesource.
         '''
         gevent.spawn(self.sleepThen, frames, job, *args)
-    
+
     def updateFramecount(self, framecount):
         # Is called for every new framecount reported.
-        # add delta to self.frame and also add another plotpoint to speed measurements
+        # add delta to self.frame and also add another plotpoint to speed
+        # measurements
         delta = framecount - self._framePrev
-        
+
         now = time.clock()
         deltaReal = now - self._timerPrev
-        
+
         self._framePrev = framecount
         self._timerPrev = now
-        if delta <= 0: return
-        
+        if delta <= 0:
+            return
+
         self.frame += delta
-        
-        delta /= 60.0 # frame count, increases by 60/s
-        speed = (delta / deltaReal) if deltaReal > 0 else 0 # wat
+
+        delta /= 60.0  # frame count, increases by 60/s
+        speed = (delta / deltaReal) if deltaReal > 0 else 0  # wat
         self.speedPlots.append(speed)
-        
-    

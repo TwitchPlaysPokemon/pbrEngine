@@ -29,18 +29,27 @@ with open("json.json") as f:
     data = [d for d in data if not d["shiny"]]
     # TODO remove this again, it's debugging stuff
     # only keep certain moves
-    #moves = ["Explosion", "Self-Destruct", "Whirlwind", "Roar", "Perish Song", "Destiny Bond", "Encore", "Metronome", "Me First", "Transform", "Counter"]
-    #data = [d for d in data if any(set(moves) & set([m["name"] for m in d["moves"]]))]
-    
+    # moves = ["Explosion", "Self-Destruct", "Whirlwind", "Roar",
+    # "Perish Song", "Destiny Bond", "Encore", "Metronome", "Me First",
+    # "Transform", "Counter"]
+    # data = [d for d in data if any(set(moves) & set([m["name"]
+    #         for m in d["moves"]]))]
+
     # TODO this is stupid
-    # remove all utf-8, because windows console crashes otherwise
+    # remove all unicode, because windows console crashes otherwise
     # should only affect nidorans, but better be safe
     for i, _ in enumerate(data):
-        data[i]["name"] = data[i]["name"].replace(u"\u2642", "(m)").replace(u"\u2640", "(f)").encode('ascii', 'replace').decode()
+        data[i]["name"] = (data[i]["name"]
+                           .replace(u"\u2642", "(m)")
+                           .replace(u"\u2640", "(f)")
+                           .encode('ascii', 'replace')
+                           .decode())
         for j, _ in enumerate(data[i]["moves"]):
-            data[i]["moves"][j]["name"] = data[i]["moves"][j]["name"].encode('ascii', 'replace').decode()
-    
-    
+            data[i]["moves"][j]["name"] = (data[i]["moves"][j]["name"]
+                                           .encode('ascii', 'replace')
+                                           .decode())
+
+
 stages = (
     Stages.GATEWAY,
     Stages.MAIN_STREET,
@@ -52,7 +61,7 @@ stages = (
     Stages.SUNSET,
     Stages.COURTYARD,
     Stages.STARGAZER,
-    #Stages.LAGOON, # uncomment to include into pool
+    # Stages.LAGOON, # uncomment to include into pool
 )
 
 avatarsBlue = (
@@ -68,8 +77,10 @@ avatarsRed = (
 )
 
 logfile = "ishouldnotexist.txt"
-channel = "#invalid"#"#_tppspoilbot_1443119161371" #"#FelkCraft"
-logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn", channel, "192.16.64.180")
+channel = "#invalid"  # "#_tppspoilbot_1443119161371" #"#FelkCraft"
+logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn",
+                   channel, "192.16.64.180")
+
 
 def countdown(t=20):
     while True:
@@ -84,84 +95,103 @@ def countdown(t=20):
             pbr.start(order1, order2)
             break
 
+
 def new():
     global logfile
     logfile = "logs/match-%d.txt" % time.time()
     display.addEvent("Starting a new match...")
     pkmn = random.sample(data, 6)
     stage = random.choice(stages)
-    
+
     logbot.send_message(channel, "--- NEW MATCH ---")
     log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
     log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
     log("STAGE: %s" % Stages.names[stage])
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
-    
-    pbr.new(stage, pkmn[:3], pkmn[3:], random.choice(avatarsBlue), random.choice(avatarsRed))
-    #pbr.new(stage, [data[398]], [data[9], data[10], data[12]])
-    #pbr.new(random.randint(0,9), random.sample([data[201], data[49], data[359]], random.choice([1, 2, 3])), random.sample([d for d in data if d["position"] not in ["201", "49", "359"]], random.choice([1, 2, 3])))
+
+    pbr.new(stage, pkmn[:3], pkmn[3:],
+            random.choice(avatarsBlue),
+            random.choice(avatarsRed))
+    # pbr.new(stage, [data[398]], [data[9], data[10], data[12]])
+    # pbr.new(random.randint(0,9),
+    #         random.sample([data[201], data[49], data[359]],
+    #         random.choice([1, 2, 3])),
+    #         random.sample([d for d in data if d["position"] not
+    #                        in ["201", "49", "359"]],
+    #         random.choice([1, 2, 3])))
     gevent.spawn(countdown)
-    
+
+
 def onState(state):
     if state == PbrStates.WAITING_FOR_NEW:
         new()
-        
+
+
 def onAttack(side, mon, moveindex, movename):
     display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
-        
+
+
 def onWin(winner):
     if winner != "draw":
         display.addEvent("> %s won the game! <" % winner.title())
     else:
         display.addEvent("> The game ended in a draw! <")
 
+
 def onDeath(side, mon, monindex):
     display.addEvent("%s (%s) is down." % (mon["name"], side))
-    
+
+
 def onSwitch(side, mon, monindex):
     display.addEvent("%s (%s) is sent out." % (mon["name"], side))
-    
+
+
 def onMoveSelection(side, fails):
     if side == "blue" and fails == 0:
-        pass#gevent.sleep(3)
+        pass  # gevent.sleep(3)
     pbr.selectMove(random.randint(0, 3))
-    #pbr.selectMove(0)
+
 
 _BASEPATH = "G:/TPP/rc1"
+
+
 def onCrash():
     display.addEvent("Dolphin unresponsive. Restarting...")
     # kill dolphin (caution: windows only solution because wynaut)
     os.system("taskkill /im Dolphin.exe /f")
     # wait for the process to properly die of old age
     gevent.sleep(4)
-    
+
     # restart dolphin
     cmd = '%s/crashrestart.bat' % _BASEPATH
-    #subprocess.call(cmd) # DOES NOT WORK FOR SOME REASON DON'T USE PLZ! needs to run independently bc. sockets propably.
+    # subprocess.call(cmd) # DOES NOT WORK FOR SOME REASON DON'T USE PLZ!
+    # needs to run independently bc. sockets propably?
     os.startfile(cmd)
-    
+
     # wait for the new Dolphin instance to fully boot, hopefully
     gevent.sleep(10)
     # then reset the crashchecker
     checker.reset()
 
+
 def log(text):
-    logbot.send_message(channel, text)
+    # logbot.send_message(channel, text)
     with open(logfile, "a") as f:
         f.write(text + "\n")
+
 
 def main():
     global checker, display, pbr
     # init the PBR engine and hook everything up
     pbr = PBR()
-    
+
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)
-    
+
     # start the crash detection thingy
     checker = crashchecker.Checker(pbr, onCrash)
-    
+
     pbr.onState += onState
     pbr.onWin += onWin
     pbr.onAttack += onAttack
@@ -173,7 +203,7 @@ def main():
     pbr.onGui += lambda gui: display.reprint()
     # pbr.setVolume(0)
     pbr.setFov(0.7)
-    
+
     # don't terminate please
     gevent.sleep(100000000000)
 
