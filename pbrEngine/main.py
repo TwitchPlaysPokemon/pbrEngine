@@ -110,7 +110,7 @@ def new():
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
 
-    pbr.new(stage, pkmn[:3], pkmn[3:],
+    pbr.new(stage, pkmn[:3], pkmn[3:6],
             random.choice(avatarsBlue),
             random.choice(avatarsRed))
     # pbr.new(stage, [data[398]], [data[9], data[10], data[12]])
@@ -156,7 +156,7 @@ def onMoveSelection(side, fails):
 _BASEPATH = "G:/TPP/rc1"
 
 
-def onCrash():
+def onCrash(pbr):
     display.addEvent("Dolphin unresponsive. Restarting...")
     # kill dolphin (caution: windows only solution because wynaut)
     os.system("taskkill /im Dolphin.exe /f")

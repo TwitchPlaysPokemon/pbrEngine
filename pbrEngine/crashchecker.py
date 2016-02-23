@@ -6,12 +6,16 @@ Created on 14.09.2015
 
 import gevent
 from pbrEngine.states import PbrStates
+from pbrEngine.util import EventHook
+from pbrEngine.pbr import PBR
 
 
 class Checker(object):
-    def __init__(self, pbr, onCrash):
+    def __init__(self, pbr, crash_callback):
         self.pbr = pbr
-        self._onCrash = onCrash
+        self.onCrash = EventHook(pbr=PBR)
+        if crash_callback:
+            self.onCrash += crash_callback
         self.reset()
 
     def reset(self):
@@ -20,6 +24,7 @@ class Checker(object):
         gevent.spawn(self.loop)
 
     def loop(self):
+        # check if no frame advanced for a bit
         while self.fails <= 3:
             now = self.pbr.timer.frame
             if self._lastFrame == now and self.pbr.state not in\
@@ -30,4 +35,4 @@ class Checker(object):
                 self.fails = 0
             gevent.sleep(1)
         # crashed
-        self._onCrash()
+        self.onCrash(self.pbr)
