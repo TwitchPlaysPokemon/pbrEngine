@@ -58,6 +58,7 @@ target/
 
 # custom stuff
 /logs/
-/.pydevproject
-/.settings/
 /dolphinWatch/
+.pydevproject
+.project
+.settings/
