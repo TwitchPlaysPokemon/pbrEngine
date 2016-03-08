@@ -8,7 +8,10 @@ import gevent
 import random
 import re
 import logging
-from dolphinWatch.connection import DolphinConnection, DisconnectReason
+try:
+    from dolphinWatch import DolphinConnection, DisconnectReason
+except ImportError:
+    from .dolphinWatch import DolphinConnection, DisconnectReason
 
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
