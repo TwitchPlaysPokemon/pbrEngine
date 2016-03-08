@@ -9,9 +9,9 @@ import random
 import re
 import logging
 try:
-    from dolphinWatch import DolphinConnection, DisconnectReason
+    import dolphinWatch
 except ImportError:
-    from .dolphinWatch import DolphinConnection, DisconnectReason
+    from .. import dolphinWatch
 
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
@@ -30,7 +30,7 @@ savefile2 = "saveWithoutAnnouncer.state"
 class PBR():
     def __init__(self):
         self._distinguisher = Distinguisher(self._distinguishGui)
-        self._dolphin = DolphinConnection("localhost", 6000)
+        self._dolphin = dolphinWatch.DolphinConnection("localhost", 6000)
         self._dolphin.onDisconnect(self._reconnect)
         self._dolphin.onConnect(self._initDolphinWatch)
 
@@ -128,7 +128,7 @@ class PBR():
         Connects do Dolphin with dolphinWatch. Should be called when the
         initialization (setting listeners etc.) is done.
         '''
-        self._dolphin.connect()
+        gevent.spawn(self._dolphin.connect)
 
     def _initDolphinWatch(self, watcher):
         self._dolphin.volume(self.volume)
@@ -176,11 +176,11 @@ class PBR():
                                           callback)
 
     def _reconnect(self, watcher, reason):
-        if (reason == DisconnectReason.CONNECTION_CLOSED_BY_HOST):
+        if (reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST):
             # don't reconnect if we closed the connection on purpose
             return
         logger.warning("DolphinConnection connection closed, reconnecting...")
-        if (reason == DisconnectReason.CONNECTION_FAILED):
+        if (reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED):
             # just tried to establish a connection, give it a break
             gevent.sleep(3)
         self.connect()
