@@ -16,7 +16,7 @@ import logging
 import crashchecker
 import monitor
 
-from pbrEngine.pbr import PBR
+from pbrEngine import PBR
 from pbrEngine.states import PbrStates
 from pbrEngine.stages import Stages
 from pbrEngine.avatars import AvatarsBlue, AvatarsRed
