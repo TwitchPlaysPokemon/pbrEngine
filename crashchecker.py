@@ -7,7 +7,7 @@ Created on 14.09.2015
 import gevent
 from pbrEngine.states import PbrStates
 from pbrEngine.util import EventHook
-from pbrEngine.pbr import PBR
+from pbrEngine import PBR
 
 
 class Checker(object):

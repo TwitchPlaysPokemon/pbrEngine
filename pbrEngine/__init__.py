@@ -8,10 +8,7 @@ import gevent
 import random
 import re
 import logging
-try:
-    import dolphinWatch
-except ImportError:
-    from .. import dolphinWatch
+import dolphinWatch
 
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
@@ -128,7 +125,7 @@ class PBR():
         Connects do Dolphin with dolphinWatch. Should be called when the
         initialization (setting listeners etc.) is done.
         '''
-        gevent.spawn(self._dolphin.connect)
+        self._dolphin.connect()
 
     def _initDolphinWatch(self, watcher):
         self._dolphin.volume(self.volume)
