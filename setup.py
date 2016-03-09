@@ -4,8 +4,8 @@ setup(
     name="pbrEngine",
     version="0.1",
     packages=["pbrEngine"],
-    install_requires=['dolphinWatch>=1.1'],
-    dependency_links=['git+https://github.com/TwitchPlaysPokemon/PyDolphinWatch.git#egg=dolphinWatch-1.1'],
+    install_requires=['dolphinWatch'],
+    dependency_links=['https://github.com/TwitchPlaysPokemon/PyDolphinWatch/tarball/master#egg=dolphinWatch'],
 
     author="Felk",
     description="Library based on DolphinWatch to offer automation of Pokemon Battle Revolution matches for TwitchPlaysPokemon.",
