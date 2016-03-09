@@ -1,9 +1,9 @@
 
-from setuptools import setup
+from setuptools import setup, find_packages
 setup(
     name="pbrEngine",
     version="0.1",
-    packages=["pbrEngine"],
+    packages=find_packages(),
     install_requires=['dolphinWatch'],
 
     author="Felk",
