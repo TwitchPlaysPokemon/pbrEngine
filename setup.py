@@ -4,6 +4,7 @@ setup(
     name="pbrEngine",
     version="0.1",
     packages=["pbrEngine"],
+    install_requires=['dolphinWatch'],
     dependency_links=['git+https://github.com/TwitchPlaysPokemon/PyDolphinWatch.git#egg=dolphinWatch'],
 
     author="Felk",
