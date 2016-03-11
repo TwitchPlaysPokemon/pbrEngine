@@ -116,8 +116,9 @@ def onState(state):
         new()
 
 
-def onAttack(side, mon, moveindex, movename):
+def onAttack(side, mon, moveindex, movename, obj):
     display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
+    display.addEvent("{} was the selection".format(obj))
 
 
 def onWin(winner):
@@ -131,14 +132,19 @@ def onDeath(side, mon, monindex):
     display.addEvent("%s (%s) is down." % (mon["name"], side))
 
 
-def onSwitch(side, mon, monindex):
+def onSwitch(side, mon, monindex, obj):
     display.addEvent("%s (%s) is sent out." % (mon["name"], side))
+    display.addEvent("{} was the selection".format(obj))
 
 
-def onMoveSelection(side, fails):
-    if side == "blue" and fails == 0:
-        pass  # gevent.sleep(3)
-    pbr.selectMove(random.randint(0, 3))
+def actionCallback(side, fails, moves, switch):
+    options = []
+    if moves:
+        options += ["a", "b", "c", "d"]
+    if switch:
+        options += ["1", "2", "3"]
+    move = random.choice(options)
+    return (move, move)
 
 
 _BASEPATH = "G:/TPP/rc1"
@@ -172,7 +178,7 @@ def log(text):
 def main():
     global checker, display, pbr
     # init the PBR engine and hook everything up
-    pbr = PBREngine()
+    pbr = PBREngine(actionCallback)
 
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)
@@ -186,7 +192,6 @@ def main():
     pbr.onDeath += onDeath
     pbr.onSwitch += onSwitch
     pbr.onMatchlog += log
-    pbr.onMoveSelection += onMoveSelection
     pbr.connect()
     pbr.onGui += lambda gui: display.reprint()
     # pbr.setVolume(0)

@@ -23,8 +23,28 @@ from .avatars import AvatarsBlue, AvatarsRed
 logger = logging.getLogger("pbrEngine")
 
 
+class ActionError(Exception):
+    pass
+
+
 class PBREngine():
-    def __init__(self, savefile_dir="pbr_savefiles"):
+    def __init__(self, action_callback, savefile_dir="pbr_savefiles"):
+        '''
+        :param action_callback:
+            will be called when a player action needs to be determined.
+            Gets called with these keyword arguments:
+                <side> "blue" or "red".
+                <fails> number of how many times the current selection failed.
+                    happens for no pp/disabled move/invalid switch for example
+                <moves> True/False, if a move selection is possible
+                <switch> True/False, if a pokemon switch is possible
+            Must return a tuple (action, obj), where <action> is one of the following:
+                a, b, c, d: move to be selected.
+                1, 2, 3, 4, 5, 6: pokemon index to switch to
+            and <obj> is any object. <obj> will be submitted as an argument to
+            either the onSwitch or onAttack callback if this command succeeds.
+        '''
+        self._action_callback = action_callback
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection("localhost", 6000)
         self._dolphin.onDisconnect(self._reconnect)
@@ -67,9 +87,11 @@ class PBREngine():
               CAUTION: <mon> might not have a move with that index (e.g. Ditto)
         arg3: <movename> name of the move used.
               CAUTION: <mon> might not have this attack (e.g. Ditto, Metronome)
+        arg4: <obj> object originally returned by the action-callback that lead
+              to this event. None if the callback wasn't called (e.g. Rollout)
         '''
         self.onAttack = EventHook(side=str, mon=dict, moveindex=int,
-                                  movename=str)
+                                  movename=str, obj=object)
         '''
         Event of a pokemon dying.
         arg0: <side> "blue" "red"
@@ -84,8 +106,10 @@ class PBREngine():
         arg1: <mon> dictionary/json-object of the pokemon originally
               submitted with new()
         arg2: <monindex> 0-2, index of the pokemon now fighting.
+        arg3: <obj> object originally returned by the action-callback that lead
+              to this event. None if the callback wasn't called (e.g. death)
         '''
-        self.onSwitch = EventHook(side=str, mon=dict, monindex=int)
+        self.onSwitch = EventHook(side=str, mon=dict, monindex=int, obj=object)
         '''
         Event of information text appearing during a match.
         Includes: a) texts from the black textbox in the corner
@@ -97,15 +121,6 @@ class PBREngine():
               Actual in-game-text if possible.
         '''
         self.onMatchlog = EventHook(text=str)
-        '''
-        Event of a move needing to be selected.
-        Might get called again for the same move selection if the previous
-        failed, e.g. if no such move, no pp or disabled.
-        arg0: <side> "blue" "red"
-        arg1: <fails> number of already failed attempts for this move
-              selection. 0 if first try.
-        '''
-        self.onMoveSelection = EventHook(side=str, fails=int)
 
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
@@ -196,6 +211,7 @@ class PBREngine():
         self._movesBlocked = [False, False, False, False]
         self._posBlues = []
         self._posReds = []
+        self._actionCallbackObjStore = {"blue": None, "red": None}
         self._fSelectedSingleBattle = False
         self._fSelectedTppRules = False
         self._fBlueSelectedBP = False
@@ -352,7 +368,9 @@ class PBREngine():
         self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
     def _switched(self, side, mon, monindex):
-        self.onSwitch(side=side, mon=mon, monindex=monindex)
+        self.onSwitch(side=side, mon=mon, monindex=monindex,
+                      obj=self._actionCallbackObjStore[side])
+        self._actionCallbackObjStore[side] = None
         self.onMatchlog(text="Team %s's %s is sent out." % (side.title(),
                                                             mon["name"]))
 
@@ -504,32 +522,18 @@ class PBREngine():
         # The fail-counter will naturally rise a bit.
         fails = 0
 
-        options = self.match.aliveBlue if self.bluesTurn\
-            else self.match.aliveRed
-        options = list(zip(options, [0, 1, 2]))
-        # filter out current
-        del options[self.match.currentBlue if self.bluesTurn
-                    else self.match.currentRed]
-        # filter out dead
-        options = [o for o in options if o[0]]
-        # get rid of the booleans
-        options = [o[1] for o in options]
-
-        # use the silent method that locks up if selection fails?
+        # Should the silent pokemon selection be used?
+        # Don't use it, because it locks up if the selected pokemon is invalid
+        # and I am not 100% sure just filtering out dead pokemon is enough.
         silent = False
 
-        # if called back: random! else first
-        if (self.bluesTurn and self.match.fSendNextBlue) or\
-                (not self.bluesTurn and self.match.fSendNextRed):
-            nextPkmn = options[0]
-            silent = True  # safe, selection won't fail
-            # reset those flags
-            if self.bluesTurn:
-                self.match.fSendNextBlue = False
-            else:
-                self.match.fSendNextRed = False
+        # if called back: pokemon already chosen
+        if self.match.nextPkmn >= 0:
+            nextPkmn = self.match.nextPkmn
+            # reset
+            self.match.nextPkmn = -1
         else:
-            nextPkmn = random.choice(options)
+            _, nextPkmn = self._getAction(moves=False, switch=True)
 
         index = (self.match.mapBlue if self.bluesTurn
                  else self.match.mapRed)[nextPkmn]
@@ -573,28 +577,46 @@ class PBREngine():
         if switched:
             self.match.switched("blue" if wasBluesTurn else "red", nextPkmn)
 
-    def selectMove(self, num):
-        '''
-        Selects a move.
-        Should be called after the callback onMoveSelection was triggered.
-        <num> must be 0, 1, 2 or 3 for up, left, right or down move.
-        Can fail (instantly) and cause another onMoveSelection callback with
-        incremented <fails> argument.
-        '''
-        # early opt-out no-PP moves.
-        if self._movesBlocked[num]:
-            logger.info("selected 0PP move. early opt-out")
+    def _getAction(self, moves=True, switch=True):
+        side = "blue" if self.bluesTurn else "red"
+        while True:
+            # retrieve action
+            action, obj = self._action_callback(side,
+                                                fails=self._failsMoveSelection,
+                                                moves=moves, switch=switch)
+            self._actionCallbackObjStore[side] = obj
+            if moves and action.lower() in ("a", "b", "c", "d"):
+                move = ord(action.lower()) - ord('a')
+                if self._movesBlocked[move]:
+                    # early opt-out blocked moves like no-PP
+                    logger.info("selected 0PP move. early opt-out")
+                else:
+                    return ("move", move)
+            elif switch and str(action) in ("1", "2", "3", "4", "5", "6"):
+                selection = int(action) - 1
+                options = self.match.aliveBlue if self.bluesTurn\
+                    else self.match.aliveRed
+                options = list(enumerate(options))
+                # filter out current
+                del options[self.match.currentBlue if self.bluesTurn
+                            else self.match.currentRed]
+                # get indices of alive pokemon
+                options = [index for index, alive in options if alive]
+                if selection not in options:
+                    # early opt-out not available pokemon
+                    logger.info("selected unavailable pokemon. early opt-out")
+                else:
+                    return ("switch", selection)
+            else:
+                raise ActionError("Invalid player action: %r " +
+                                  "with moves: %s and switch: %s",
+                                  action, moves, switch)
             self._failsMoveSelection += 1
-            # TODO why the -1?
-            self.onMoveSelection(side="blue" if self.bluesTurn else "red",
-                                 fails=self._failsMoveSelection-1)
-        else:
-            self._dolphin.write8(Locations.INPUT_MOVE.value.addr, num)
 
     def _nextMove(self):
         '''
         Is called once the move selection screen pops up.
-        Triggers the callback onMoveSelection that prompts the upper layer to
+        Triggers the action-callback that prompts the upper layer to
         decide for a move.
         '''
 
@@ -608,12 +630,6 @@ class PBREngine():
             self._matchOver("draw")
             return
 
-        # this instantly hides and locks the gui until a move was inputted.
-        # TODO do this not now, but right as the move gets selected
-        #      to keep the gui visible, so people can see the PP
-        self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
-                              GuiTarget.SELECT_MOVE)
-
         # If this is the first try, retrieve PP
         if self._failsMoveSelection == 0:
             # res = AsyncResult()
@@ -626,8 +642,21 @@ class PBREngine():
                 x = ((val >> 8*(3-i)) & 0xFF) == 0
                 self._movesBlocked[i] = x
 
-        self.onMoveSelection(side="blue" if self.bluesTurn else "red",
-                             fails=self._failsMoveSelection)
+        switchPossible = sum(self.match.aliveBlue if self.bluesTurn
+                             else self.match.aliveRed) > 1
+        action, index = self._getAction(moves=True, switch=switchPossible)
+        if action == "move":
+            # this hides and locks the gui until a move was inputted.
+            self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
+                                  GuiTarget.SELECT_MOVE)
+            self._dolphin.write8(Locations.INPUT_MOVE.value.addr, index)
+        elif action == "switch":
+            self.match.nextPkmn = index
+            self._pressTwo()
+        else:
+            # should only be "move" or "switch"
+            assert False
+
         self._failsMoveSelection += 1
 
     def _skipIntro(self):
@@ -734,12 +763,16 @@ class PBREngine():
                 self.onAttack(side="blue",
                               mon=self.match.pkmnBlue[self.match.currentBlue],
                               moveindex=self._moveBlueUsed,
-                              movename=move)
+                              movename=move,
+                              obj=self._actionCallbackObjStore["blue"])
+                self._actionCallbackObjStore["blue"] = None
             else:
                 self.onAttack(side="red",
                               mon=self.match.pkmnRed[self.match.currentRed],
                               moveindex=self._moveRedUsed,
-                              movename=move)
+                              movename=move,
+                              obj=self._actionCallbackObjStore["red"])
+                self._actionCallbackObjStore["red"] = None
 
     def _distinguishInfo(self, data):
         # Gets called each time the text in the infobox (xyz fainted, abc hurt

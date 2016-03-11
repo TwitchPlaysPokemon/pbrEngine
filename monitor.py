@@ -36,7 +36,7 @@ class Monitor(object):
         print(" | Speed: %5.1f%%                               |"
               % (100 * speed))
         print(" +---------------------------------------------+")
-        print(" | Colosseum: %32s |" % Colosseums(self.pbr.stage).name)
+        print(" | Colosseum: %32s |" % Colosseums(self.pbr.colosseum).name)
         print(" |     State: %32s |" % PbrStates(self.pbr.state).name)
         print(" |       Gui: %32s |" % PbrGuis(self.pbr.gui).name)
         print(" +----------------------+----------------------+")

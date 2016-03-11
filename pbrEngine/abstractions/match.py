@@ -8,7 +8,7 @@ import logging
 
 from ..util import invertSide, swap, EventHook
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("pbrEngine")
 
 
 class Match(object):
@@ -38,8 +38,7 @@ class Match(object):
         self.aliveRed = [True for _ in pkmnRed]
         self.currentBlue = 0
         self.currentRed = 0
-        self.fSendNextBlue = True
-        self.fSendNextRed = True
+        self.nextPkmn = -1
         # mappings from pkmn# to button#
         self.mapBlue = list(range(len(pkmnBlue)))
         self.mapRed = list(range(len(pkmnRed)))
@@ -87,12 +86,10 @@ class Match(object):
         if side == "blue":
             dead = self.currentBlue
             self.aliveBlue[dead] = False
-            self.fSendNextBlue = True
             self.onDeath(side=side, mon=self.pkmnBlue[dead], monindex=dead)
         else:
             dead = self.currentRed
             self.aliveRed[dead] = False
-            self.fSendNextRed = True
             self.onDeath(side=side, mon=self.pkmnRed[dead], monindex=dead)
         if not any(self.aliveBlue) or not any(self.aliveRed):
             if self._checkScheduled:
