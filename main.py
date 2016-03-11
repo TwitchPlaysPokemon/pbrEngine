@@ -108,7 +108,7 @@ def new():
     logbot.send_message(channel, "--- NEW MATCH ---")
     log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
     log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
-    log("STAGE: %s" % Stages.names[stage])
+    log("STAGE: %s" % Stages(stage).name)
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
 

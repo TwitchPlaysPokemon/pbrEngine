@@ -18,7 +18,7 @@ class Cursor(object):
         Sets the game's selection cursor to a certain position.
         Used to minimize gui navigation and logic. Major speedup.
         '''
-        self._dolphin.write16(Locations.CURSOR_POS.addr, pos)
+        self._dolphin.write16(Locations.CURSOR_POS.value.addr, pos)
 
     def addEvent(self, value, callback, retroactive=True, *args):
         '''

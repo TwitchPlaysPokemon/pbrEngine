@@ -9,14 +9,6 @@ import inspect
 import gevent
 
 
-# http://stackoverflow.com/a/1695250/3688648
-def enum(*sequential, **named):
-    enums = dict(zip(sequential, range(len(sequential))), **named)
-    reverse = dict((value, key) for key, value in enums.items())
-    enums['names'] = reverse
-    return type('Enum', (), enums)
-
-
 class EventHook(object):
     '''
     A simple implementation of the Observer-Pattern.

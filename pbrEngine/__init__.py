@@ -132,27 +132,27 @@ class PBR():
 
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
-        self._subscribe(Locations.WHICH_PLAYER,               self._distinguishPlayer)
-        self._subscribe(Locations.GUI_STATE_MATCH_PKMN_MENU,  self._distinguishPkmnMenu)
-        self._subscribe(Locations.ORDER_LOCK_BLUE,            self._distinguishOrderLock)
-        self._subscribe(Locations.ORDER_LOCK_RED,             self._distinguishOrderLock)
-        self._subscribeMulti(Locations.ATTACK_TEXT,           self._distinguishAttack)
-        self._subscribeMulti(Locations.INFO_TEXT,             self._distinguishInfo)
-        self._subscribe(Locations.HP_BLUE,                    self._distinguishHpBlue)
-        self._subscribe(Locations.HP_RED,                     self._distinguishHpRed)
-        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT, self._distinguishEffective)
+        self._subscribe(Locations.WHICH_PLAYER.value,               self._distinguishPlayer)
+        self._subscribe(Locations.GUI_STATE_MATCH_PKMN_MENU.value,  self._distinguishPkmnMenu)
+        self._subscribe(Locations.ORDER_LOCK_BLUE.value,            self._distinguishOrderLock)
+        self._subscribe(Locations.ORDER_LOCK_RED.value,             self._distinguishOrderLock)
+        self._subscribeMulti(Locations.ATTACK_TEXT.value,           self._distinguishAttack)
+        self._subscribeMulti(Locations.INFO_TEXT.value,             self._distinguishInfo)
+        self._subscribe(Locations.HP_BLUE.value,                    self._distinguishHpBlue)
+        self._subscribe(Locations.HP_RED.value,                     self._distinguishHpRed)
+        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value, self._distinguishEffective)
         # de-multiplexing all these into single PbrGuis-enum using distinguisher
-        self._subscribe(Locations.GUI_STATE_MATCH,        self._distinguisher.distinguishMatch)
-        self._subscribe(Locations.GUI_STATE_BP,           self._distinguisher.distinguishBp)
-        self._subscribe(Locations.GUI_STATE_MENU,         self._distinguisher.distinguishMenu)
-        self._subscribe(Locations.GUI_STATE_RULES,        self._distinguisher.distinguishRules)
-        self._subscribe(Locations.GUI_STATE_ORDER,        self._distinguisher.distinguishOrder)
-        self._subscribe(Locations.GUI_STATE_BP_SELECTION, self._distinguisher.distinguishBpSelect)
-        self._subscribeMulti(Locations.GUI_TEMPTEXT,      self._distinguisher.distinguishStart)
-        self._subscribe(Locations.POPUP_BOX,              self._distinguisher.distinguishPopup)
+        self._subscribe(Locations.GUI_STATE_MATCH.value,        self._distinguisher.distinguishMatch)
+        self._subscribe(Locations.GUI_STATE_BP.value,           self._distinguisher.distinguishBp)
+        self._subscribe(Locations.GUI_STATE_MENU.value,         self._distinguisher.distinguishMenu)
+        self._subscribe(Locations.GUI_STATE_RULES.value,        self._distinguisher.distinguishRules)
+        self._subscribe(Locations.GUI_STATE_ORDER.value,        self._distinguisher.distinguishOrder)
+        self._subscribe(Locations.GUI_STATE_BP_SELECTION.value, self._distinguisher.distinguishBpSelect)
+        self._subscribeMulti(Locations.GUI_TEMPTEXT.value,      self._distinguisher.distinguishStart)
+        self._subscribe(Locations.POPUP_BOX.value,              self._distinguisher.distinguishPopup)
         # stuff processed by abstractions
-        self._subscribe(Locations.CURSOR_POS, self.cursor.updateCursorPos)
-        self._subscribe(Locations.FRAMECOUNT, self.timer.updateFramecount)
+        self._subscribe(Locations.CURSOR_POS.value, self.cursor.updateCursorPos)
+        self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
         # ##
 
         # initially paused, because in state WAITING_FOR_NEW
@@ -300,14 +300,14 @@ class PBR():
         Sets the game's field of view.
         :param val=0.5: float, apparently in radians, 0.5 is default
         '''
-        self._dolphin.write32(Locations.FOV.addr, floatToIntRepr(val))
+        self._dolphin.write32(Locations.FOV.value.addr, floatToIntRepr(val))
 
-    def setGuiPosY(self, val=DefaultValues.GUI_POS_Y):
+    def setGuiPosY(self, val=DefaultValues["GUI_POS_Y"]):
         '''
         Sets the Gui's y-coordinate.
-        :param val=DefaultValues.GUI_POS_Y: integer, y-coordinate of gui
+        :param val=DefaultValues["GUI_POS_Y"]: integer, y-coordinate of gui
         '''
-        self._dolphin.write32(Locations.GUI_POS_Y.addr, floatToIntRepr(val))
+        self._dolphin.write32(Locations.GUI_POS_Y.value.addr, floatToIntRepr(val))
 
     #######################################################
     #             Below are helper functions.             #
@@ -318,8 +318,8 @@ class PBR():
         '''
         Disables the weird multirender-blur-thingy.
         '''
-        self._dolphin.write32(Locations.BLUR1.addr, 0xffffffff)
-        self._dolphin.write32(Locations.BLUR2.addr, 0xffffffff)
+        self._dolphin.write32(Locations.BLUR1.value.addr, 0xffffffff)
+        self._dolphin.write32(Locations.BLUR2.value.addr, 0xffffffff)
 
     def _resetBlur(self):
         '''
@@ -327,8 +327,8 @@ class PBR():
         This is necessary, because these values are used for something else
         during selection!
         '''
-        self._dolphin.write32(Locations.BLUR1.addr, DefaultValues.BLUR1)
-        self._dolphin.write32(Locations.BLUR2.addr, DefaultValues.BLUR2)
+        self._dolphin.write32(Locations.BLUR1.value.addr, DefaultValues["BLUR1"])
+        self._dolphin.write32(Locations.BLUR2.value.addr, DefaultValues["BLUR2"])
 
     def _setAnimSpeed(self, val):
         '''
@@ -338,15 +338,15 @@ class PBR():
         Is automatically increased during selection as a speed improvement.
         :param v: float describing speed
         '''
-        self._dolphin.write32(Locations.SPEED_1.addr, 0)
-        self._dolphin.write32(Locations.SPEED_2.addr, floatToIntRepr(val))
+        self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
+        self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
 
     def _resetAnimSpeed(self):
         '''
         Sets the game's animation speed back to its default.
         '''
-        self._dolphin.write32(Locations.SPEED_1.addr, DefaultValues.SPEED1)
-        self._dolphin.write32(Locations.SPEED_2.addr, DefaultValues.SPEED2)
+        self._dolphin.write32(Locations.SPEED_1.value.addr, DefaultValues["SPEED1"])
+        self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
     def _switched(self, side, mon, monindex):
         self.onSwitch(side=side, mon=mon, monindex=monindex)
@@ -407,7 +407,7 @@ class PBR():
 
     def _newRng(self):
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
-        self._dolphin.write32(Locations.RNG_SEED.addr, random.getrandbits(32))
+        self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
     ############################################
     # The below functions are for timed inputs #
@@ -557,9 +557,9 @@ class PBR():
                 button = [WiimoteButton.RIGHT, WiimoteButton.DOWN,
                           WiimoteButton.UP][index]
                 if silent:
-                    self._dolphin.write32(Locations.GUI_TARGET_MATCH.addr,
+                    self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
                                           GuiTarget.CONFIRM_PKMN)
-                    self._dolphin.write8(Locations.INPUT_PKMN.addr, index)
+                    self._dolphin.write8(Locations.INPUT_PKMN.value.addr, index)
                 else:
                     self._pressButton(button)
 
@@ -586,7 +586,7 @@ class PBR():
             self.onMoveSelection(side="blue" if self.bluesTurn else "red",
                                  fails=self._failsMoveSelection-1)
         else:
-            self._dolphin.write8(Locations.INPUT_MOVE.addr, num)
+            self._dolphin.write8(Locations.INPUT_MOVE.value.addr, num)
 
     def _nextMove(self):
         '''
@@ -600,7 +600,7 @@ class PBR():
 
         if self._fMatchCancelled:
             # quit the match if it was cancelled
-            self._dolphin.write32(Locations.GUI_TARGET_MATCH.addr,
+            self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
                                   GuiTarget.INSTA_GIVE_IN)
             self._matchOver("draw")
             return
@@ -608,14 +608,14 @@ class PBR():
         # this instantly hides and locks the gui until a move was inputted.
         # TODO do this not now, but right as the move gets selected
         #      to keep the gui visible, so people can see the PP
-        self._dolphin.write32(Locations.GUI_TARGET_MATCH.addr,
+        self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
                               GuiTarget.SELECT_MOVE)
 
         # If this is the first try, retrieve PP
         if self._failsMoveSelection == 0:
             # res = AsyncResult()
-            # self._dolphin.read32(Locations.PP_BLUE.addr if self.bluesTurn
-            # else Locations.PP_RED.addr, res.set)
+            # self._dolphin.read32(Locations.PP_BLUE.value.addr if self.bluesTurn
+            # else Locations.PP_RED.value.addr, res.set)
             # val = res.get()
             val = 0xffffffff
             # TODO the PP addresses change, find the pattern
@@ -638,8 +638,8 @@ class PBR():
 
     def _invalidateEffTexts(self):
         for i in range(9):
-            self._dolphin.write32(Locations.EFFECTIVE_TEXT.addr +
-                                  Locations.EFFECTIVE_TEXT.length * i,
+            self._dolphin.write32(Locations.EFFECTIVE_TEXT.value.addr +
+                                  Locations.EFFECTIVE_TEXT.value.length * i,
                                   0x00230023)
 
     def _select_bp(self, num):
@@ -720,10 +720,10 @@ class PBR():
             # I think there will always be an attack declared between 2
             # identical texts ("But it failed" for example)
             # => No need for timed invalidation
-            self._dolphin.write32(Locations.INFO_TEXT.addr, 0x00230023)
+            self._dolphin.write32(Locations.INFO_TEXT.value.addr, 0x00230023)
 
             # "used" => "uses", so we get the event again if something changes!
-            self._dolphin.write8(Locations.ATTACK_TEXT.addr + 1 +
+            self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 1 +
                                  2 * match.start(3), 0x73)
             side = match.group(1).lower()
             self.match.setLastMove(side, move)
@@ -750,7 +750,7 @@ class PBR():
         string = bytesToString(data)
 
         # shift gui up a bit to fully see this
-        self.setGuiPosY(DefaultValues.GUI_POS_Y + 20.0)
+        self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
 
         # log the whole thing
         self.onMatchlog(text=string)
@@ -878,10 +878,10 @@ class PBR():
                 self._select(CursorPosMenu.BATTLE)
                 # hack correct stuff as "default"
                 # seems to not work? Not doing this anymore
-                # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.addr,
+                # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.value.addr,
                 # BattleStyles.SINGLE)
                 # self._fSelectedSingleBattle = True
-                # self._dolphin.write32(Locations.DEFAULT_RULESET.addr,
+                # self._dolphin.write32(Locations.DEFAULT_RULESET.value.addr,
                 # Rulesets.RULE_1)
                 # self._fSelectedTppRules = True
         elif gui == PbrGuis.MENU_BATTLE_TYPE:
@@ -929,9 +929,9 @@ class PBR():
                 self.timer.schedule(10, self._select, 1)  # colosseum mode
         elif gui == PbrGuis.START_OPTIONS:
             if self.announcer != (self.state == PbrStates.CREATING_SAVE1):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.addr, 1)
+                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 1)
             elif self.announcer != (self.state == PbrStates.CREATING_SAVE2):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.addr, 0)
+                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 0)
             self.timer.schedule(10, self._pressOne)
             self._fSetAnnouncer = True
         elif gui in (PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE,
@@ -985,7 +985,7 @@ class PBR():
             if self.state < PbrStates.PREPARING_STAGE:
                 self._pressOne()
             else:
-                self._dolphin.write32(Locations.COLOSSEUM.addr, self.stage)
+                self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.stage)
                 self._select(CursorOffsets.STAGE)
                 self._setState(PbrStates.PREPARING_START)
         elif gui == PbrGuis.RULES_SETTINGS:
@@ -1048,31 +1048,31 @@ class PBR():
             if self._fBlueChoseOrder:
                 self._fBlueChoseOrder = False
                 x1, x2 = orderToInts(self.match.orderRed)
-                self._dolphin.write32(Locations.ORDER_RED.addr, x1)
-                self._dolphin.write16(Locations.ORDER_RED.addr+4, x2)
+                self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
+                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
                 self._pressTwo()
                 self._initMatch()
             else:
                 self._fBlueChoseOrder = True
                 x1, x2 = orderToInts(self.match.orderBlue)
-                self._dolphin.write32(Locations.ORDER_BLUE.addr, x1)
-                self._dolphin.write16(Locations.ORDER_BLUE.addr+4, x2)
+                self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
+                self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
                 self._pressTwo()
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
             # try early: shift gui back to normal position
-            self.setGuiPosY(DefaultValues.GUI_POS_Y)
+            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # we can safely assume we are in match state now
             self._setState(PbrStates.MATCH_RUNNING)
             # shift gui back to normal position
-            self.setGuiPosY(DefaultValues.GUI_POS_Y)
+            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get
             # processed.
-            self._dolphin.write8(Locations.ATTACK_TEXT.addr + 11, 0)
+            self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 11, 0)
             # overwrite RNG seed
             self._newRng()
             # start the job that handles the complicated and dangerous process

@@ -36,9 +36,9 @@ class Monitor(object):
         print(" | Speed: %5.1f%%                               |"
               % (100 * speed))
         print(" +---------------------------------------------+")
-        print(" | Colosseum: %32s |" % Colosseums.names[self.pbr.stage])
-        print(" |     State: %32s |" % PbrStates.names[self.pbr.state])
-        print(" |       Gui: %32s |" % PbrGuis.names[self.pbr.gui])
+        print(" | Colosseum: %32s |" % Colosseums(self.pbr.stage).name)
+        print(" |     State: %32s |" % PbrStates(self.pbr.state).name)
+        print(" |       Gui: %32s |" % PbrGuis(self.pbr.gui).name)
         print(" +----------------------+----------------------+")
         lenBlue = len(self.pbr.match.pkmnBlue)
         lenRed = len(self.pbr.match.pkmnRed)
