@@ -9,6 +9,7 @@ import random
 import re
 import logging
 import dolphinWatch
+import os
 
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
@@ -19,17 +20,18 @@ from .util import bytesToString, floatToIntRepr, EventHook
 from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
 
-logger = logging.getLogger(__name__)
-savefile1 = "saveWithAnnouncer.state"
-savefile2 = "saveWithoutAnnouncer.state"
+logger = logging.getLogger("pbrEngine")
 
 
 class PBREngine():
-    def __init__(self):
+    def __init__(self, savefile_dir="pbr_savefiles"):
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection("localhost", 6000)
         self._dolphin.onDisconnect(self._reconnect)
         self._dolphin.onConnect(self._initDolphinWatch)
+
+        self._savefile1 = os.path.abspath(os.path.join(savefile_dir, "saveWithAnnouncer.state"))
+        self._savefile2 = os.path.abspath(os.path.join(savefile_dir, "saveWithoutAnnouncer.state"))
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
@@ -268,7 +270,8 @@ class PBREngine():
         # if that succeeds, skip a few steps
         self._setState(PbrStates.EMPTYING_BP2)
         self._dolphin.resume()
-        if not self._dolphin.load(savefile1 if announcer else savefile2):
+        if not self._dolphin.load(self._savefile1 if announcer
+                                  else self._savefile2):
             self._setState(PbrStates.CREATING_SAVE1)
         else:
             self._setAnimSpeed(self._increasedSpeed)
@@ -828,9 +831,9 @@ class PBREngine():
             self._resetAnimSpeed()
             # wait for game to stabilize. maybe this causes the load fails.
             gevent.sleep(1.0)
-            self._dolphin.save(savefile1 if self.announcer !=
+            self._dolphin.save(self._savefile1 if self.announcer !=
                                (self.state == PbrStates.CREATING_SAVE1)
-                               else savefile2)
+                               else self._savefile2)
             gevent.sleep(1.0)
             self._setAnimSpeed(self._increasedSpeed)
             self._fSetAnnouncer = False
