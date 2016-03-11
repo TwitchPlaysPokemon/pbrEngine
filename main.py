@@ -16,9 +16,9 @@ import logging
 import crashchecker
 import monitor
 
-from pbrEngine import PBR
+from pbrEngine import PBREngine
 from pbrEngine.states import PbrStates
-from pbrEngine.stages import Stages
+from pbrEngine import Colosseums
 from pbrEngine.avatars import AvatarsBlue, AvatarsRed
 from tbot import Twitchbot
 from random import shuffle
@@ -49,20 +49,6 @@ with open("json.json") as f:
                                            .encode('ascii', 'replace')
                                            .decode())
 
-
-stages = (
-    Stages.GATEWAY,
-    Stages.MAIN_STREET,
-    Stages.WATERFALL,
-    Stages.NEON,
-    Stages.CRYSTAL,
-    Stages.SUNNY_PARK,
-    Stages.MAGMA,
-    Stages.SUNSET,
-    Stages.COURTYARD,
-    Stages.STARGAZER,
-    # Stages.LAGOON, # uncomment to include into pool
-)
 
 avatarsBlue = (
     AvatarsBlue.BLUE,
@@ -103,19 +89,19 @@ def new():
     logfile = "logs/match-%d.txt" % time.time()
     display.addEvent("Starting a new match...")
     pkmn = random.sample(data, 6)
-    stage = random.choice(stages)
+    colosseum = random.choice(list(Colosseums))
 
     logbot.send_message(channel, "--- NEW MATCH ---")
     log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
     log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
-    log("STAGE: %s" % Stages(stage).name)
+    log("COLOSSEUM: %s" % Colosseums(colosseum).name)
     log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
 
-    pbr.new(stage, pkmn[:3], pkmn[3:6],
+    pbr.new(colosseum, pkmn[:3], pkmn[3:6],
             random.choice(avatarsBlue),
             random.choice(avatarsRed))
-    # pbr.new(stage, [data[398]], [data[9], data[10], data[12]])
+    # pbr.new(colosseum, [data[398]], [data[9], data[10], data[12]])
     # pbr.new(random.randint(0,9),
     #         random.sample([data[201], data[49], data[359]],
     #         random.choice([1, 2, 3])),
@@ -186,7 +172,7 @@ def log(text):
 def main():
     global checker, display, pbr
     # init the PBR engine and hook everything up
-    pbr = PBR()
+    pbr = PBREngine()
 
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)

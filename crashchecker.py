@@ -7,13 +7,13 @@ Created on 14.09.2015
 import gevent
 from pbrEngine.states import PbrStates
 from pbrEngine.util import EventHook
-from pbrEngine import PBR
+from pbrEngine import PBREngine
 
 
 class Checker(object):
     def __init__(self, pbr, crash_callback):
         self.pbr = pbr
-        self.onCrash = EventHook(pbr=PBR)
+        self.onCrash = EventHook(pbr=PBREngine)
         if crash_callback:
             self.onCrash += crash_callback
         self.reset()

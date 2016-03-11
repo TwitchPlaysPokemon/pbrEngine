@@ -6,7 +6,7 @@ Created on 26.09.2015
 
 import os
 from pbrEngine.states import PbrStates, PbrGuis
-from pbrEngine.memorymap.values import Colosseums
+from pbrEngine import Colosseums
 import gevent
 
 
