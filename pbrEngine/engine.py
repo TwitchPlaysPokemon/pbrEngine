@@ -28,7 +28,10 @@ class ActionError(Exception):
 
 
 class PBREngine():
-    def __init__(self, action_callback, savefile_dir="pbr_savefiles"):
+    def __init__(self, action_callback, host="localhost", port=6000,
+                 savefile_dir="pbr_savefiles",
+                 savefile_with_announcer_name="saveWithAnnouncer.state",
+                 savefile_without_announcer_name="saveWithoutAnnouncer.state"):
         '''
         :param action_callback:
             will be called when a player action needs to be determined.
@@ -43,15 +46,20 @@ class PBREngine():
                 1, 2, 3, 4, 5, 6: pokemon index to switch to
             and <obj> is any object. <obj> will be submitted as an argument to
             either the onSwitch or onAttack callback if this command succeeds.
+        :param host: ip of the dolphin instance to connect to
+        :param port: port of the dolphin instance to connect to
+        :param savefile_dir: directory location of savestates
+        :param savefile_with_announcer_name: filename of savefile with the announcer turned on
+        :param savefile_without_announcer_name: filename of savefile with the announcer turned off
         '''
         self._action_callback = action_callback
         self._distinguisher = Distinguisher(self._distinguishGui)
-        self._dolphin = dolphinWatch.DolphinConnection("localhost", 6000)
+        self._dolphin = dolphinWatch.DolphinConnection(host, port)
         self._dolphin.onDisconnect(self._reconnect)
         self._dolphin.onConnect(self._initDolphinWatch)
 
-        self._savefile1 = os.path.abspath(os.path.join(savefile_dir, "saveWithAnnouncer.state"))
-        self._savefile2 = os.path.abspath(os.path.join(savefile_dir, "saveWithoutAnnouncer.state"))
+        self._savefile1 = os.path.abspath(os.path.join(savefile_dir, savefile_with_announcer_name))
+        self._savefile2 = os.path.abspath(os.path.join(savefile_dir, savefile_without_announcer_name))
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
