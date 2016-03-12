@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 setup(
     name="pbrEngine",
-    version="0.2",
+    version="0.3-dev",
     packages=find_packages(),
     install_requires=['dolphinWatch'],
 
