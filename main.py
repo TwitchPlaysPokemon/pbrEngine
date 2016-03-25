@@ -107,7 +107,6 @@ def onState(state):
 
 def onAttack(side, mon, moveindex, movename, obj):
     display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
-    display.addEvent("{} was the selection".format(obj))
 
 
 def onWin(winner):
@@ -123,14 +122,14 @@ def onDeath(side, mon, monindex):
 
 def onSwitch(side, mon, monindex, obj):
     display.addEvent("%s (%s) is sent out." % (mon["name"], side))
-    display.addEvent("{} was the selection".format(obj))
 
 
 def actionCallback(side, fails, moves, switch):
     options = []
     if moves:
-        options += ["a", "b", "c", "d"]
-    if switch:
+        options += ["a"]*4 + ["b"]*3 + ["c"]*2 + ["d"]
+    #if switch:
+    elif switch:  # don't switch if not necessary to speed battles up for testing
         options += ["1", "2", "3"]
     move = random.choice(options)
     return (move, move)

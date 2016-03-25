@@ -139,6 +139,7 @@ class PBREngine():
         self.avatar_blue = AvatarsBlue.BLUE
         self.avatar_red = AvatarsRed.RED
         self.announcer = True
+        self.hide_gui = True
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._reset()
 
@@ -525,7 +526,13 @@ class PBREngine():
         If that was caused due to a death, send out the first possible pokemon.
         Else, send out a random living pokemon.
         '''
-
+        
+        # shift gui back to normal position
+        if self.hide_gui:
+            self.setGuiPosY(100000.0)
+        else:
+            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+        
         # Note: This gui isn't input-ready from the beginning.
         # The fail-counter will naturally rise a bit.
         fails = 0
@@ -720,12 +727,14 @@ class PBREngine():
         # Just for the logging. Can also be "critical hit"
         if self.state != PbrStates.MATCH_RUNNING:
             return
+        # move gui back into place. Don't hide this even with hide_gui set
+        self.setGuiPosY(DefaultValues["GUI_POS_Y"])
         text = bytesToString(data)
         if text.startswith("##"):
             return
         self.on_matchlog(text=text)
         # this text gets instantly changed, so change it after it's gone.
-        # thise frames is a wild guess.
+        # this number of frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
         self.timer.schedule(240, self._invalidateEffTexts)
 
@@ -1106,12 +1115,18 @@ class PBREngine():
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
             # try early: shift gui back to normal position
-            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+            if self.hide_gui:
+                self.setGuiPosY(100000.0)
+            else:
+                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # we can safely assume we are in match state now
             self._setState(PbrStates.MATCH_RUNNING)
             # shift gui back to normal position
-            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+            if self.hide_gui:
+                self.setGuiPosY(100000.0)
+            else:
+                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get
