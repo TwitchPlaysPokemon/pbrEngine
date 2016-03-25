@@ -32,7 +32,7 @@ class Monitor(object):
         os.system("cls" if os.name == "nt" else "clear")
         print("\n")
         print(" +---------------------------------------------+")
-        speed = sum(self.pbr.timer.speedPlots)/len(self.pbr.timer.speedPlots)
+        speed = sum(self.pbr.timer.speed_plots)/len(self.pbr.timer.speed_plots)
         print(" | Speed: %5.1f%%                               |"
               % (100 * speed))
         print(" +---------------------------------------------+")
@@ -40,19 +40,19 @@ class Monitor(object):
         print(" |     State: %32s |" % PbrStates(self.pbr.state).name)
         print(" |       Gui: %32s |" % PbrGuis(self.pbr.gui).name)
         print(" +----------------------+----------------------+")
-        lenBlue = len(self.pbr.match.pkmnBlue)
-        lenRed = len(self.pbr.match.pkmnRed)
+        lenBlue = len(self.pbr.match.pkmn_blue)
+        lenRed = len(self.pbr.match.pkmn_red)
         for i in range(max(lenBlue, lenRed)):
-            blue = self.pbr.match.pkmnBlue[i] if i < lenBlue else None
-            red = self.pbr.match.pkmnRed[i] if i < lenRed else None
+            blue = self.pbr.match.pkmn_blue[i] if i < lenBlue else None
+            red = self.pbr.match.pkmn_red[i] if i < lenRed else None
             print(" | %s  %-18s|%18s  %s |" % (
-                ("X" if not self.pbr.match.aliveBlue[i]
-                 else (">" if i == self.pbr.match.currentBlue
+                ("X" if not self.pbr.match.alive_blue[i]
+                 else (">" if i == self.pbr.match.current_blue
                        else " ")) if blue else " ",
                 blue["name"] if blue else " ",
                 red["name"] if red else " ",
-                ("X" if not self.pbr.match.aliveRed[i]
-                 else ("<" if i == self.pbr.match.currentRed
+                ("X" if not self.pbr.match.alive_red[i]
+                 else ("<" if i == self.pbr.match.current_red
                        else " ")) if red else " ",
             ))
         print(" +----------------------+----------------------+")

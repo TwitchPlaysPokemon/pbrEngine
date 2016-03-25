@@ -45,7 +45,7 @@ class PBREngine():
                 a, b, c, d: move to be selected.
                 1, 2, 3, 4, 5, 6: pokemon index to switch to
             and <obj> is any object. <obj> will be submitted as an argument to
-            either the onSwitch or onAttack callback if this command succeeds.
+            either the on_switch or on_attack callback if this command succeeds.
         :param host: ip of the dolphin instance to connect to
         :param port: port of the dolphin instance to connect to
         :param savefile_dir: directory location of savestates
@@ -64,8 +64,8 @@ class PBREngine():
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
-        self.match.onWin += self._matchOver
-        self.match.onSwitch += self._switched
+        self.match.on_win += self._matchOver
+        self.match.on_switch += self._switched
 
         # event callbacks
         '''
@@ -73,19 +73,19 @@ class PBREngine():
         Can be considered end of the match.
         arg0: <winner> "blue" "red" "draw"
         '''
-        self.onWin = EventHook(winner=str)
+        self.on_win = EventHook(winner=str)
         '''
         Event for state changes.
         Propably only useful for the debug monitor, not for production.
         arg0: <state> see states.PbrStates
         '''
-        self.onState = EventHook(state=PbrStates)
+        self.on_state = EventHook(state=PbrStates)
         '''
         Event of a gui changing.
         Propably only useful for the debug monitor, not for production.
         arg0: <gui> see states.PbrGuis
         '''
-        self.onGui = EventHook(gui=PbrGuis)
+        self.on_gui = EventHook(gui=PbrGuis)
         '''
         Event of a pokemon attacking.
         arg0: <side> "blue" "red"
@@ -98,7 +98,7 @@ class PBREngine():
         arg4: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. Rollout)
         '''
-        self.onAttack = EventHook(side=str, mon=dict, moveindex=int,
+        self.on_attack = EventHook(side=str, mon=dict, moveindex=int,
                                   movename=str, obj=object)
         '''
         Event of a pokemon dying.
@@ -107,7 +107,7 @@ class PBREngine():
               submitted with new()
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
-        self.onDeath = EventHook(side=str, mon=dict, monindex=int)
+        self.on_death = EventHook(side=str, mon=dict, monindex=int)
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
@@ -117,7 +117,7 @@ class PBREngine():
         arg3: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
         '''
-        self.onSwitch = EventHook(side=str, mon=dict, monindex=int, obj=object)
+        self.on_switch = EventHook(side=str, mon=dict, monindex=int, obj=object)
         '''
         Event of information text appearing during a match.
         Includes: a) texts from the black textbox in the corner
@@ -128,7 +128,7 @@ class PBREngine():
         arg0: <text> representation of the event.
               Actual in-game-text if possible.
         '''
-        self.onMatchlog = EventHook(text=str)
+        self.on_matchlog = EventHook(text=str)
 
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
@@ -136,8 +136,8 @@ class PBREngine():
         self.volume = 50
         self.state = PbrStates.INIT
         self.colosseum = 0
-        self.avatarBlue = AvatarsBlue.BLUE
-        self.avatarRed = AvatarsRed.RED
+        self.avatar_blue = AvatarsBlue.BLUE
+        self.avatar_red = AvatarsRed.RED
         self.announcer = True
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._reset()
@@ -208,7 +208,7 @@ class PBREngine():
         self.connect()
 
     def _reset(self):
-        self.bluesTurn = True
+        self.blues_turn = True
         self.startsignal = False
 
         # working data
@@ -239,27 +239,27 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def start(self, orderBlue=[1, 2, 3], orderRed=[1, 2, 3]):
+    def start(self, order_blue=[1, 2, 3], order_red=[1, 2, 3]):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason
         (state != WAITING_FOR_START), it will continue to prepare normally and
         start the match once it's ready.
         Otherwise calling start() will start the match by resuming the game.
-        :param orderBlue: pokemon order of blue team as list, e.g. [1, 2, 3]
-        :param orderRed: pokemon order of red team as list, e.g. [2, 1]
-        CAUTION: The list order of match.pkmnBlue and match.pkmnRed will be
+        :param order_blue: pokemon order of blue team as list, e.g. [1, 2, 3]
+        :param order_red: pokemon order of red team as list, e.g. [2, 1]
+        CAUTION: The list order of match.pkmn_blue and match.pkmn_red will be
                  altered
         '''
-        self.match.orderBlue = orderBlue
-        self.match.orderRed = orderRed
+        self.match.order_blue = order_blue
+        self.match.order_red = order_red
         self.startsignal = True
         if self.state == PbrStates.WAITING_FOR_START:
             self._setState(PbrStates.SELECTING_ORDER)
             self._dolphin.resume()
 
-    def new(self, colosseum, pkmnBlue, pkmnRed, avatarBlue=AvatarsBlue.BLUE,
-            avatarRed=AvatarsRed.RED, announcer=True):
+    def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
+            avatar_red=AvatarsRed.RED, announcer=True):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -268,11 +268,11 @@ class PBREngine():
         CAUTION: issues a cancel() call first if the preparation reached
                  the "point of no return".
         :param colosseum: colosseum enum, choose from pbrEngine.Colosseums
-        :param pkmnBlue: array with dictionaries of team blue's pokemon
-        :param pkmnRed: array with dictionaries of team red's pokemon
+        :param pkmn_blue: array with dictionaries of team blue's pokemon
+        :param pkmn_red: array with dictionaries of team red's pokemon
         CAUTION: Currently only max. 3 pokemon per team supported.
-        :param avatarBlue=AvatarsBlue.BLUE: enum for team blue's avatar
-        :param avatarRed=AvatarsRed.RED: enum for team red's avatar
+        :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
+        :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         :param announcer=True: boolean if announcer's voice is enabled
         '''
         self._reset()
@@ -283,11 +283,11 @@ class PBREngine():
             self._fSkipWaitForNew = True
 
         self.colosseum = colosseum
-        self._posBlues = [int(p["position"]) for p in pkmnBlue]
-        self._posReds = [int(p["position"]) for p in pkmnRed]
-        self.match.new(pkmnBlue, pkmnRed)
-        self.avatarBlue = avatarBlue
-        self.avatarRed = avatarRed
+        self._posBlues = [int(p["position"]) for p in pkmn_blue]
+        self._posReds = [int(p["position"]) for p in pkmn_red]
+        self.match.new(pkmn_blue, pkmn_red)
+        self.avatar_blue = avatar_blue
+        self.avatar_red = avatar_red
         self.announcer = announcer
 
         # try to load savestate
@@ -376,10 +376,10 @@ class PBREngine():
         self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
     def _switched(self, side, mon, monindex):
-        self.onSwitch(side=side, mon=mon, monindex=monindex,
+        self.on_switch(side=side, mon=mon, monindex=monindex,
                       obj=self._actionCallbackObjStore[side])
         self._actionCallbackObjStore[side] = None
-        self.onMatchlog(text="Team %s's %s is sent out." % (side.title(),
+        self.on_matchlog(text="Team %s's %s is sent out." % (side.title(),
                                                             mon["name"]))
 
     def _stuckChecker(self):
@@ -426,13 +426,13 @@ class PBREngine():
 
     def _setState(self, state):
         '''
-        Sets the current PBR state. Fires the onState event if it changed.
+        Sets the current PBR state. Fires the on_state event if it changed.
         Always use this method to change the state, or events will be missed.
         '''
         if self.state == state:
             return
         self.state = state
-        self.onState(state=state)
+        self.on_state(state=state)
 
     def _newRng(self):
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
@@ -483,18 +483,18 @@ class PBREngine():
         Is called when the current match ended and a winner is determined.
         Sets the cursorevent for when the "Continue/Change Rules/Quit"
         options appear.
-        Calls the onWin-callback and triggers a matchlog-message.
+        Calls the on_win-callback and triggers a matchlog-message.
         '''
         if self.state != PbrStates.MATCH_RUNNING:
             return
         self._fMatchCancelled = False  # reset flag here
         self.cursor.addEvent(1, self._quitMatch)
         self._setState(PbrStates.MATCH_ENDED)
-        self.onWin(winner=winner)
+        self.on_win(winner=winner)
         if winner == "draw":
-            self.onMatchlog(text="The game ended in a draw!")
+            self.on_matchlog(text="The game ended in a draw!")
         else:
-            self.onMatchlog(text="%s won the game!" % winner.title())
+            self.on_matchlog(text="%s won the game!" % winner.title())
 
     def _waitForNew(self):
         if not self._fSkipWaitForNew:
@@ -536,23 +536,23 @@ class PBREngine():
         silent = False
 
         # if called back: pokemon already chosen
-        if self.match.nextPkmn >= 0:
-            nextPkmn = self.match.nextPkmn
+        if self.match.next_pkmn >= 0:
+            next_pkmn = self.match.next_pkmn
             # reset
-            self.match.nextPkmn = -1
+            self.match.next_pkmn = -1
         else:
-            _, nextPkmn = self._getAction(moves=False, switch=True)
+            _, next_pkmn = self._getAction(moves=False, switch=True)
 
-        index = (self.match.mapBlue if self.bluesTurn
-                 else self.match.mapRed)[nextPkmn]
+        index = (self.match.map_blue if self.blues_turn
+                 else self.match.map_red)[next_pkmn]
 
-        wasBluesTurn = self.bluesTurn
+        wasBluesTurn = self.blues_turn
 
         self._fTryingToSwitch = True
         switched = True  # flag if the switching was cancelled after all
         # Gui can temporarily become "idle" if an popup
         # ("Can't be switched out") appears. use custom flag!
-        while self._fGuiPkmnUp and self.bluesTurn == wasBluesTurn:
+        while self._fGuiPkmnUp and self.blues_turn == wasBluesTurn:
             if fails >= 4:
                 switched = False
                 # A popup appears. Click it away and cancel move selection.
@@ -583,10 +583,10 @@ class PBREngine():
 
         self._fTryingToSwitch = False
         if switched:
-            self.match.switched("blue" if wasBluesTurn else "red", nextPkmn)
+            self.match.switched("blue" if wasBluesTurn else "red", next_pkmn)
 
     def _getAction(self, moves=True, switch=True):
-        side = "blue" if self.bluesTurn else "red"
+        side = "blue" if self.blues_turn else "red"
         while True:
             # retrieve action
             action, obj = self._action_callback(side,
@@ -602,12 +602,12 @@ class PBREngine():
                     return ("move", move)
             elif switch and str(action) in ("1", "2", "3", "4", "5", "6"):
                 selection = int(action) - 1
-                options = self.match.aliveBlue if self.bluesTurn\
-                    else self.match.aliveRed
+                options = self.match.alive_blue if self.blues_turn\
+                    else self.match.alive_red
                 options = list(enumerate(options))
                 # filter out current
-                del options[self.match.currentBlue if self.bluesTurn
-                            else self.match.currentRed]
+                del options[self.match.current_blue if self.blues_turn
+                            else self.match.current_red]
                 # get indices of alive pokemon
                 options = [index for index, alive in options if alive]
                 if selection not in options:
@@ -641,7 +641,7 @@ class PBREngine():
         # If this is the first try, retrieve PP
         if self._failsMoveSelection == 0:
             # res = AsyncResult()
-            # self._dolphin.read32(Locations.PP_BLUE.value.addr if self.bluesTurn
+            # self._dolphin.read32(Locations.PP_BLUE.value.addr if self.blues_turn
             # else Locations.PP_RED.value.addr, res.set)
             # val = res.get()
             val = 0xffffffff
@@ -650,8 +650,8 @@ class PBREngine():
                 x = ((val >> 8*(3-i)) & 0xFF) == 0
                 self._movesBlocked[i] = x
 
-        switchPossible = sum(self.match.aliveBlue if self.bluesTurn
-                             else self.match.aliveRed) > 1
+        switchPossible = sum(self.match.alive_blue if self.blues_turn
+                             else self.match.alive_red) > 1
         action, index = self._getAction(moves=True, switch=switchPossible)
         if action == "move":
             # this hides and locks the gui until a move was inputted.
@@ -659,7 +659,7 @@ class PBREngine():
                                   GuiTarget.SELECT_MOVE)
             self._dolphin.write8(Locations.INPUT_MOVE.value.addr, index)
         elif action == "switch":
-            self.match.nextPkmn = index
+            self.match.next_pkmn = index
             self._pressTwo()
         else:
             # should only be "move" or "switch"
@@ -705,14 +705,14 @@ class PBREngine():
     def _distinguishHpBlue(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.onMatchlog(text="Team Blue's %s has %d/%d HP left." %
+        self.on_matchlog(text="Team Blue's %s has %d/%d HP left." %
                         (self.match.getCurrentBlue()["name"], val,
                          self.match.getCurrentBlue()["stats"]["hp"]))
 
     def _distinguishHpRed(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.onMatchlog(text="Team Red's %s has %d/%d HP left." %
+        self.on_matchlog(text="Team Red's %s has %d/%d HP left." %
                         (self.match.getCurrentRed()["name"], val,
                          self.match.getCurrentRed()["stats"]["hp"]))
 
@@ -723,7 +723,7 @@ class PBREngine():
         text = bytesToString(data)
         if text.startswith("##"):
             return
-        self.onMatchlog(text=text)
+        self.on_matchlog(text=text)
         # this text gets instantly changed, so change it after it's gone.
         # thise frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
@@ -754,7 +754,7 @@ class PBREngine():
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
             # Log the whole thing
-            self.onMatchlog(text="%s %s" % (line, move))
+            self.on_matchlog(text="%s %s" % (line, move))
 
             # invalidate the little info boxes here.
             # I think there will always be an attack declared between 2
@@ -768,15 +768,15 @@ class PBREngine():
             side = match.group(1).lower()
             self.match.setLastMove(side, move)
             if side == "blue":
-                self.onAttack(side="blue",
-                              mon=self.match.pkmnBlue[self.match.currentBlue],
+                self.on_attack(side="blue",
+                              mon=self.match.pkmn_blue[self.match.current_blue],
                               moveindex=self._moveBlueUsed,
                               movename=move,
                               obj=self._actionCallbackObjStore["blue"])
                 self._actionCallbackObjStore["blue"] = None
             else:
-                self.onAttack(side="red",
-                              mon=self.match.pkmnRed[self.match.currentRed],
+                self.on_attack(side="red",
+                              mon=self.match.pkmn_red[self.match.current_red],
                               moveindex=self._moveRedUsed,
                               movename=move,
                               obj=self._actionCallbackObjStore["red"])
@@ -797,7 +797,7 @@ class PBREngine():
         self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
 
         # log the whole thing
-        self.onMatchlog(text=string)
+        self.on_matchlog(text=string)
 
         # CASE 1: Someone fainted.
         match = re.search(r"^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?fainted",
@@ -826,7 +826,7 @@ class PBREngine():
         # this value is 0 or 1, depending on which player is inputting next
         # new fails counter for move selection.
         self._failsMoveSelection = 0
-        self.bluesTurn = (val == 0)
+        self.blues_turn = (val == 0)
 
     def _distinguishBpSlots(self):
         # Decide what to do if we are looking at a battle pass...
@@ -882,14 +882,14 @@ class PBREngine():
 
         if self.state == PbrStates.EMPTYING_BP2:
             self._fClearedBp = False
-            self._select_bp(self.avatarRed)
+            self._select_bp(self.avatar_red)
         elif self.state == PbrStates.EMPTYING_BP1\
                 or self.state == PbrStates.PREPARING_BP1:
             self._fClearedBp = False
-            self._select_bp(self.avatarBlue)
+            self._select_bp(self.avatar_blue)
         elif self.state == PbrStates.PREPARING_BP2:
             self._fClearedBp = True  # redundant?
-            self._select_bp(self.avatarRed)
+            self._select_bp(self.avatar_red)
         else:
             # done preparing or starting to prepare savestates
             self._pressOne()
@@ -1065,11 +1065,11 @@ class PBREngine():
             self._fBpPage2 = False
             if self._fBlueSelectedBP:
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatarRed)
+                                     self.avatar_red)
                 self._fBlueSelectedBP = False
             else:
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatarBlue)
+                                     self.avatar_blue)
                 self._fBlueSelectedBP = True
         elif gui == PbrGuis.BPSELECT_CONFIRM and\
                 self.state >= PbrStates.PREPARING_START:
@@ -1091,14 +1091,14 @@ class PBREngine():
                         vals[4] << 8 | vals[5])
             if self._fBlueChoseOrder:
                 self._fBlueChoseOrder = False
-                x1, x2 = orderToInts(self.match.orderRed)
+                x1, x2 = orderToInts(self.match.order_red)
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
                 self._pressTwo()
                 self._initMatch()
             else:
                 self._fBlueChoseOrder = True
-                x1, x2 = orderToInts(self.match.orderBlue)
+                x1, x2 = orderToInts(self.match.order_blue)
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
                 self._pressTwo()
@@ -1138,9 +1138,9 @@ class PBREngine():
             # This gui was not accepted. Restore the old gui state.
             # unknown/uncategorized or filtered by state
             self.gui = backup
-            # Don't trigger the onGui event
+            # Don't trigger the on_gui event
             return
 
-        # Trigger the onGui event now.
+        # Trigger the on_gui event now.
         # The gui is consideren valid if we reach here.
-        self.onGui(gui=gui)
+        self.on_gui(gui=gui)

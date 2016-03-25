@@ -23,33 +23,33 @@ class Match(object):
               with new()
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
-        self.onDeath = EventHook(side=str, mon=dict, monindex=int)
-        self.onWin = EventHook(winner=str)
-        self.onSwitch = EventHook(side=str, mon=dict, monindex=int)
+        self.on_death = EventHook(side=str, mon=dict, monindex=int)
+        self.on_win = EventHook(winner=str)
+        self.on_switch = EventHook(side=str, mon=dict, monindex=int)
 
         self._checkScheduled = False
         self._checkCancelled = False
         self._lastMove = ("blue", "")
 
-    def new(self, pkmnBlue, pkmnRed):
-        self.pkmnBlue = pkmnBlue
-        self.pkmnRed = pkmnRed
-        self.aliveBlue = [True for _ in pkmnBlue]
-        self.aliveRed = [True for _ in pkmnRed]
-        self.currentBlue = 0
-        self.currentRed = 0
-        self.nextPkmn = -1
+    def new(self, pkmn_blue, pkmn_red):
+        self.pkmn_blue = pkmn_blue
+        self.pkmn_red = pkmn_red
+        self.alive_blue = [True for _ in pkmn_blue]
+        self.alive_red = [True for _ in pkmn_red]
+        self.current_blue = 0
+        self.current_red = 0
+        self.next_pkmn = -1
         # mappings from pkmn# to button#
-        self.mapBlue = list(range(len(pkmnBlue)))
-        self.mapRed = list(range(len(pkmnRed)))
-        self._orderBlue = list(range(1, 1+len(pkmnBlue)))
-        self._orderRed = list(range(1, 1+len(pkmnRed)))
+        self.map_blue = list(range(len(pkmn_blue)))
+        self.map_red = list(range(len(pkmn_red)))
+        self._orderBlue = list(range(1, 1+len(pkmn_blue)))
+        self._orderRed = list(range(1, 1+len(pkmn_red)))
 
     def getCurrentBlue(self):
-        return self.pkmnBlue[self.currentBlue]
+        return self.pkmn_blue[self.current_blue]
 
     def getCurrentRed(self):
-        return self.pkmnRed[self.currentRed]
+        return self.pkmn_red[self.current_red]
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
@@ -63,60 +63,60 @@ class Match(object):
                              "(amount of pokemon) only: %s " % order)
 
     @property
-    def orderBlue(self):
+    def order_blue(self):
         return self._orderBlue
 
-    @orderBlue.setter
-    def orderBlue(self, order):
-        self._checkOrder(order, len(self.pkmnBlue))
+    @order_blue.setter
+    def order_blue(self, order):
+        self._checkOrder(order, len(self.pkmn_blue))
         self._orderBlue = order
-        self.pkmnBlue = [self.pkmnBlue[i-1] for i in order]
+        self.pkmn_blue = [self.pkmn_blue[i-1] for i in order]
 
     @property
-    def orderRed(self):
+    def order_red(self):
         return self._orderRed
 
-    @orderRed.setter
-    def orderRed(self, order):
-        self._checkOrder(order, len(self.pkmnRed))
+    @order_red.setter
+    def order_red(self, order):
+        self._checkOrder(order, len(self.pkmn_red))
         self._orderRed = order
-        self.pkmnRed = [self.pkmnRed[i-1] for i in order]
+        self.pkmn_red = [self.pkmn_red[i-1] for i in order]
 
     def fainted(self, side):
         if side == "blue":
-            dead = self.currentBlue
-            self.aliveBlue[dead] = False
-            self.onDeath(side=side, mon=self.pkmnBlue[dead], monindex=dead)
+            dead = self.current_blue
+            self.alive_blue[dead] = False
+            self.on_death(side=side, mon=self.pkmn_blue[dead], monindex=dead)
         else:
-            dead = self.currentRed
-            self.aliveRed[dead] = False
-            self.onDeath(side=side, mon=self.pkmnRed[dead], monindex=dead)
-        if not any(self.aliveBlue) or not any(self.aliveRed):
+            dead = self.current_red
+            self.alive_red[dead] = False
+            self.on_death(side=side, mon=self.pkmn_red[dead], monindex=dead)
+        if not any(self.alive_blue) or not any(self.alive_red):
             if self._checkScheduled:
                 self._checkCancelled = True
             self._checkScheduled = True
             self._timer.schedule(500, self.checkWinner)
 
-    def switched(self, side, nextPkmn):
+    def switched(self, side, next_pkmn):
         '''
         Is called when a pokemon has been switch with another one.
-        Triggers the onSwitch event and fixes the switch-mappings
+        Triggers the on_switch event and fixes the switch-mappings
         '''
         if side == "blue":
-            swap(self.mapBlue, self.currentBlue, nextPkmn)
-            self.currentBlue = nextPkmn
-            self.onSwitch(side=side, mon=self.pkmnBlue[nextPkmn],
-                          monindex=nextPkmn)
+            swap(self.map_blue, self.current_blue, next_pkmn)
+            self.current_blue = next_pkmn
+            self.on_switch(side=side, mon=self.pkmn_blue[next_pkmn],
+                          monindex=next_pkmn)
         else:
-            swap(self.mapRed, self.currentRed, nextPkmn)
-            self.currentRed = nextPkmn
-            self.onSwitch(side=side, mon=self.pkmnRed[nextPkmn],
-                          monindex=nextPkmn)
+            swap(self.map_red, self.current_red, next_pkmn)
+            self.current_red = next_pkmn
+            self.on_switch(side=side, mon=self.pkmn_red[next_pkmn],
+                          monindex=next_pkmn)
 
-    def draggedOut(self, side, pkmnName):
+    def draggedOut(self, side, pkmn_name):
         # check each pokemon if that is the one that was sent out
-        for i, v in enumerate(self.pkmnBlue if side == "blue"
-                              else self.pkmnRed):
+        for i, v in enumerate(self.pkmn_blue if side == "blue"
+                              else self.pkmn_red):
             # names are displayed in all-caps
             name = v["name"].upper()
             # match pkmn names with display name
@@ -128,7 +128,7 @@ class Match(object):
                 name = "NIDORAN(M)"
             elif name == "NIDORAN?" and v["gender"] == "f":
                 name = "NIDORAN(F)"
-            if name == pkmnName:
+            if name == pkmn_name:
                 # this is it! Calling switched to trigger the switch event and
                 # fix the order-mapping.
                 self.switched(side, i)
@@ -139,13 +139,13 @@ class Match(object):
             # differently than expected.
             # In that case: look above! Make sure the names in the .json and
             # the display names can match up
-            names = [p["name"].upper() for p in (self.pkmnBlue
+            names = [p["name"].upper() for p in (self.pkmn_blue
                                                  if side == "blue"
-                                                 else self.pkmnRed)]
+                                                 else self.pkmn_red)]
             logger.critical('No pokemon in Roar/Whirlwind message matched ' +
                             '"%s"! Expected one of the following: %s. The ' +
                             'engine now believes the wrong pokemon is out.',
-                            pkmnName, ", ".join(names))
+                            pkmn_name, ", ".join(names))
 
     def checkWinner(self):
         '''
@@ -158,8 +158,8 @@ class Match(object):
             return
         self._checkScheduled = False
 
-        deadBlue = not any(self.aliveBlue)
-        deadRed = not any(self.aliveRed)
+        deadBlue = not any(self.alive_blue)
+        deadRed = not any(self.alive_red)
         winner = "draw"
         if deadBlue and deadRed:
             # draw? check further
@@ -171,4 +171,4 @@ class Match(object):
             winner = "red"
         else:
             winner = "blue"
-        self.onWin(winner=winner)
+        self.on_win(winner=winner)

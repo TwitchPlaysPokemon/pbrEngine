@@ -13,7 +13,7 @@ class Timer(object):
         self.frame = 0
         self._framePrev = 0
         self._timerPrev = time.clock()
-        self.speedPlots = collections.deque([1.0], 20)
+        self.speed_plots = collections.deque([1.0], 20)
 
     def sleep(self, frames):
         '''
@@ -57,4 +57,4 @@ class Timer(object):
 
         delta /= 60.0  # frame count, increases by 60/s
         speed = (delta / deltaReal) if deltaReal > 0 else 0  # wat
-        self.speedPlots.append(speed)
+        self.speed_plots.append(speed)

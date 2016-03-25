@@ -16,7 +16,7 @@ import logging
 import crashchecker
 import monitor
 
-from pbrEngine import PBREngine
+from pbrEngine import PBREngine, avatars
 from pbrEngine.states import PbrStates
 from pbrEngine import Colosseums
 from pbrEngine.avatars import AvatarsBlue, AvatarsRed
@@ -50,17 +50,6 @@ with open("json.json") as f:
                                            .decode())
 
 
-avatarsBlue = (
-    AvatarsBlue.BLUE,
-    AvatarsBlue.GREEN,
-    AvatarsBlue.YELLOW,
-)
-
-avatarsRed = (
-    AvatarsRed.RED,
-    AvatarsRed.BLACK,
-    AvatarsRed.PINK,
-)
 
 logfile = "ishouldnotexist.txt"
 channel = "#invalid"  # "#_tppspoilbot_1443119161371" #"#FelkCraft"
@@ -99,8 +88,8 @@ def new():
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
 
     pbr.new(colosseum, pkmn[:3], pkmn[3:6],
-            random.choice(avatarsBlue),
-            random.choice(avatarsRed))
+            random.choice(list(AvatarsBlue)),
+            random.choice(list(AvatarsRed)))
     # pbr.new(colosseum, [data[398]], [data[9], data[10], data[12]])
     # pbr.new(random.randint(0,9),
     #         random.sample([data[201], data[49], data[359]],
@@ -186,14 +175,14 @@ def main():
     # start the crash detection thingy
     checker = crashchecker.Checker(pbr, onCrash)
 
-    pbr.onState += onState
-    pbr.onWin += onWin
-    pbr.onAttack += onAttack
-    pbr.onDeath += onDeath
-    pbr.onSwitch += onSwitch
-    pbr.onMatchlog += log
+    pbr.on_state += onState
+    pbr.on_win += onWin
+    pbr.on_attack += onAttack
+    pbr.on_death += onDeath
+    pbr.on_switch += onSwitch
+    pbr.on_matchlog += log
     pbr.connect()
-    pbr.onGui += lambda gui: display.reprint()
+    pbr.on_gui += lambda gui: display.reprint()
     # pbr.setVolume(0)
     pbr.setFov(0.7)
 

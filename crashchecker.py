@@ -13,9 +13,9 @@ from pbrEngine import PBREngine
 class Checker(object):
     def __init__(self, pbr, crash_callback):
         self.pbr = pbr
-        self.onCrash = EventHook(pbr=PBREngine)
+        self.on_crash = EventHook(pbr=PBREngine)
         if crash_callback:
-            self.onCrash += crash_callback
+            self.on_crash += crash_callback
         self.reset()
 
     def reset(self):
@@ -35,4 +35,4 @@ class Checker(object):
                 self.fails = 0
             gevent.sleep(1)
         # crashed
-        self.onCrash(self.pbr)
+        self.on_crash(self.pbr)
