@@ -58,6 +58,7 @@ class PBREngine():
         self._dolphin.onDisconnect(self._reconnect)
         self._dolphin.onConnect(self._initDolphinWatch)
 
+        os.makedirs(os.path.abspath(savefile_dir), exist_ok=True)
         self._savefile1 = os.path.abspath(os.path.join(savefile_dir, savefile_with_announcer_name))
         self._savefile2 = os.path.abspath(os.path.join(savefile_dir, savefile_without_announcer_name))
 
