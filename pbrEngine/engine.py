@@ -67,7 +67,6 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
-
         # event callbacks
         '''
         Event of the winner being determined.
@@ -90,8 +89,7 @@ class PBREngine():
         '''
         Event of a pokemon attacking.
         arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally
-              submitted with new()
+        arg1: <monindex> index of the pokemon attacking (e.g. 0 for first pokemon)
         arg2: <moveindex> 0-3, index of move used.
               CAUTION: <mon> might not have a move with that index (e.g. Ditto)
         arg3: <movename> name of the move used.
@@ -99,37 +97,39 @@ class PBREngine():
         arg4: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. Rollout)
         '''
-        self.on_attack = EventHook(side=str, mon=dict, moveindex=int,
+        self.on_attack = EventHook(side=str, monindex=int, moveindex=int,
                                   movename=str, obj=object)
         '''
         Event of a pokemon dying.
         arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally
-              submitted with new()
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
-        self.on_death = EventHook(side=str, mon=dict, monindex=int)
+        self.on_death = EventHook(side=str, monindex=int)
+        self.match.on_death += self.on_death
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally
-              submitted with new()
         arg2: <monindex> 0-2, index of the pokemon now fighting.
         arg3: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
         '''
-        self.on_switch = EventHook(side=str, mon=dict, monindex=int, obj=object)
+        self.on_switch = EventHook(side=str, monindex=int, obj=object)
         '''
-        Event of information text appearing during a match.
-        Includes: a) texts from the black textbox in the corner
-                     (xyz fainted/But it failed/etc.)
-                  b) fly-by texts
-                     (Team Blue's Pokemon used Move/It's super effective!)
-                  c) non-displayed events (Pokemon is sent out/blue won)
-        arg0: <text> representation of the event.
-              Actual in-game-text if possible.
+        Event of information text appearing in one of those black boxes.
+        Also includes fly-by texts (It's super-effective!/A critical hit/Team X's Y used Z etc.)
+        Includes moves failing, pokemon dying, weather effect reminders etc.
+        arg0: <text> Text in the box.
         '''
-        self.on_matchlog = EventHook(text=str)
+        self.on_infobox = EventHook(text=str)
+        '''
+        Event of some stats getting updated.
+        arg0: <type> what stat type got updated (e.g. "hp")
+        arg1: <data> dictionary containing information on the new stat
+        Examples:
+        hp: {"hp": 123, "side": "blue", "monindex": 0}
+        pp: {"pp": 13, "side": "red", "monindex": 1}  # pp currently not supported :(
+        '''
+        self.on_stat_update = EventHook(type=str, data=dict)
 
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
@@ -379,12 +379,10 @@ class PBREngine():
         self._dolphin.write32(Locations.SPEED_1.value.addr, DefaultValues["SPEED1"])
         self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
-    def _switched(self, side, mon, monindex):
-        self.on_switch(side=side, mon=mon, monindex=monindex,
+    def _switched(self, side, monindex):
+        self.on_switch(side=side, monindex=monindex,
                       obj=self._actionCallbackObjStore[side])
         self._actionCallbackObjStore[side] = None
-        self.on_matchlog(text="Team %s's %s is sent out." % (side.title(),
-                                                            mon["name"]))
 
     def _stuckChecker(self):
         '''
@@ -495,10 +493,6 @@ class PBREngine():
         self.cursor.addEvent(1, self._quitMatch)
         self._setState(PbrStates.MATCH_ENDED)
         self.on_win(winner=winner)
-        if winner == "draw":
-            self.on_matchlog(text="The game ended in a draw!")
-        else:
-            self.on_matchlog(text="%s won the game!" % winner.title())
 
     def _waitForNew(self):
         if not self._fSkipWaitForNew:
@@ -715,16 +709,14 @@ class PBREngine():
     def _distinguishHpBlue(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.on_matchlog(text="Team Blue's %s has %d/%d HP left." %
-                        (self.match.getCurrentBlue()["name"], val,
-                         self.match.getCurrentBlue()["stats"]["hp"]))
+        self.on_stat_update("hp", data={"hp": val, "side": "blue",
+                                        "monindex": self.match.current_red})
 
     def _distinguishHpRed(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.on_matchlog(text="Team Red's %s has %d/%d HP left." %
-                        (self.match.getCurrentRed()["name"], val,
-                         self.match.getCurrentRed()["stats"]["hp"]))
+        self.on_stat_update("hp", data={"hp": val, "side": "red",
+                                        "monindex": self.match.current_red})
 
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"
@@ -735,7 +727,7 @@ class PBREngine():
         text = bytesToString(data)
         if text.startswith("##"):
             return
-        self.on_matchlog(text=text)
+        self.on_infobox(text=text)
         # this text gets instantly changed, so change it after it's gone.
         # this number of frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
@@ -765,9 +757,6 @@ class PBREngine():
 
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
-            # Log the whole thing
-            self.on_matchlog(text="%s %s" % (line, move))
-
             # invalidate the little info boxes here.
             # I think there will always be an attack declared between 2
             # identical texts ("But it failed" for example)
@@ -781,14 +770,14 @@ class PBREngine():
             self.match.setLastMove(side, move)
             if side == "blue":
                 self.on_attack(side="blue",
-                              mon=self.match.pkmn_blue[self.match.current_blue],
+                              monindex=self.match.current_blue,
                               moveindex=self._moveBlueUsed,
                               movename=move,
                               obj=self._actionCallbackObjStore["blue"])
                 self._actionCallbackObjStore["blue"] = None
             else:
                 self.on_attack(side="red",
-                              mon=self.match.pkmn_red[self.match.current_red],
+                              monindex=self.match.current_red,
                               moveindex=self._moveRedUsed,
                               movename=move,
                               obj=self._actionCallbackObjStore["red"])
@@ -809,7 +798,7 @@ class PBREngine():
         self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
 
         # log the whole thing
-        self.on_matchlog(text=string)
+        self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
         match = re.search(r"^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?fainted",

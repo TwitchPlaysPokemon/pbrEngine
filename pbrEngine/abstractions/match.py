@@ -19,13 +19,11 @@ class Match(object):
         '''
         Event of a pokemon dying.
         arg0: <side> "blue" "red"
-        arg1: <mon> dictionary/json-object of the pokemon originally submitted
-              with new()
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
-        self.on_death = EventHook(side=str, mon=dict, monindex=int)
+        self.on_death = EventHook(side=str, monindex=int)
         self.on_win = EventHook(winner=str)
-        self.on_switch = EventHook(side=str, mon=dict, monindex=int)
+        self.on_switch = EventHook(side=str, monindex=int)
 
         self._checkScheduled = False
         self._checkCancelled = False
@@ -86,11 +84,11 @@ class Match(object):
         if side == "blue":
             dead = self.current_blue
             self.alive_blue[dead] = False
-            self.on_death(side=side, mon=self.pkmn_blue[dead], monindex=dead)
+            self.on_death(side=side, monindex=dead)
         else:
             dead = self.current_red
             self.alive_red[dead] = False
-            self.on_death(side=side, mon=self.pkmn_red[dead], monindex=dead)
+            self.on_death(side=side, monindex=dead)
         if not any(self.alive_blue) or not any(self.alive_red):
             if self._checkScheduled:
                 self._checkCancelled = True
@@ -105,13 +103,11 @@ class Match(object):
         if side == "blue":
             swap(self.map_blue, self.current_blue, next_pkmn)
             self.current_blue = next_pkmn
-            self.on_switch(side=side, mon=self.pkmn_blue[next_pkmn],
-                          monindex=next_pkmn)
+            self.on_switch(side=side, monindex=next_pkmn)
         else:
             swap(self.map_red, self.current_red, next_pkmn)
             self.current_red = next_pkmn
-            self.on_switch(side=side, mon=self.pkmn_red[next_pkmn],
-                          monindex=next_pkmn)
+            self.on_switch(side=side, monindex=next_pkmn)
 
     def draggedOut(self, side, pkmn_name):
         # check each pokemon if that is the one that was sent out

@@ -10,16 +10,17 @@ import gevent
 import json
 import random
 import os
+import sys
 import time
 import logging
 
 import crashchecker
 import monitor
 
-from pbrEngine import PBREngine, avatars
+from pbrEngine import PBREngine
 from pbrEngine.states import PbrStates
 from pbrEngine import Colosseums
-from pbrEngine.avatars import AvatarsBlue, AvatarsRed
+from pbrEngine import AvatarsBlue, AvatarsRed
 from tbot import Twitchbot
 from random import shuffle
 
@@ -51,7 +52,6 @@ with open("json.json") as f:
 
 
 
-logfile = "ishouldnotexist.txt"
 channel = "#invalid"  # "#_tppspoilbot_1443119161371" #"#FelkCraft"
 # gg, oauth token in source file. git will remember forever.
 # Remember me to disable this token when the repository goes live somewhen.
@@ -81,10 +81,6 @@ def new():
     colosseum = random.choice(list(Colosseums))
 
     logbot.send_message(channel, "--- NEW MATCH ---")
-    log("BLUE: %s" % ", ".join([p["name"] for p in pkmn[:3]]))
-    log("RED: %s" % ", ".join([p["name"] for p in pkmn[3:]]))
-    log("COLOSSEUM: %s" % Colosseums(colosseum).name)
-    log("MATCHLOG:")
     logbot.send_message(channel, "Preparing done in about 30 seconds...")
 
     pbr.new(colosseum, pkmn[:3], pkmn[3:6],
@@ -105,7 +101,8 @@ def onState(state):
         new()
 
 
-def onAttack(side, mon, moveindex, movename, obj):
+def onAttack(side, monindex, moveindex, movename, obj):
+    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
     display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
 
 
@@ -116,11 +113,13 @@ def onWin(winner):
         display.addEvent("> The game ended in a draw! <")
 
 
-def onDeath(side, mon, monindex):
+def onDeath(side, monindex):
+    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
     display.addEvent("%s (%s) is down." % (mon["name"], side))
 
 
-def onSwitch(side, mon, monindex, obj):
+def onSwitch(side, monindex, obj):
+    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
     display.addEvent("%s (%s) is sent out." % (mon["name"], side))
 
 
@@ -157,17 +156,11 @@ def onCrash(pbr):
     checker.reset()
 
 
-def log(text):
-    # logbot.send_message(channel, text)
-    with open(logfile, "a") as f:
-        f.write(text + "\n")
-
-
 def main():
     global checker, display, pbr
-    logging.basicConfig(level=logging.DEBUG, filename="pbrengine.log")
+    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     # init the PBR engine and hook everything up
-    pbr = PBREngine(actionCallback, host="danny-pc")
+    pbr = PBREngine(actionCallback)
 
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)
@@ -180,7 +173,6 @@ def main():
     pbr.on_attack += onAttack
     pbr.on_death += onDeath
     pbr.on_switch += onSwitch
-    pbr.on_matchlog += log
     pbr.connect()
     pbr.on_gui += lambda gui: display.reprint()
     # pbr.setVolume(0)
