@@ -139,8 +139,10 @@ class PBREngine():
         self.colosseum = 0
         self.avatar_blue = AvatarsBlue.BLUE
         self.avatar_red = AvatarsRed.RED
+        self._prev_avatar_blue = AvatarsBlue.BLUE
+        self._prev_avatar_red = AvatarsRed.RED
         self.announcer = True
-        self.hide_gui = True
+        self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._reset()
 
@@ -856,6 +858,7 @@ class PBREngine():
             # There are still old pokemon on blue's battle pass. Grab that.
             # Triggers gui BPS_PKMN_GRABBED
             if self._fClearedBp:
+                self._fClearedBp = False
                 self._setState(self.state + 1)
                 self._pressOne()
             else:
@@ -892,13 +895,15 @@ class PBREngine():
 
         if self.state == PbrStates.EMPTYING_BP2:
             self._fClearedBp = False
-            self._select_bp(self.avatar_red)
-        elif self.state == PbrStates.EMPTYING_BP1\
-                or self.state == PbrStates.PREPARING_BP1:
+            self._select_bp(self._prev_avatar_red)
+        elif self.state == PbrStates.EMPTYING_BP1:
             self._fClearedBp = False
+            self._select_bp(self._prev_avatar_blue)
+        elif self.state == PbrStates.PREPARING_BP1:
             self._select_bp(self.avatar_blue)
         elif self.state == PbrStates.PREPARING_BP2:
-            self._fClearedBp = True  # redundant?
+            self._prev_avatar_blue = self.avatar_blue
+            self._prev_avatar_red = self.avatar_red
             self._select_bp(self.avatar_red)
         else:
             # done preparing or starting to prepare savestates
@@ -998,7 +1003,7 @@ class PBREngine():
         # BATTLE PASS MENU
         elif gui == PbrGuis.BPS_SELECT and\
                 self.state < PbrStates.PREPARING_START:
-            # done with cursorevents
+            # done via cursorevents
             self.cursor.addEvent(CursorOffsets.BPS, self._distinguishBpsSelect)
         elif gui == PbrGuis.BPS_SLOTS and\
                 self.state < PbrStates.PREPARING_START:
@@ -1010,8 +1015,8 @@ class PBREngine():
                 self.state < PbrStates.PREPARING_START:
             self._fEnteredBp = True
             self._fClearedBp = True
-            if self.state == PbrStates.EMPTYING_BP1:
-                self._setState(PbrStates.PREPARING_BP1)
+            #if self.state == PbrStates.EMPTYING_BP1:
+            #    self._setState(PbrStates.PREPARING_BP1)
                 # no need to go back to bp selection first, short-circuit
             if self.state == PbrStates.PREPARING_BP1:
                 self._select(CursorOffsets.BOX + (self._posBlues[0] // 30))

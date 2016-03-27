@@ -165,8 +165,9 @@ def log(text):
 
 def main():
     global checker, display, pbr
+    logging.basicConfig(level=logging.DEBUG, filename="pbrengine.log")
     # init the PBR engine and hook everything up
-    pbr = PBREngine(actionCallback)
+    pbr = PBREngine(actionCallback, host="danny-pc")
 
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)

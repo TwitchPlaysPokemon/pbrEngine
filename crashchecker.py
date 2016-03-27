@@ -35,4 +35,4 @@ class Checker(object):
                 self.fails = 0
             gevent.sleep(1)
         # crashed
-        self.on_crash(self.pbr)
+        self.on_crash(pbr=self.pbr)
