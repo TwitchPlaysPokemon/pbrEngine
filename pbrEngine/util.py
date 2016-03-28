@@ -70,10 +70,10 @@ class EventHook(object):
         self.__handlers.remove(handler)
         return self
 
-    def __call__(self, **kwargs):
-        if (set(kwargs.keys()) != self.__argnames):
+    def __call__(self, *args, **kwargs):
+        if args or (set(kwargs.keys()) != self.__argnames):
             raise ValueError("This EventHook must be called with these " +
-                             "arguments: (%s)" % self.__kwargs_str())
+                             "keyword arguments: (%s)" % self.__kwargs_str())
         greenlets = []
         for handler in self.__handlers:
             greenlets.append(gevent.spawn(handler, **kwargs))

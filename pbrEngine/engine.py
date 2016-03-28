@@ -709,13 +709,13 @@ class PBREngine():
     def _distinguishHpBlue(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.on_stat_update("hp", data={"hp": val, "side": "blue",
+        self.on_stat_update(type="hp", data={"hp": val, "side": "blue",
                                         "monindex": self.match.current_red})
 
     def _distinguishHpRed(self, val):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.on_stat_update("hp", data={"hp": val, "side": "red",
+        self.on_stat_update(type="hp", data={"hp": val, "side": "red",
                                         "monindex": self.match.current_red})
 
     def _distinguishEffective(self, data):
