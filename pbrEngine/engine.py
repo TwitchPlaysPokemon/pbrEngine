@@ -105,7 +105,7 @@ class PBREngine():
         arg2: <monindex> 0-2, index of the dead pokemon
         '''
         self.on_death = EventHook(side=str, monindex=int)
-        self.match.on_death += self.on_death
+        self.match.on_death += lambda side, monindex: self.on_death(side=side, monindex=monindex)
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
