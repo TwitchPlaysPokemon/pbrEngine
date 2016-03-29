@@ -589,13 +589,27 @@ class PBREngine():
         if switched:
             self.match.switched("blue" if wasBluesTurn else "red", next_pkmn)
 
+    def _getRandomAction(self, moves=True, switch=True):
+        actions = []
+        if moves:
+            actions += ["a", "b", "c", "d"]
+        elif switch:
+            actions += [1, 2, 3]
+        return random.choice(actions)
+
     def _getAction(self, moves=True, switch=True):
         side = "blue" if self.blues_turn else "red"
         while True:
             # retrieve action
-            action, obj = self._action_callback(side,
-                                                fails=self._failsMoveSelection,
-                                                moves=moves, switch=switch)
+            if self._failsMoveSelection > 300:
+                # we are stuck in an early-opt-out loop (stalling?)
+                # start picking actions by random
+                obj = None
+                action = self._getRandomAction(moves, switch)
+            else:
+                action, obj = self._action_callback(side,
+                                                    fails=self._failsMoveSelection,
+                                                    moves=moves, switch=switch)
             self._actionCallbackObjStore[side] = obj
             if moves and action.lower() in ("a", "b", "c", "d"):
                 move = ord(action.lower()) - ord('a')
