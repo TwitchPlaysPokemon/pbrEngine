@@ -52,6 +52,8 @@ class Locations(Enum):
                                             # up to 9 80-byte strings in total! this looks like a deque
     # INFO_BOX_MON    = Loc(0x474f43, 1) # see above, "R" from "RED" or "B" from "BLUE"
     # INFO_BOX_LINE2  = Loc(0x474f64, 4)
+    STATUS_BLUE      = Loc(0x47854f, 1)  # PSN2 PAR FRZ BRN PSN SLP SLP SLP
+    STATUS_RED       = Loc(0x478F9f, 1)  # -"-
     STYLE_SELECTION  = Loc(0x63eedc, 1)
     COLOSSEUM        = Loc(0x1302ac, 4)
     DEFAULT_RULESET  = Loc(0x11DD8C, 4)

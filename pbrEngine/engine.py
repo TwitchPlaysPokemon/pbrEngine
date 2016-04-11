@@ -10,6 +10,7 @@ import re
 import logging
 import dolphinWatch
 import os
+from functools import partial
 
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
@@ -128,6 +129,8 @@ class PBREngine():
         Examples:
         hp: {"hp": 123, "side": "blue", "monindex": 0}
         pp: {"pp": 13, "side": "red", "monindex": 1}  # pp currently not supported :(
+        status: {"status": "brn/par/frz/slp/psn/psn+", "side": "blue", "monindex": "2"}
+            if status is "slp", the field "rounds" (remaining slp) will be included too
         '''
         self.on_stat_update = EventHook(type=str, data=dict)
 
@@ -167,8 +170,10 @@ class PBREngine():
         self._subscribe(Locations.ORDER_LOCK_RED.value,             self._distinguishOrderLock)
         self._subscribeMulti(Locations.ATTACK_TEXT.value,           self._distinguishAttack)
         self._subscribeMulti(Locations.INFO_TEXT.value,             self._distinguishInfo)
-        self._subscribe(Locations.HP_BLUE.value,                    self._distinguishHpBlue)
-        self._subscribe(Locations.HP_RED.value,                     self._distinguishHpRed)
+        self._subscribe(Locations.HP_BLUE.value,                    partial(self._distinguishHp, side="blue"))
+        self._subscribe(Locations.HP_RED.value,                     partial(self._distinguishHp, side="red"))
+        self._subscribe(Locations.STATUS_BLUE.value,                partial(self._distinguishStatus, side="blue"))
+        self._subscribe(Locations.STATUS_RED.value,                 partial(self._distinguishStatus, side="red"))
         self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value, self._distinguishEffective)
         # de-multiplexing all these into single PbrGuis-enum using distinguisher
         self._subscribe(Locations.GUI_STATE_MATCH.value,        self._distinguisher.distinguishMatch)
@@ -720,17 +725,30 @@ class PBREngine():
     #     certain gui is open, and when, etc.    #
     ##############################################
 
-    def _distinguishHpBlue(self, val):
+    def _distinguishHp(self, val, side):
         if val == 0 or self.state != PbrStates.MATCH_RUNNING:
             return
-        self.on_stat_update(type="hp", data={"hp": val, "side": "blue",
-                                        "monindex": self.match.current_red})
+        current_index = self.match.current_blue if side == "blue" else self.match.current_red
+        self.on_stat_update(type="hp", data={"hp": val, "side": side,
+                                             "monindex": current_index})
 
-    def _distinguishHpRed(self, val):
-        if val == 0 or self.state != PbrStates.MATCH_RUNNING:
-            return
-        self.on_stat_update(type="hp", data={"hp": val, "side": "red",
-                                        "monindex": self.match.current_red})
+    def _distinguishStatus(self, val, side):
+        status = {
+            0x00: None,
+            0x08: "psn",
+            0x10: "brn",
+            0x20: "frz",
+            0x40: "par",
+            0x80: "psn+"  # badly poisoned
+        }.get(val, "slp")  # slp can be 0x01-0x07
+        current_index = self.match.current_blue if side == "blue" else self.match.current_red
+        if status == "slp":
+            # include rounds remaining on sleep
+            self.on_stat_update(type="status", data={"status": status, "side": side, "rounds": val,
+                                                     "monindex": current_index})
+        else:
+            self.on_stat_update(type="status", data={"status": status, "side": side,
+                                                     "monindex": current_index})
 
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"

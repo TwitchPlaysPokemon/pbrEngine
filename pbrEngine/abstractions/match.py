@@ -128,20 +128,19 @@ class Match(object):
                 # this is it! Calling switched to trigger the switch event and
                 # fix the order-mapping.
                 self.switched(side, i)
-                break
-        else:
-            # error! no pokemon matched.
-            # This should never occur, unless the pokemon's name is written
-            # differently than expected.
-            # In that case: look above! Make sure the names in the .json and
-            # the display names can match up
-            names = [p["name"].upper() for p in (self.pkmn_blue
-                                                 if side == "blue"
-                                                 else self.pkmn_red)]
-            logger.critical('No pokemon in Roar/Whirlwind message matched ' +
-                            '"%s"! Expected one of the following: %s. The ' +
-                            'engine now believes the wrong pokemon is out.',
-                            pkmn_name, ", ".join(names))
+                return
+        # error! no pokemon matched.
+        # This should never occur, unless the pokemon's name is written
+        # differently than expected.
+        # In that case: look above! Make sure the names in the .json and
+        # the display names can match up
+        names = [p["name"].upper() for p in (self.pkmn_blue
+                                             if side == "blue"
+                                             else self.pkmn_red)]
+        logger.critical('No pokemon in Roar/Whirlwind message matched ' +
+                        '"%s"! Expected one of the following: %s. The ' +
+                        'engine now believes the wrong pokemon is out.',
+                        pkmn_name, ", ".join(names))
 
     def checkWinner(self):
         '''

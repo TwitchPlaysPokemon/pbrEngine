@@ -56,7 +56,7 @@ channel = "#invalid"  # "#_tppspoilbot_1443119161371" #"#FelkCraft"
 # gg, oauth token in source file. git will remember forever.
 # Remember me to disable this token when the repository goes live somewhen.
 logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn",
-                   channel, "192.16.64.180")
+                   channel, "irc.chat.twitch.tv")
 
 
 def countdown(t=20):
