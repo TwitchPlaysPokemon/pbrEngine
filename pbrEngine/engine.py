@@ -615,15 +615,16 @@ class PBREngine():
                 action, obj = self._action_callback(side,
                                                     fails=self._failsMoveSelection,
                                                     moves=moves, switch=switch)
+                action = str(action).lower()
             self._actionCallbackObjStore[side] = obj
-            if moves and action.lower() in ("a", "b", "c", "d"):
+            if moves and action in ("a", "b", "c", "d"):
                 move = ord(action.lower()) - ord('a')
                 if self._movesBlocked[move]:
                     # early opt-out blocked moves like no-PP
                     logger.info("selected 0PP move. early opt-out")
                 else:
                     return ("move", move)
-            elif switch and str(action) in ("1", "2", "3", "4", "5", "6"):
+            elif switch and action in ("1", "2", "3", "4", "5", "6"):
                 selection = int(action) - 1
                 options = self.match.alive_blue if self.blues_turn\
                     else self.match.alive_red
