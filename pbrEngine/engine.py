@@ -159,6 +159,13 @@ class PBREngine():
         '''
         self._dolphin.connect()
 
+    def disconnect(self):
+        '''
+        Disconnects from Dolphin.
+        connect() needs to be called to make this instance work again.
+        '''
+        self._dolphin.disconnect()
+
     def _initDolphinWatch(self, watcher):
         self._dolphin.volume(self.volume)
 
