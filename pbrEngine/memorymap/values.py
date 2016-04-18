@@ -44,7 +44,6 @@ class Rulesets(IntEnum):
 
 
 class Colosseums(IntEnum):
-    NONE        = 0
     GATEWAY     = 0x380003e8
     MAIN_STREET = 0x380003e9
     WATERFALL   = 0x380003ea
