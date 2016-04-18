@@ -310,8 +310,11 @@ class PBREngine():
         # if that succeeds, skip a few steps
         self._setState(PbrStates.EMPTYING_BP2)
         self._dolphin.resume()
-        if not self._dolphin.load(self._savefile1 if announcer
-                                  else self._savefile2):
+        loaded_success = self._dolphin.load(self._savefile1 if announcer
+                                            else self._savefile2)
+        # wait until loaded, just to be sure
+        self.timer.sleep(80)
+        if not loaded_success:
             self._setState(PbrStates.CREATING_SAVE1)
         else:
             self._setAnimSpeed(self._increasedSpeed)
