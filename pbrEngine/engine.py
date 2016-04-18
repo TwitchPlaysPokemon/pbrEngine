@@ -920,7 +920,7 @@ class PBREngine():
             self._dolphin.save(self._savefile1 if self.announcer !=
                                (self.state == PbrStates.CREATING_SAVE1)
                                else self._savefile2)
-            gevent.sleep(1.0)
+            gevent.sleep(3.0)  # I don't think this caused the saves to go corrupt, but better be save
             self._setAnimSpeed(self._increasedSpeed)
             self._fSetAnnouncer = False
             self._setState(self.state + 1)
