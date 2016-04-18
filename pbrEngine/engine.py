@@ -718,11 +718,11 @@ class PBREngine():
         if not self._fBpPage2 and num >= 4:
             self._select(CursorPosBP.BP_NEXT)
             self._fBpPage2 = True
-            self.timer.schedule(25, self._select, index)
+            self.timer.schedule(60, self._select, index)
         elif self._fBpPage2 and num < 4:
             self._select(CursorPosBP.BP_PREV)
             self._fBpPage2 = False
-            self.timer.schedule(25, self._select, index)
+            self.timer.schedule(60, self._select, index)
         else:
             self._select(index)
 
