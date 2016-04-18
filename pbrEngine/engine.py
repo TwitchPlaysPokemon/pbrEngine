@@ -871,6 +871,8 @@ class PBREngine():
     def _distinguishPlayer(self, val):
         # this value is 0 or 1, depending on which player is inputting next
         self.blues_turn = (val == 0)
+        # reset fails counter
+        self._failsMoveSelection = 0
 
     def _distinguishBpSlots(self):
         # Decide what to do if we are looking at a battle pass...
