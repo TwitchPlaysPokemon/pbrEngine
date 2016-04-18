@@ -147,7 +147,7 @@ class PBREngine():
         self.announcer = True
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
-        self._reset()
+        self.reset()
 
         # stuck checker
         gevent.spawn(self._stuckChecker)
@@ -223,7 +223,7 @@ class PBREngine():
             gevent.sleep(3)
         self.connect()
 
-    def _reset(self):
+    def reset(self):
         self.blues_turn = True
         self.startsignal = False
 
@@ -291,7 +291,7 @@ class PBREngine():
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         :param announcer=True: boolean if announcer's voice is enabled
         '''
-        self._reset()
+        self.reset()
         if self.state >= PbrStates.PREPARING_START and \
            self.state <= PbrStates.MATCH_RUNNING:
             # TODO this doesn't work after startup!
@@ -532,8 +532,6 @@ class PBREngine():
     def _nextPkmn(self):
         '''
         Is called once the pokemon selection screen pops up.
-        If that was caused due to a death, send out the first possible pokemon.
-        Else, send out a random living pokemon.
         '''
         
         # shift gui back to normal position
@@ -550,7 +548,7 @@ class PBREngine():
         # Don't use it, because it locks up if the selected pokemon is invalid
         # and I am not 100% sure just filtering out dead pokemon is enough.
         silent = False
-
+        
         # if called back: pokemon already chosen
         if self.match.next_pkmn >= 0:
             next_pkmn = self.match.next_pkmn
@@ -600,6 +598,8 @@ class PBREngine():
         self._fTryingToSwitch = False
         if switched:
             self.match.switched("blue" if wasBluesTurn else "red", next_pkmn)
+            # reset fails counter
+            self._failsMoveSelection = 0
 
     def _getRandomAction(self, moves=True, switch=True):
         actions = []
@@ -622,7 +622,7 @@ class PBREngine():
                 action, obj = self._action_callback(side,
                                                     fails=self._failsMoveSelection,
                                                     moves=moves, switch=switch)
-                action = str(action).lower()
+            action = str(action).lower()
             self._actionCallbackObjStore[side] = obj
             if moves and action in ("a", "b", "c", "d"):
                 move = ord(action.lower()) - ord('a')
@@ -808,6 +808,8 @@ class PBREngine():
                                  2 * match.start(3), 0x73)
             side = match.group(1).lower()
             self.match.setLastMove(side, move)
+            # reset fails counter
+            self._failsMoveSelection = 0
             if side == "blue":
                 self.on_attack(side="blue",
                               monindex=self.match.current_blue,
@@ -865,8 +867,6 @@ class PBREngine():
 
     def _distinguishPlayer(self, val):
         # this value is 0 or 1, depending on which player is inputting next
-        # new fails counter for move selection.
-        self._failsMoveSelection = 0
         self.blues_turn = (val == 0)
 
     def _distinguishBpSlots(self):
