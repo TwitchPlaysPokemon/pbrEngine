@@ -918,11 +918,11 @@ class PBREngine():
                 and self._fSetAnnouncer:
             self._resetAnimSpeed()
             # wait for game to stabilize. maybe this causes the load fails.
-            gevent.sleep(1.0)
+            gevent.sleep(0.5)
             self._dolphin.save(self._savefile1 if self.announcer !=
                                (self.state == PbrStates.CREATING_SAVE1)
                                else self._savefile2)
-            gevent.sleep(3.0)  # I don't think this caused the saves to go corrupt, but better be save
+            gevent.sleep(1.0)  # I don't think this caused the saves to go corrupt, but better be save
             self._setAnimSpeed(self._increasedSpeed)
             self._fSetAnnouncer = False
             self._setState(self.state + 1)
@@ -1035,13 +1035,16 @@ class PBREngine():
             self.timer.schedule(10, self._pressTwo)
 
         # BATTLE PASS MENU
-        elif gui == PbrGuis.BPS_SELECT and\
+        if gui == PbrGuis.BPS_SELECT and\
                 self.state < PbrStates.PREPARING_START:
             # done via cursorevents
             self.cursor.addEvent(CursorOffsets.BPS, self._distinguishBpsSelect)
         elif gui == PbrGuis.BPS_SLOTS and\
                 self.state < PbrStates.PREPARING_START:
-            if not self._fEnteredBp:
+            if self.state < PbrStates.CREATING_SAVE2:
+                # accidentially entered BP
+                self._pressOne()
+            elif not self._fEnteredBp:
                 self._distinguishBpSlots()
         elif gui == PbrGuis.BPS_PKMN_GRABBED:
             self._select(CursorPosBP.REMOVE)
