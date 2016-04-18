@@ -1011,7 +1011,10 @@ class PBREngine():
             # slow down because of intro
         elif gui == PbrGuis.MENU_SAVE_TYP2:
             # handled with timed event
-            self.timer.schedule(60, self._pressTwo)
+            def quit_to_title():
+                self._pressTwo()
+                self._resetAnimSpeed()  # to not get stuck in the demo
+            self.timer.schedule(60, quit_to_title)
 
         # START MENU
         elif gui == PbrGuis.START_MENU:
