@@ -636,14 +636,7 @@ class PBREngine():
                     return ("move", move)
             elif switch and action in ("1", "2", "3", "4", "5", "6"):
                 selection = int(action) - 1
-                options = self.match.alive_blue if self.blues_turn\
-                    else self.match.alive_red
-                options = list(enumerate(options))
-                # filter out current
-                del options[self.match.current_blue if self.blues_turn
-                            else self.match.current_red]
-                # get indices of alive pokemon
-                options = [index for index, alive in options if alive]
+                options = self.match.get_switch_options("blue" if self.blues_turn else "red")
                 if selection not in options:
                     # early opt-out not available pokemon
                     logger.info("selected unavailable pokemon. early opt-out")

@@ -60,6 +60,20 @@ class Match(object):
             raise ValueError("Order-list must contain numbers 1-n " +
                              "(amount of pokemon) only: %s " % order)
 
+    def get_switch_options(self, side):
+        '''Returns 0-based indices of pokemon being available
+        to switch to for that team. Basically alive pokemon minus
+        the current one. No 100% switch success guaranteed on these.
+        '''
+        # get as list of tuples (index, alive)
+        options = self.alive_blue if side == "blue" else self.alive_red
+        options = list(enumerate(options))
+        # filter out current
+        del options[(self.current_blue if side == "red" else self.current_red)]
+        # get indices of alive pokemon
+        options = [index for index, alive in options if alive]
+        return options
+
     @property
     def order_blue(self):
         return self._orderBlue
