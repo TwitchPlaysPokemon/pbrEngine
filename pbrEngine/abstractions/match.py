@@ -69,7 +69,7 @@ class Match(object):
         options = self.alive_blue if side == "blue" else self.alive_red
         options = list(enumerate(options))
         # filter out current
-        del options[(self.current_blue if side == "red" else self.current_red)]
+        del options[(self.current_blue if side == "blue" else self.current_red)]
         # get indices of alive pokemon
         options = [index for index, alive in options if alive]
         return options
