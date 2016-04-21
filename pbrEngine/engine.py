@@ -117,7 +117,7 @@ class PBREngine():
         self.on_switch = EventHook(side=str, monindex=int, obj=object)
         '''
         Event of information text appearing in one of those black boxes.
-        Also includes fly-by texts (It's super-effective!/A critical hit/Team X's Y used Z etc.)
+        Also includes fly-by texts (It's super/not very effective!, A critical hit!)
         Includes moves failing, pokemon dying, weather effect reminders etc.
         arg0: <text> Text in the box.
         '''
@@ -761,6 +761,7 @@ class PBREngine():
         # move gui back into place. Don't hide this even with hide_gui set
         self.setGuiPosY(DefaultValues["GUI_POS_Y"])
         text = bytesToString(data)
+        # skip text invalidations
         if text.startswith("##"):
             return
         self.on_infobox(text=text)
@@ -831,6 +832,10 @@ class PBREngine():
             return
 
         string = bytesToString(data)
+        
+        # skip text invalidation
+        if string.startswith("##"):
+            return
 
         # shift gui up a bit to fully see this
         self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
