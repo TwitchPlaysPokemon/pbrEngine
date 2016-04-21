@@ -129,7 +129,7 @@ class PBREngine():
         Examples:
         hp: {"hp": 123, "side": "blue", "monindex": 0}
         pp: {"pp": 13, "side": "red", "monindex": 1}  # pp currently not supported :(
-        status: {"status": "brn/par/frz/slp/psn/psn+", "side": "blue", "monindex": "2"}
+        status: {"status": "brn/par/frz/slp/psn/tox", "side": "blue", "monindex": "2"}
             if status is "slp", the field "rounds" (remaining slp) will be included too
         '''
         self.on_stat_update = EventHook(type=str, data=dict)
@@ -743,7 +743,7 @@ class PBREngine():
             0x10: "brn",
             0x20: "frz",
             0x40: "par",
-            0x80: "psn+"  # badly poisoned
+            0x80: "tox"  # badly poisoned
         }.get(val, "slp")  # slp can be 0x01-0x07
         current_index = self.match.current_blue if side == "blue" else self.match.current_red
         if status == "slp":
