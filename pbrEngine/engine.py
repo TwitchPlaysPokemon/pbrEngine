@@ -492,8 +492,8 @@ class PBREngine():
         '''
         self._resetAnimSpeed()
         # mute the "whoosh" as well
-        self.timer.schedule(330, self._dolphin.volume, self.volume)
-        self.timer.schedule(450, self._disableBlur)
+        self.timer.spawn_later(330, self._dolphin.volume, self.volume)
+        self.timer.spawn_later(450, self._disableBlur)
 
     def _matchOver(self, winner):
         '''
@@ -530,7 +530,7 @@ class PBREngine():
         self._select(3)
         self._setAnimSpeed(self._increasedSpeed)
         # make sure this input gets processed before a potential savestate-load
-        self.timer.schedule(30, self._waitForNew)
+        self.timer.spawn_later(30, self._waitForNew)
 
     def _nextPkmn(self):
         '''
@@ -714,11 +714,11 @@ class PBREngine():
         if not self._fBpPage2 and num >= 4:
             self._select(CursorPosBP.BP_NEXT)
             self._fBpPage2 = True
-            self.timer.schedule(60, self._select, index)
+            self.timer.spawn_later(60, self._select, index)
         elif self._fBpPage2 and num < 4:
             self._select(CursorPosBP.BP_PREV)
             self._fBpPage2 = False
-            self.timer.schedule(60, self._select, index)
+            self.timer.spawn_later(60, self._select, index)
         else:
             self._select(index)
 
@@ -768,7 +768,7 @@ class PBREngine():
         # this text gets instantly changed, so change it after it's gone.
         # this number of frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
-        self.timer.schedule(240, self._invalidateEffTexts)
+        self.timer.spawn_later(240, self._invalidateEffTexts)
 
     def _distinguishPkmnMenu(self, val):
         self._fGuiPkmnUp = False
@@ -1017,28 +1017,28 @@ class PBREngine():
             def quit_to_title():
                 self._pressTwo()
                 self._resetAnimSpeed()  # to not get stuck in the demo
-            self.timer.schedule(60, quit_to_title)
+            self.timer.spawn_later(60, quit_to_title)
 
         # START MENU
         elif gui == PbrGuis.START_MENU:
             if not self._fSetAnnouncer and self.state in\
                     (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
-                self.timer.schedule(10, self._select, 3)  # options
+                self.timer.spawn_later(10, self._select, 3)  # options
             else:
-                self.timer.schedule(10, self._select, 1)  # colosseum mode
+                self.timer.spawn_later(10, self._select, 1)  # colosseum mode
         elif gui == PbrGuis.START_OPTIONS:
             if self.announcer != (self.state == PbrStates.CREATING_SAVE1):
                 self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 1)
             elif self.announcer != (self.state == PbrStates.CREATING_SAVE2):
                 self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 0)
-            self.timer.schedule(10, self._pressOne)
+            self.timer.spawn_later(10, self._pressOne)
             self._fSetAnnouncer = True
         elif gui in (PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE,
                      PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO):
             # START_SAVEFILE is not working,
             # but I am relying on the unstucker anyway...
             self._setAnimSpeed(self._increasedSpeed)
-            self.timer.schedule(10, self._pressTwo)
+            self.timer.spawn_later(10, self._pressTwo)
 
         # BATTLE PASS MENU
         if gui == PbrGuis.BPS_SELECT and\

@@ -32,13 +32,13 @@ class Timer(object):
         self.sleep(frames)
         then(*args)
 
-    def schedule(self, frames, job, *args):
+    def spawn_later(self, frames, job, *args, **kwargs):
         '''
         Spawns a new greenlet that performs an action in a given time,
         based on ingame frames as a timesource.
         Returns the greenlet that gets spawned.
         '''
-        return gevent.spawn(self.sleepThen, frames, job, *args)
+        return gevent.spawn(self.sleepThen, frames, job, *args, **kwargs)
 
     def updateFramecount(self, framecount):
         # Is called for every new framecount reported.

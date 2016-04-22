@@ -112,7 +112,7 @@ class Match(object):
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
             # 11s delay = enough time for swampert (>7s death animation) to die
-            self._check_greenlet = self._timer.schedule(660, self.checkWinner)
+            self._check_greenlet = self._timer.spawn_later(660, self.checkWinner)
 
     def switched(self, side, next_pkmn):
         '''
