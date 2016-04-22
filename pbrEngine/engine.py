@@ -858,6 +858,11 @@ class PBREngine():
             side = match.group(1).lower()
             self.match.draggedOut(side, match.group(2))
             return
+        
+        # update the win detection for each (unprocessed) message.
+        # e.g. "xyz was buffered by the sandstorm" takes extra time for
+        # the 2nd pokemon to die and therefore needs a timer reset
+        self.match.update_winning_checker()
 
     def _distinguishOrderLock(self, val):
         # This value becomes 1 if at least 1 pokemon has been selected for

@@ -25,8 +25,7 @@ class Match(object):
         self.on_win = EventHook(winner=str)
         self.on_switch = EventHook(side=str, monindex=int)
 
-        self._checkScheduled = False
-        self._checkCancelled = False
+        self._check_greenlet = None
         self._lastMove = ("blue", "")
 
     def new(self, pkmn_blue, pkmn_red):
@@ -103,11 +102,17 @@ class Match(object):
             dead = self.current_red
             self.alive_red[dead] = False
             self.on_death(side=side, monindex=dead)
+        self.update_winning_checker()
+
+    def update_winning_checker(self):
+        '''Initiates a delayed win detection.
+        Has to be delayed, because there might be followup-deaths.'''
         if not any(self.alive_blue) or not any(self.alive_red):
-            if self._checkScheduled:
-                self._checkCancelled = True
-            self._checkScheduled = True
-            self._timer.schedule(500, self.checkWinner)
+            # kill already running wincheckers
+            if self._check_greenlet and not self._check_greenlet.ready():
+                self._check_greenlet.kill()
+            # 11s delay = enough time for swampert (>7s death animation) to die
+            self._check_greenlet = self._timer.schedule(660, self.checkWinner)
 
     def switched(self, side, next_pkmn):
         '''
@@ -158,24 +163,18 @@ class Match(object):
 
     def checkWinner(self):
         '''
-        Shall be called about 8 seconds after a fainted textbox appears.
+        Shall be called about 11 seconds after a fainted textbox appears.
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        if self._checkCancelled:
-            self._checkCancelled = False
-            return
-        self._checkScheduled = False
-
         deadBlue = not any(self.alive_blue)
         deadRed = not any(self.alive_red)
         winner = "draw"
         if deadBlue and deadRed:
             # draw? check further
-            if self._lastMove[1] in ("Explosion",
-                                     "Selfdestruct",
-                                     "Self-Destruct"):
-                winner = invertSide(self._lastMove[0])
+            side, move = self._lastMove
+            if move.lower() in ("explosion", "selfdestruct", "self-destruct"):
+                winner = invertSide(side)
         elif deadBlue:
             winner = "red"
         else:

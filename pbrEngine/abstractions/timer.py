@@ -36,8 +36,9 @@ class Timer(object):
         '''
         Spawns a new greenlet that performs an action in a given time,
         based on ingame frames as a timesource.
+        Returns the greenlet that gets spawned.
         '''
-        gevent.spawn(self.sleepThen, frames, job, *args)
+        return gevent.spawn(self.sleepThen, frames, job, *args)
 
     def updateFramecount(self, framecount):
         # Is called for every new framecount reported.
