@@ -494,6 +494,11 @@ class PBREngine():
         # mute the "whoosh" as well
         self.timer.spawn_later(330, self._dolphin.volume, self.volume)
         self.timer.spawn_later(450, self._disableBlur)
+        # the unstucker gets disabled when the match starts,
+        # but there's a 2-3 frame window where it can screw things up
+        # before the state gets updated to MATCH_RUNNING. Therefore:
+        # Delay the unstucker by saying the last button press was 30s in the future
+        self._lastInputFrame = self.timer.frame + 60*30
 
     def _matchOver(self, winner):
         '''
