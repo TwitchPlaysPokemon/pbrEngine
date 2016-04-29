@@ -110,6 +110,8 @@ class Match(object):
         assert side in ("blue", "red")
         index = self.get_pkmn_index_by_name(side, pkmn_name)
         if index is None:
+            # uh-oh. just assume the current one faints. might fail in some
+            # extremely rare cases
             index = self.current_blue if side == "blue" else self.current_red
         if side == "blue":
             self.alive_blue[index] = False
@@ -145,29 +147,49 @@ class Match(object):
     def get_pkmn_index_by_name(self, side, pkmn_name):
         # check each pokemon if that is the one
         pkmn_name = pkmn_name.upper()
+        indices = []
         for i, v in enumerate(self.pkmn_blue if side == "blue"
                               else self.pkmn_red):
             name = normalize_pkmn_name(v["name"], v["gender"])
-            if name == pkmn_name:
-                return i
-        # error! no pokemon matched.
-        # This should never occur, unless the pokemon's name is written
-        # differently than expected.
-        # In that case: look above! Make sure the names in the .json and
-        # the display names can match up
-        names = [normalize_pkmn_name(p["name"], p["gender"])
-                 for p in (self.pkmn_blue
-                           if side == "blue"
-                           else self.pkmn_red)]
-        logger.critical('No pokemon matched "%s"! '
-                        'Expected one of the following: %s. ',
-                        pkmn_name, ", ".join(names))
-        return None
+            if name.startswith(pkmn_name):  # startswith also works with "Deoxys Speed", "Arceus Bug", forms, etc.
+                indices.append(i)
+        if not indices:
+            # error! no pokemon matched.
+            # This should never occur, unless the pokemon's name is written
+            # differently than expected.
+            # In that case: look above! Make sure the names in the .json and
+            # the display names can match up
+            names = [normalize_pkmn_name(p["name"], p["gender"])
+                     for p in (self.pkmn_blue
+                               if side == "blue"
+                               else self.pkmn_red)]
+            logger.critical('No pokemon matched "%s"! '
+                            'Expected one of the following: %s. ',
+                            pkmn_name, ", ".join(names))
+            return None
+        elif len(indices) > 1:
+            # error! no unique match!
+            # this might occur if a team has 2+ identically named pokemon (e.g. Arceus).
+            names = [normalize_pkmn_name(p["name"], p["gender"])
+                     for p in (self.pkmn_blue
+                               if side == "blue"
+                               else self.pkmn_red)]
+            logger.critical('Multiple pokemon matched "%s"! '
+                            'Expected one of the following: %s. ',
+                            pkmn_name, ", ".join(names))
+            return None
+        else:
+            # ok!
+            return indices[0]
 
     def draggedOut(self, side, pkmn_name):
+        # fix the order-mapping.
         index = self.get_pkmn_index_by_name(side, pkmn_name)
-        if index is not None:
-            # fix the order-mapping.
+        if index is None:
+            # uh-oh, just assume the next one.
+            # will have a 50% chance of failure
+            self.switched(side, self.get_switch_options(side)[0])
+        else:
             self.switched(side, index)
 
     def checkWinner(self):
