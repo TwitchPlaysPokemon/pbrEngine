@@ -11,6 +11,19 @@ from ..util import invertSide, swap, EventHook
 logger = logging.getLogger("pbrEngine")
 
 
+def normalize_pkmn_name(name, gender="-"):
+    name = name.upper()
+    # match pkmn name with display name
+    for old, new in {u"\u2642": "(M)",
+                     u"\u2640": "(F)",
+                     " (SHINY)": "-S"}.items():
+        name = name.replace(old, new)
+    if name == "NIDORAN?" and gender == "m":
+        name = "NIDORAN(M)"
+    elif name == "NIDORAN?" and gender == "f":
+        name = "NIDORAN(F)"
+    return name
+
 class Match(object):
     def __init__(self, timer):
         self._timer = timer
@@ -93,15 +106,16 @@ class Match(object):
         self._orderRed = order
         self.pkmn_red = [self.pkmn_red[i-1] for i in order]
 
-    def fainted(self, side):
+    def fainted(self, side, pkmn_name):
+        assert side in ("blue", "red")
+        index = self.get_pkmn_index_by_name(side, pkmn_name)
+        if index is None:
+            index = self.current_blue if side == "blue" else self.current_red
         if side == "blue":
-            dead = self.current_blue
-            self.alive_blue[dead] = False
-            self.on_death(side=side, monindex=dead)
+            self.alive_blue[index] = False
         else:
-            dead = self.current_red
-            self.alive_red[dead] = False
-            self.on_death(side=side, monindex=dead)
+            self.alive_red[index] = False
+        self.on_death(side=side, monindex=index)
         self.update_winning_checker()
 
     def update_winning_checker(self):
@@ -128,38 +142,33 @@ class Match(object):
             self.current_red = next_pkmn
             self.on_switch(side=side, monindex=next_pkmn)
 
-    def draggedOut(self, side, pkmn_name):
-        # check each pokemon if that is the one that was sent out
+    def get_pkmn_index_by_name(self, side, pkmn_name):
+        # check each pokemon if that is the one
+        pkmn_name = pkmn_name.upper()
         for i, v in enumerate(self.pkmn_blue if side == "blue"
                               else self.pkmn_red):
-            # names are displayed in all-caps
-            name = v["name"].upper()
-            # match pkmn names with display name
-            for old, new in {u"\u2642": "(M)",
-                             u"\u2640": "(F)",
-                             " (SHINY)": "-S"}.items():
-                name = name.replace(old, new)
-            if name == "NIDORAN?" and v["gender"] == "m":
-                name = "NIDORAN(M)"
-            elif name == "NIDORAN?" and v["gender"] == "f":
-                name = "NIDORAN(F)"
+            name = normalize_pkmn_name(v["name"], v["gender"])
             if name == pkmn_name:
-                # this is it! Calling switched to trigger the switch event and
-                # fix the order-mapping.
-                self.switched(side, i)
-                return
+                return i
         # error! no pokemon matched.
         # This should never occur, unless the pokemon's name is written
         # differently than expected.
         # In that case: look above! Make sure the names in the .json and
         # the display names can match up
-        names = [p["name"].upper() for p in (self.pkmn_blue
-                                             if side == "blue"
-                                             else self.pkmn_red)]
-        logger.critical('No pokemon in Roar/Whirlwind message matched ' +
-                        '"%s"! Expected one of the following: %s. The ' +
-                        'engine now believes the wrong pokemon is out.',
+        names = [normalize_pkmn_name(p["name"], p["gender"])
+                 for p in (self.pkmn_blue
+                           if side == "blue"
+                           else self.pkmn_red)]
+        logger.critical('No pokemon matched "%s"! '
+                        'Expected one of the following: %s. ',
                         pkmn_name, ", ".join(names))
+        return None
+
+    def draggedOut(self, side, pkmn_name):
+        index = self.get_pkmn_index_by_name(side, pkmn_name)
+        if index is not None:
+            # fix the order-mapping.
+            self.switched(side, index)
 
     def checkWinner(self):
         '''

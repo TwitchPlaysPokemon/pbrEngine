@@ -853,7 +853,7 @@ class PBREngine():
                           string)
         if match:
             side = match.group(1).lower()
-            self.match.fainted(side)
+            self.match.fainted(side, match.group(2))
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
@@ -865,7 +865,7 @@ class PBREngine():
             return
         
         # update the win detection for each (unprocessed) message.
-        # e.g. "xyz was buffered by the sandstorm" takes extra time for
+        # e.g. "xyz was buffeted by the sandstorm" takes extra time for
         # the 2nd pokemon to die and therefore needs a timer reset
         self.match.update_winning_checker()
 
