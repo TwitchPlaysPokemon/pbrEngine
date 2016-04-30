@@ -18,6 +18,10 @@ def normalize_pkmn_name(name, gender="-"):
                      u"\u2640": "(F)",
                      " (SHINY)": "-S"}.items():
         name = name.replace(old, new)
+    # shiny names could have gotten truncated (TYPHLOSI-S)
+    if name.endswith("-S") and len(name) > 10:
+        name = name.rsplit("-", 1)[0]
+        name = name[:8] + "-S"
     if name == "NIDORAN?" and gender == "m":
         name = "NIDORAN(M)"
     elif name == "NIDORAN?" and gender == "f":
