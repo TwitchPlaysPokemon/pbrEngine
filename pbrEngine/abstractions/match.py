@@ -11,23 +11,6 @@ from ..util import invertSide, swap, EventHook
 logger = logging.getLogger("pbrEngine")
 
 
-def normalize_pkmn_name(name, gender="-"):
-    name = name.upper()
-    # match pkmn name with display name
-    for old, new in {u"\u2642": "(M)",
-                     u"\u2640": "(F)",
-                     " (SHINY)": "-S"}.items():
-        name = name.replace(old, new)
-    # shiny names could have gotten truncated (TYPHLOSI-S)
-    if name.endswith("-S") and len(name) > 10:
-        name = name.rsplit("-", 1)[0]
-        name = name[:8] + "-S"
-    if name == "NIDORAN?" and gender == "m":
-        name = "NIDORAN(M)"
-    elif name == "NIDORAN?" and gender == "f":
-        name = "NIDORAN(F)"
-    return name
-
 class Match(object):
     def __init__(self, timer):
         self._timer = timer
@@ -48,6 +31,10 @@ class Match(object):
     def new(self, pkmn_blue, pkmn_red):
         self.pkmn_blue = pkmn_blue
         self.pkmn_red = pkmn_red
+        pkmn_both = pkmn_blue+pkmn_red
+        if len(set(p["ingamename"] for p in pkmn_both)) < len(pkmn_both):
+            raise ValueError("Ingamenames of all Pokemon in a match must be unique: %s"
+                             % ", ".join(p["ingamename"] for p in pkmn_both))
         self.alive_blue = [True for _ in pkmn_blue]
         self.alive_red = [True for _ in pkmn_red]
         self.current_blue = 0
@@ -98,7 +85,6 @@ class Match(object):
     def order_blue(self, order):
         self._checkOrder(order, len(self.pkmn_blue))
         self._orderBlue = order
-        self.pkmn_blue = [self.pkmn_blue[i-1] for i in order]
 
     @property
     def order_red(self):
@@ -108,7 +94,10 @@ class Match(object):
     def order_red(self, order):
         self._checkOrder(order, len(self.pkmn_red))
         self._orderRed = order
-        self.pkmn_red = [self.pkmn_red[i-1] for i in order]
+
+    def apply_order(self):
+        self.pkmn_blue = [self.pkmn_blue[i-1] for i in self._orderBlue]
+        self.pkmn_red = [self.pkmn_red[i-1] for i in self._orderRed]
 
     def fainted(self, side, pkmn_name):
         assert side in ("blue", "red")
@@ -116,6 +105,7 @@ class Match(object):
         if index is None:
             # uh-oh. just assume the current one faints. might fail in some
             # extremely rare cases
+            logger.critical("Did not recognize pokemon name: %s", pkmn_name)
             index = self.current_blue if side == "blue" else self.current_red
         if side == "blue":
             self.alive_blue[index] = False
@@ -150,41 +140,10 @@ class Match(object):
 
     def get_pkmn_index_by_name(self, side, pkmn_name):
         # check each pokemon if that is the one
-        pkmn_name = pkmn_name.upper()
-        indices = []
         for i, v in enumerate(self.pkmn_blue if side == "blue"
                               else self.pkmn_red):
-            name = normalize_pkmn_name(v["name"], v["gender"])
-            if name.startswith(pkmn_name):  # startswith also works with "Deoxys Speed", "Arceus Bug", forms, etc.
-                indices.append(i)
-        if not indices:
-            # error! no pokemon matched.
-            # This should never occur, unless the pokemon's name is written
-            # differently than expected.
-            # In that case: look above! Make sure the names in the .json and
-            # the display names can match up
-            names = [normalize_pkmn_name(p["name"], p["gender"])
-                     for p in (self.pkmn_blue
-                               if side == "blue"
-                               else self.pkmn_red)]
-            logger.critical('No pokemon matched "%s"! '
-                            'Expected one of the following: %s. ',
-                            pkmn_name, ", ".join(names))
-            return None
-        elif len(indices) > 1:
-            # error! no unique match!
-            # this might occur if a team has 2+ identically named pokemon (e.g. Arceus).
-            names = [normalize_pkmn_name(p["name"], p["gender"])
-                     for p in (self.pkmn_blue
-                               if side == "blue"
-                               else self.pkmn_red)]
-            logger.critical('Multiple pokemon matched "%s"! '
-                            'Expected one of the following: %s. ',
-                            pkmn_name, ", ".join(names))
-            return None
-        else:
-            # ok!
-            return indices[0]
+            if v["ingamename"] == pkmn_name:
+                return i
 
     def draggedOut(self, side, pkmn_name):
         # fix the order-mapping.

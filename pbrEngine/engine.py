@@ -12,9 +12,12 @@ import dolphinWatch
 import os
 from functools import partial
 
+from .eps import get_pokemon_from_data
+
+from gevent.event import AsyncResult
 from .memorymap.addresses import Locations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
-    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues
+    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues, BPStructOffsets
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook
@@ -255,7 +258,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def start(self, order_blue=[1, 2, 3], order_red=[1, 2, 3]):
+    def start(self, order_blue=None, order_red=None):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason
@@ -267,6 +270,10 @@ class PBREngine():
         CAUTION: The list order of match.pkmn_blue and match.pkmn_red will be
                  altered
         '''
+        if not order_blue:
+            order_blue = list(range(1, 1+len(self.match.pkmn_blue)))
+        if not order_red:
+            order_red = list(range(1, 1+len(self.match.pkmn_red)))
         self.match.order_blue = order_blue
         self.match.order_red = order_red
         self.startsignal = True
@@ -455,6 +462,36 @@ class PBREngine():
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
+
+    def _injectPokemon(self):
+        # BPStructOffsets
+        pointer = AsyncResult()
+        self._dolphin.read32(Locations.POINTER_BP_STRUCT.value.addr, pointer.set)
+        pointer = pointer.get()
+        
+        for offset, data in ((BPStructOffsets.PKMN_BLUE, self.match.pkmn_blue), (BPStructOffsets.PKMN_RED, self.match.pkmn_red)):
+            for poke_i, pkmn_dict in enumerate(data):
+                pokemon = get_pokemon_from_data(pkmn_dict)
+                pokebytes = pokemon.to_bytes()
+                self._dolphin.pause()
+                gevent.sleep(0.1)
+                for i, byte in enumerate(pokebytes):
+                    self._dolphin.write8(pointer + offset + i + poke_i*0x8c, byte)
+                gevent.sleep(0.1)
+                self._dolphin.resume()
+                self.timer.sleep(20)
+
+    def pkmnIndexToButton(self, index):
+        # TODO fix sideways remote
+        return [
+            WiimoteButton.RIGHT,
+            WiimoteButton.DOWN,
+            WiimoteButton.UP,
+            WiimoteButton.LEFT,
+            WiimoteButton.TWO,
+            WiimoteButton.ONE
+        ][index]
+
     ############################################
     # The below functions are for timed inputs #
     #        or processing "raw events"        #
@@ -591,8 +628,7 @@ class PBREngine():
                     self._pressButton(WiimoteButton.MINUS)
             else:
                 # TODO fix sideways remote
-                button = [WiimoteButton.RIGHT, WiimoteButton.DOWN,
-                          WiimoteButton.UP][index]
+                button = self.pkmnIndexToButton(index)
                 if silent:
                     self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
                                           GuiTarget.CONFIRM_PKMN)
@@ -614,7 +650,7 @@ class PBREngine():
         if moves:
             actions += ["a", "b", "c", "d"]
         elif switch:
-            actions += [1, 2, 3]
+            actions += [1, 2, 3, 4, 5, 6]
         return random.choice(actions)
 
     def _getAction(self, moves=True, switch=True):
@@ -626,6 +662,7 @@ class PBREngine():
                 # start picking actions by random
                 obj = None
                 action = self._getRandomAction(moves, switch)
+                logger.info("stuck in loop. selected random action: %s", action)
             else:
                 action, obj = self._action_callback(side,
                                                     fails=self._failsMoveSelection,
@@ -849,7 +886,7 @@ class PBREngine():
         self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
-        match = re.search(r"^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?fainted",
+        match = re.search(r"^Team (Blue|Red)'s (.+?) fainted!$",
                           string)
         if match:
             side = match.group(1).lower()
@@ -858,7 +895,7 @@ class PBREngine():
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search(
-            r"^Team (Blue|Red)'s ([A-Za-z0-9()'-]+).*?was dragged out", string)
+            r"^Team (Blue|Red)'s (.+?) was dragged out!$", string)
         if match:
             side = match.group(1).lower()
             self.match.draggedOut(side, match.group(2))
@@ -1115,6 +1152,7 @@ class PBREngine():
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
             self._select(1)
         elif gui == PbrGuis.RULES_BPS_CONFIRM:
+            self._injectPokemon()
             self._pressTwo()
             # skip the followup match intro
             gevent.spawn_later(1, self._skipIntro)
@@ -1160,6 +1198,7 @@ class PBREngine():
                 self._pressTwo()
                 self._initMatch()
             else:
+                self.match.apply_order()
                 self._fBlueChoseOrder = True
                 x1, x2 = orderToInts(self.match.order_blue)
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)

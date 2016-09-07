@@ -69,3 +69,5 @@ class Locations(Enum):
     BLUR2            = Loc(0x641e90, 4)
     HP_BLUE          = Loc(0x478552, 2)
     HP_RED           = Loc(0x478fa2, 2)
+
+    POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)

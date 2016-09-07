@@ -24,10 +24,12 @@ from pbrEngine import AvatarsBlue, AvatarsRed
 from tbot import Twitchbot
 from random import shuffle
 
-with open("json.json") as f:
+with open("testpkmn.json") as f:
     data = json.load(f)
+    for d in data:
+        d["ingamename_cmdsafe"] = d["ingamename"].encode("ascii", "replace").decode()
     # reduce by shinies
-    data = [d for d in data if not d["shiny"]]
+    #data = [d for d in data if not d["shiny"]]
     # TODO remove this again, it's debugging stuff
     # only keep certain moves
     # moves = ["Explosion", "Self-Destruct", "Whirlwind", "Roar",
@@ -40,15 +42,16 @@ with open("json.json") as f:
     # remove all unicode, because windows console crashes otherwise
     # should only affect nidorans, but better be safe
     for i, _ in enumerate(data):
-        data[i]["name"] = (data[i]["name"]
-                           .replace(u"\u2642", "(m)")
-                           .replace(u"\u2640", "(f)")
-                           .encode('ascii', 'replace')
-                           .decode())
-        for j, _ in enumerate(data[i]["moves"]):
-            data[i]["moves"][j]["name"] = (data[i]["moves"][j]["name"]
-                                           .encode('ascii', 'replace')
-                                           .decode())
+        data[i]["position"] = i
+        #data[i]["name"] = (data[i]["name"]
+        #                   .replace(u"\u2642", "(m)")
+        #                   .replace(u"\u2640", "(f)")
+        #                   .encode('ascii', 'replace')
+        #                   .decode())
+        #for j, _ in enumerate(data[i]["moves"]):
+        #    data[i]["moves"][j]["name"] = (data[i]["moves"][j]["name"]
+        #                                   .encode('ascii', 'replace')
+        #                                   .decode())
 
 
 
@@ -65,11 +68,7 @@ def countdown(t=20):
         t -= 1
         if t <= 0:
             t = 0
-            order1 = [1, 2, 3]
-            shuffle(order1)
-            order2 = [1, 2, 3]
-            shuffle(order2)
-            pbr.start(order1, order2)
+            pbr.start()
             break
 
 
@@ -103,7 +102,7 @@ def onState(state):
 
 def onAttack(side, monindex, moveindex, movename, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) uses %s." % (mon["name"], side, movename))
+    display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
 
 def onWin(winner):
@@ -115,12 +114,12 @@ def onWin(winner):
 
 def onDeath(side, monindex):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is down." % (mon["name"], side))
+    display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
 
 
 def onSwitch(side, monindex, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is sent out." % (mon["name"], side))
+    display.addEvent("%s (%s) is sent out." % (mon["ingamename"], side))
 
 
 def actionCallback(side, fails, moves, switch):
@@ -129,7 +128,7 @@ def actionCallback(side, fails, moves, switch):
         options += ["a"]*4 + ["b"]*3 + ["c"]*2 + ["d"]
     #if switch:
     elif switch:  # don't switch if not necessary to speed battles up for testing
-        options += ["1", "2", "3"]
+        options += ["1", "2", "3", "4", "5", "6"]
     move = random.choice(options)
     return (move, move)
 
@@ -175,7 +174,7 @@ def main():
     pbr.on_switch += onSwitch
     pbr.connect()
     pbr.on_gui += lambda gui: display.reprint()
-    # pbr.setVolume(0)
+    pbr.setVolume(20)
     pbr.setFov(0.7)
 
     # don't terminate please

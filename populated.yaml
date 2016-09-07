@@ -1,0 +1,628 @@
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Bulbasaur
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: BULBASAUR
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 49, def: 49, hp: 45, spA: 65, spD: 65, spe: 45}
+    id: 1
+    name: Bulbasaur
+    types: [Grass, Poison]
+stats: {atk: 216, def: 92, hp: 200, spA: 229, spD: 135, spe: 95}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Ivysaur
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: IVYSAUR
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 62, def: 63, hp: 60, spA: 80, spD: 80, spe: 60}
+    id: 2
+    name: Ivysaur
+    types: [Grass, Poison]
+stats: {atk: 245, def: 117, hp: 230, spA: 259, spD: 165, spe: 125}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Venusaur
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: VENUSAUR
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 82, def: 83, hp: 80, spA: 100, spD: 100, spe: 80}
+    id: 3
+    name: Venusaur
+    types: [Grass, Poison]
+stats: {atk: 289, def: 153, hp: 270, spA: 299, spD: 205, spe: 165}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Charmander
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: CHARMANDER
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 52, def: 43, hp: 39, spA: 60, spD: 50, spe: 65}
+    id: 4
+    name: Charmander
+    types: [Fire]
+stats: {atk: 223, def: 81, hp: 188, spA: 219, spD: 105, spe: 135}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Charmeleon
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: CHARMELEON
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 64, def: 58, hp: 58, spA: 80, spD: 65, spe: 80}
+    id: 5
+    name: Charmeleon
+    types: [Fire]
+stats: {atk: 249, def: 108, hp: 226, spA: 259, spD: 135, spe: 165}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Charizard
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: CHARIZARD
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 84, def: 78, hp: 78, spA: 109, spD: 85, spe: 100}
+    id: 6
+    name: Charizard
+    types: [Fire, Flying]
+stats: {atk: 293, def: 144, hp: 266, spA: 317, spD: 175, spe: 205}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Squirtle
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: SQUIRTLE
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 48, def: 65, hp: 44, spA: 50, spD: 64, spe: 43}
+    id: 7
+    name: Squirtle
+    types: [Water]
+stats: {atk: 214, def: 121, hp: 198, spA: 199, spD: 133, spe: 91}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Wartortle
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: WARTORTLE
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 63, def: 80, hp: 59, spA: 65, spD: 80, spe: 58}
+    id: 8
+    name: Wartortle
+    types: [Water]
+stats: {atk: 247, def: 148, hp: 228, spA: 229, spD: 165, spe: 121}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Blastoise
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: BLASTOISE
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 83, def: 100, hp: 79, spA: 85, spD: 105, spe: 78}
+    id: 9
+    name: Blastoise
+    types: [Water]
+stats: {atk: 291, def: 184, hp: 268, spA: 269, spD: 215, spe: 161}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Pidgey
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: PIDGEY
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 45, def: 40, hp: 40, spA: 35, spD: 35, spe: 56}
+    id: 16
+    name: Pidgey
+    types: [Normal, Flying]
+stats: {atk: 207, def: 76, hp: 190, spA: 169, spD: 75, spe: 117}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Pidgeotto
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: PIDGEOTTO
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 60, def: 55, hp: 63, spA: 50, spD: 50, spe: 71}
+    id: 17
+    name: Pidgeotto
+    types: [Normal, Flying]
+stats: {atk: 240, def: 103, hp: 236, spA: 199, spD: 105, spe: 147}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Pidgeot
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: PIDGEOT
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 80, def: 75, hp: 83, spA: 70, spD: 70, spe: 91}
+    id: 18
+    name: Pidgeot
+    types: [Normal, Flying]
+stats: {atk: 284, def: 139, hp: 276, spA: 239, spD: 145, spe: 187}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: Lanturn
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: CZERWONA
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 58, def: 58, hp: 125, spA: 76, spD: 76, spe: 67}
+    id: 171
+    name: Lanturn
+    types: [Water, Electric]
+stats: {atk: 236, def: 108, hp: 360, spA: 251, spD: 157, spe: 139}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: "Nidoran\u2642"
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: "NIDORAN\u2642"
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 57, def: 40, hp: 46, spA: 40, spD: 40, spe: 50}
+    id: 32
+    name: "Nidoran\u2642"
+    types: [Poison]
+stats: {atk: 234, def: 76, hp: 202, spA: 179, spD: 85, spe: 105}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: "Nidoran\u2642"
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: "NIDORAN\u26422"
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 57, def: 40, hp: 46, spA: 40, spD: 40, spe: 50}
+    id: 32
+    name: "Nidoran\u2642"
+    types: [Poison]
+stats: {atk: 234, def: 76, hp: 202, spA: 179, spD: 85, spe: 105}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: "Nidoran\u2640"
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: "NIDORAN\u2640"
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 47, def: 52, hp: 55, spA: 40, spD: 40, spe: 41}
+    id: 29
+    name: "Nidoran\u2640"
+    types: [Poison]
+stats: {atk: 212, def: 98, hp: 220, spA: 179, spD: 85, spe: 87}
+---
+ability:
+- {description: '', id: 37, name: Huge Power}
+ball:
+- {description: '', id: 4, name: "Pok\xE9 Ball"}
+biddable: true
+combinations: []
+displayname: "Nidoran\u2640"
+evs: {atk: 252, def: 0, hp: 0, spA: 252, spD: 0, spe: 0}
+form: 0
+gender: [null]
+happiness: 255
+ingamename: "NIDORAN\u26402"
+item:
+- {description: '', id: 0, name: null}
+ivs: {atk: 31, def: 0, hp: 0, spA: 31, spD: 0, spe: 0}
+level: 100
+moves:
+-   - {accuracy: 100, category: Status, displayname: Roar, id: 46, name: Roar, name_id: roar,
+        power: 0, pp: 20, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Special, displayname: Hyper Beam, id: 63, name: Hyper
+            Beam, name_id: hyperbeam, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 90, category: Physical, displayname: Giga Impact, id: 416, name: Giga
+            Impact, name_id: gigaimpact, power: 150, pp: 5, pp_ups: 0, type: Normal}
+-   - {accuracy: 100, category: Special, displayname: Judgment Normal, id: 449, name: Judgment,
+        name_id: judgment, power: 100, pp: 10, pp_ups: 0, type: Normal}
+nature: {decreased: def, id: 1, increased: atk, name: Lonely}
+rarity: 1.0
+separations: []
+setname: Standard
+shiny: false
+species:
+    basestats: {atk: 47, def: 52, hp: 55, spA: 40, spD: 40, spe: 41}
+    id: 29
+    name: "Nidoran\u2640"
+    types: [Poison]
+stats: {atk: 212, def: 98, hp: 220, spA: 179, spD: 85, spe: 87}

@@ -91,18 +91,21 @@ def bytesToString(data):
     0xfe gets replaced with a space,
     because it represents (part of) a line break.
     '''
-    # remove paddings
-    data = data[1::2]
-    # replace pbr's "newline" with a space
-    data = [x if x != 0xfe else 0x20 for x in data]
-    # eliminate invalid ascii points
-    data = [x for x in data if x <= 0x7f]
-    # stop at first 0
-    try:
-        data = data[:data.index(0)]
-    except:
-        pass
-    return bytes(data).decode()
+    chars = []
+    for i in range(0, len(data), 2):
+        character = bytes(data[i:i+2]).decode("utf-16be")
+        if character == '\x00':
+            break  # end of string
+        _replacements = {
+            "\uffff": "",
+            "\ufffe": " ",
+            "\u3328": "\u2642",
+            "\u3329": "\u2640",
+        }
+        for needle, replacement in _replacements.items():
+            character = character.replace(needle, replacement)
+        chars.append(character)
+    return "".join(chars)
 
 
 def stringToBytes(string):
@@ -152,3 +155,4 @@ def invertSide(side):
     Representing a side sometimes includes "draw", and an enum would have been
     a hassle for api-writer and user. So it's just a string.'''
     return "blue" if side == "red" else ("red" if side == "blue" else "draw")
+

@@ -29,40 +29,41 @@ class Monitor(object):
         self.reprint()
 
     def reprint(self):
-        os.system("cls" if os.name == "nt" else "clear")
+        #os.system("cls" if os.name == "nt" else "clear")
         print("\n")
-        print(" +---------------------------------------------+")
+        print(" +-------------------------------------------------+")
         speed = sum(self.pbr.timer.speed_plots)/len(self.pbr.timer.speed_plots)
-        print(" | Speed: %5.1f%%                               |"
+        print(" | Speed: %5.1f%%                                   |"
               % (100 * speed))
-        print(" +---------------------------------------------+")
-        print(" | Colosseum: %32s |" % Colosseums(self.pbr.colosseum).name)
-        print(" |     State: %32s |" % PbrStates(self.pbr.state).name)
-        print(" |       Gui: %32s |" % PbrGuis(self.pbr.gui).name)
-        print(" +----------------------+----------------------+")
+        print(" +-------------------------------------------------+")
+        if self.pbr.colosseum:
+            print(" | Colosseum: %36s |" % Colosseums(self.pbr.colosseum).name)
+        print(" |     State: %36s |" % PbrStates(self.pbr.state).name)
+        print(" |       Gui: %36s |" % PbrGuis(self.pbr.gui).name)
+        print(" +------------------------+------------------------+")
         lenBlue = len(self.pbr.match.pkmn_blue)
         lenRed = len(self.pbr.match.pkmn_red)
         for i in range(max(lenBlue, lenRed)):
             blue = self.pbr.match.pkmn_blue[i] if i < lenBlue else None
             red = self.pbr.match.pkmn_red[i] if i < lenRed else None
-            print(" | %s  %-18s|%18s  %s |" % (
+            print(" | %s  %-20s|%20s  %s |" % (
                 ("X" if not self.pbr.match.alive_blue[i]
                  else (">" if i == self.pbr.match.current_blue
                        else " ")) if blue else " ",
-                blue["name"] if blue else " ",
-                red["name"] if red else " ",
+                blue["ingamename_cmdsafe"] if blue else " ",
+                red["ingamename_cmdsafe"] if red else " ",
                 ("X" if not self.pbr.match.alive_red[i]
                  else ("<" if i == self.pbr.match.current_red
                        else " ")) if red else " ",
             ))
-        print(" +----------------------+----------------------+")
-        print(" | Last events (newest on top):                |")
-        print(" |                                             |")
+        print(" +------------------------+------------------------+")
+        print(" | Last events (newest on top):                    |")
+        print(" |                                                 |")
         for i in range(self.max_events):
             try:
-                print (" | %-43s |" % (self.events[i][:41]+".."
+                print (" | %-47s |" % (self.events[i][:41]+".."
                                        if len(self.events[i]) > 43
                                        else self.events[i]))
             except:
-                print(" |                                             |")
-        print(" +---------------------------------------------+")
+                print(" |                                                 |")
+        print(" +-------------------------------------------------+")

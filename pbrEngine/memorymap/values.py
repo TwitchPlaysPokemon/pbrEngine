@@ -80,6 +80,11 @@ class TrainerStyle(IntEnum):
     LITTLE_GIRL_C = 0x11
 
 
+class BPStructOffsets(IntEnum):
+    PKMN_BLUE = 0x5AB74
+    PKMN_RED  = 0x5B94C
+
+
 DefaultValues = {
     "GUI_POS_X": intToFloatRepr(0xbe830304),
     "GUI_POS_Y": intToFloatRepr(0x41700000),

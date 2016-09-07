@@ -1,0 +1,2084 @@
+[
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Bulbasaur",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 1,
+            "basestats": {
+                "spA": 65,
+                "spD": 65,
+                "hp": 45,
+                "atk": 49,
+                "def": 49,
+                "spe": 45
+            },
+            "types": [
+                "Grass",
+                "Poison"
+            ],
+            "name": "Bulbasaur"
+        },
+        "ingamename": "BULBASAUR",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 229,
+            "spD": 135,
+            "hp": 200,
+            "atk": 216,
+            "def": 92,
+            "spe": 95
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Ivysaur",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 2,
+            "basestats": {
+                "spA": 80,
+                "spD": 80,
+                "hp": 60,
+                "atk": 62,
+                "def": 63,
+                "spe": 60
+            },
+            "types": [
+                "Grass",
+                "Poison"
+            ],
+            "name": "Ivysaur"
+        },
+        "ingamename": "IVYSAUR",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 259,
+            "spD": 165,
+            "hp": 230,
+            "atk": 245,
+            "def": 117,
+            "spe": 125
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Venusaur",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 3,
+            "basestats": {
+                "spA": 100,
+                "spD": 100,
+                "hp": 80,
+                "atk": 82,
+                "def": 83,
+                "spe": 80
+            },
+            "types": [
+                "Grass",
+                "Poison"
+            ],
+            "name": "Venusaur"
+        },
+        "ingamename": "VENUSAUR",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 299,
+            "spD": 205,
+            "hp": 270,
+            "atk": 289,
+            "def": 153,
+            "spe": 165
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Charmander",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 4,
+            "basestats": {
+                "spA": 60,
+                "spD": 50,
+                "hp": 39,
+                "atk": 52,
+                "def": 43,
+                "spe": 65
+            },
+            "types": [
+                "Fire"
+            ],
+            "name": "Charmander"
+        },
+        "ingamename": "CHARMANDER",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 219,
+            "spD": 105,
+            "hp": 188,
+            "atk": 223,
+            "def": 81,
+            "spe": 135
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Charmeleon",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 5,
+            "basestats": {
+                "spA": 80,
+                "spD": 65,
+                "hp": 58,
+                "atk": 64,
+                "def": 58,
+                "spe": 80
+            },
+            "types": [
+                "Fire"
+            ],
+            "name": "Charmeleon"
+        },
+        "ingamename": "CHARMELEON",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 259,
+            "spD": 135,
+            "hp": 226,
+            "atk": 249,
+            "def": 108,
+            "spe": 165
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Charizard",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 6,
+            "basestats": {
+                "spA": 109,
+                "spD": 85,
+                "hp": 78,
+                "atk": 84,
+                "def": 78,
+                "spe": 100
+            },
+            "types": [
+                "Fire",
+                "Flying"
+            ],
+            "name": "Charizard"
+        },
+        "ingamename": "CHARIZARD",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 317,
+            "spD": 175,
+            "hp": 266,
+            "atk": 293,
+            "def": 144,
+            "spe": 205
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Squirtle",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 7,
+            "basestats": {
+                "spA": 50,
+                "spD": 64,
+                "hp": 44,
+                "atk": 48,
+                "def": 65,
+                "spe": 43
+            },
+            "types": [
+                "Water"
+            ],
+            "name": "Squirtle"
+        },
+        "ingamename": "SQUIRTLE",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 199,
+            "spD": 133,
+            "hp": 198,
+            "atk": 214,
+            "def": 121,
+            "spe": 91
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Wartortle",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 8,
+            "basestats": {
+                "spA": 65,
+                "spD": 80,
+                "hp": 59,
+                "atk": 63,
+                "def": 80,
+                "spe": 58
+            },
+            "types": [
+                "Water"
+            ],
+            "name": "Wartortle"
+        },
+        "ingamename": "WARTORTLE",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 229,
+            "spD": 165,
+            "hp": 228,
+            "atk": 247,
+            "def": 148,
+            "spe": 121
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Blastoise",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 9,
+            "basestats": {
+                "spA": 85,
+                "spD": 105,
+                "hp": 79,
+                "atk": 83,
+                "def": 100,
+                "spe": 78
+            },
+            "types": [
+                "Water"
+            ],
+            "name": "Blastoise"
+        },
+        "ingamename": "BLASTOISE",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 269,
+            "spD": 215,
+            "hp": 268,
+            "atk": 291,
+            "def": 184,
+            "spe": 161
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Pidgey",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 16,
+            "basestats": {
+                "spA": 35,
+                "spD": 35,
+                "hp": 40,
+                "atk": 45,
+                "def": 40,
+                "spe": 56
+            },
+            "types": [
+                "Normal",
+                "Flying"
+            ],
+            "name": "Pidgey"
+        },
+        "ingamename": "PIDGEY",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 169,
+            "spD": 75,
+            "hp": 190,
+            "atk": 207,
+            "def": 76,
+            "spe": 117
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Pidgeotto",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 17,
+            "basestats": {
+                "spA": 50,
+                "spD": 50,
+                "hp": 63,
+                "atk": 60,
+                "def": 55,
+                "spe": 71
+            },
+            "types": [
+                "Normal",
+                "Flying"
+            ],
+            "name": "Pidgeotto"
+        },
+        "ingamename": "PIDGEOTTO",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 199,
+            "spD": 105,
+            "hp": 236,
+            "atk": 240,
+            "def": 103,
+            "spe": 147
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Pidgeot",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 18,
+            "basestats": {
+                "spA": 70,
+                "spD": 70,
+                "hp": 83,
+                "atk": 80,
+                "def": 75,
+                "spe": 91
+            },
+            "types": [
+                "Normal",
+                "Flying"
+            ],
+            "name": "Pidgeot"
+        },
+        "ingamename": "PIDGEOT",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 239,
+            "spD": 145,
+            "hp": 276,
+            "atk": 284,
+            "def": 139,
+            "spe": 187
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Lanturn",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 171,
+            "basestats": {
+                "spA": 76,
+                "spD": 76,
+                "hp": 125,
+                "atk": 58,
+                "def": 58,
+                "spe": 67
+            },
+            "types": [
+                "Water",
+                "Electric"
+            ],
+            "name": "Lanturn"
+        },
+        "ingamename": "CZERWONA",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 251,
+            "spD": 157,
+            "hp": 360,
+            "atk": 236,
+            "def": 108,
+            "spe": 139
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Nidoran\u2642",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 32,
+            "basestats": {
+                "spA": 40,
+                "spD": 40,
+                "hp": 46,
+                "atk": 57,
+                "def": 40,
+                "spe": 50
+            },
+            "types": [
+                "Poison"
+            ],
+            "name": "Nidoran\u2642"
+        },
+        "ingamename": "NIDORAN\u2642",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 179,
+            "spD": 85,
+            "hp": 202,
+            "atk": 234,
+            "def": 76,
+            "spe": 105
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Nidoran\u2642",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 32,
+            "basestats": {
+                "spA": 40,
+                "spD": 40,
+                "hp": 46,
+                "atk": 57,
+                "def": 40,
+                "spe": 50
+            },
+            "types": [
+                "Poison"
+            ],
+            "name": "Nidoran\u2642"
+        },
+        "ingamename": "NIDORAN\u26422",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 179,
+            "spD": 85,
+            "hp": 202,
+            "atk": 234,
+            "def": 76,
+            "spe": 105
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Nidoran\u2640",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 29,
+            "basestats": {
+                "spA": 40,
+                "spD": 40,
+                "hp": 55,
+                "atk": 47,
+                "def": 52,
+                "spe": 41
+            },
+            "types": [
+                "Poison"
+            ],
+            "name": "Nidoran\u2640"
+        },
+        "ingamename": "NIDORAN\u2640",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 179,
+            "spD": 85,
+            "hp": 220,
+            "atk": 212,
+            "def": 98,
+            "spe": 87
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    },
+    {
+        "biddable": true,
+        "setname": "Standard",
+        "level": 100,
+        "shiny": false,
+        "form": 0,
+        "gender": null,
+        "happiness": 255,
+        "displayname": "Nidoran\u2640",
+        "item": {
+            "id": 0,
+            "name": null,
+            "description": ""
+        },
+        "ball": {
+            "id": 4,
+            "name": "Pok\u00e9 Ball",
+            "description": ""
+        },
+        "species": {
+            "id": 29,
+            "basestats": {
+                "spA": 40,
+                "spD": 40,
+                "hp": 55,
+                "atk": 47,
+                "def": 52,
+                "spe": 41
+            },
+            "types": [
+                "Poison"
+            ],
+            "name": "Nidoran\u2640"
+        },
+        "ingamename": "NIDORAN\u26402",
+        "nature": {
+            "id": 1,
+            "name": "Lonely",
+            "increased": "atk",
+            "decreased": "def"
+        },
+        "evs": {
+            "spA": 252,
+            "spD": 0,
+            "hp": 0,
+            "atk": 252,
+            "def": 0,
+            "spe": 0
+        },
+        "ability": {
+            "id": 37,
+            "name": "Huge Power",
+            "description": ""
+        },
+        "rarity": 1.0,
+        "ivs": {
+            "spA": 31,
+            "spD": 0,
+            "hp": 0,
+            "atk": 31,
+            "def": 0,
+            "spe": 0
+        },
+        "stats": {
+            "spA": 179,
+            "spD": 85,
+            "hp": 220,
+            "atk": 212,
+            "def": 98,
+            "spe": 87
+        },
+        "moves": [
+            {
+                "id": 46,
+                "name_id": "roar",
+                "pp": 20,
+                "name": "Roar",
+                "category": "Status",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Roar",
+                "power": 0,
+                "type": "Normal"
+            },
+            {
+                "id": 63,
+                "name_id": "hyperbeam",
+                "pp": 5,
+                "name": "Hyper Beam",
+                "category": "Special",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Hyper Beam",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 416,
+                "name_id": "gigaimpact",
+                "pp": 5,
+                "name": "Giga Impact",
+                "category": "Physical",
+                "accuracy": 90,
+                "pp_ups": 0,
+                "displayname": "Giga Impact",
+                "power": 150,
+                "type": "Normal"
+            },
+            {
+                "id": 449,
+                "name_id": "judgment",
+                "pp": 10,
+                "name": "Judgment",
+                "category": "Special",
+                "accuracy": 100,
+                "pp_ups": 0,
+                "displayname": "Judgment Normal",
+                "power": 100,
+                "type": "Normal"
+            }
+        ]
+    }
+]
