@@ -102,7 +102,7 @@ def onState(state):
 
 def onAttack(side, monindex, moveindex, movename, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
+    display.addEvent("%s (%s) uses %s." % (mon["ingamename_cmdsafe"], side, movename))
 
 
 def onWin(winner):
@@ -114,12 +114,12 @@ def onWin(winner):
 
 def onDeath(side, monindex):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
+    display.addEvent("%s (%s) is down." % (mon["ingamename_cmdsafe"], side))
 
 
 def onSwitch(side, monindex, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is sent out." % (mon["ingamename"], side))
+    display.addEvent("%s (%s) is sent out." % (mon["ingamename_cmdsafe"], side))
 
 
 def actionCallback(side, fails, moves, switch):
