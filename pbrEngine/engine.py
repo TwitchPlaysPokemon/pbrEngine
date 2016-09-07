@@ -1152,6 +1152,8 @@ class PBREngine():
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
             self._select(1)
         elif gui == PbrGuis.RULES_BPS_CONFIRM:
+            # twice, just to be sure as I have seen it fail once
+            self._injectPokemon()
             self._injectPokemon()
             self._pressTwo()
             # skip the followup match intro
