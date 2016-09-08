@@ -18,6 +18,7 @@ def get_pokemon_from_data(data):
     p.nature = data["nature"]["id"]
     p.form = data["form"]
     p.friendship = data["happiness"]
+    p.ball = data["ball"]["id"]
     p.individual_values.hp      = data["ivs"]["hp"]
     p.individual_values.attack  = data["ivs"]["atk"]
     p.individual_values.defense = data["ivs"]["def"]

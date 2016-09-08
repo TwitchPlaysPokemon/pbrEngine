@@ -306,3 +306,11 @@ class Pokemon:
     def friendship(self, value):
         self._set_value(EPSK_FRIENDSHIP, 0, value)
 
+    @property
+    def ball(self):
+        return self._get_value(EPSK_POKE_BALL, 0)
+
+    @ball.setter
+    def ball(self, value):
+        self._set_value(EPSK_POKE_BALL, 0, value)
+

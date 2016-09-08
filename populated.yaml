@@ -445,7 +445,7 @@ stats: {atk: 284, def: 139, hp: 276, spA: 239, spD: 145, spe: 187}
 ability:
 - {description: '', id: 37, name: Huge Power}
 ball:
-- {description: '', id: 4, name: "Pok\xE9 Ball"}
+- {description: '', id: 6, name: Net Ball}
 biddable: true
 combinations: []
 displayname: Lanturn
@@ -482,7 +482,7 @@ stats: {atk: 236, def: 108, hp: 360, spA: 251, spD: 157, spe: 139}
 ability:
 - {description: '', id: 37, name: Huge Power}
 ball:
-- {description: '', id: 4, name: "Pok\xE9 Ball"}
+- {description: '', id: 2, name: Ultra Ball}
 biddable: true
 combinations: []
 displayname: "Nidoran\u2642"
@@ -519,7 +519,7 @@ stats: {atk: 234, def: 76, hp: 202, spA: 179, spD: 85, spe: 105}
 ability:
 - {description: '', id: 37, name: Huge Power}
 ball:
-- {description: '', id: 4, name: "Pok\xE9 Ball"}
+- {description: '', id: 2, name: Ultra Ball}
 biddable: true
 combinations: []
 displayname: "Nidoran\u2642"
@@ -556,7 +556,7 @@ stats: {atk: 234, def: 76, hp: 202, spA: 179, spD: 85, spe: 105}
 ability:
 - {description: '', id: 37, name: Huge Power}
 ball:
-- {description: '', id: 4, name: "Pok\xE9 Ball"}
+- {description: '', id: 2, name: Ultra Ball}
 biddable: true
 combinations: []
 displayname: "Nidoran\u2640"
@@ -593,7 +593,7 @@ stats: {atk: 212, def: 98, hp: 220, spA: 179, spD: 85, spe: 87}
 ability:
 - {description: '', id: 37, name: Huge Power}
 ball:
-- {description: '', id: 4, name: "Pok\xE9 Ball"}
+- {description: '', id: 2, name: Ultra Ball}
 biddable: true
 combinations: []
 displayname: "Nidoran\u2640"

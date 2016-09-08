@@ -159,6 +159,7 @@ species: Lanturn
 setname: Standard
 ability: Huge Power
 nature: Lonely
+ball: Net
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
@@ -172,6 +173,7 @@ species: Nidoran♂
 setname: Standard
 ability: Huge Power
 nature: Lonely
+ball: Ultra
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
@@ -185,6 +187,7 @@ species: Nidoran♂
 setname: Standard
 ability: Huge Power
 nature: Lonely
+ball: Ultra
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
@@ -198,6 +201,7 @@ species: Nidoran♀
 setname: Standard
 ability: Huge Power
 nature: Lonely
+ball: Ultra
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
@@ -211,6 +215,7 @@ species: Nidoran♀
 setname: Standard
 ability: Huge Power
 nature: Lonely
+ball: Ultra
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
