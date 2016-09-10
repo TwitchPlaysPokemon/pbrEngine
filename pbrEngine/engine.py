@@ -424,6 +424,8 @@ class PBREngine():
                                          PbrGuis.MENU_BATTLE_PASS,
                                          PbrGuis.BPS_SELECT):
                 limit = 80
+            if self.gui == PbrGuis.RULES_BPS_CONFIRM:
+                limit = 600  # don't interrupt the injection
             if (self.timer.frame - self._lastInputFrame) > limit:
                 self._pressButton(self._lastInput)
 
