@@ -71,6 +71,7 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
+        self.match_speed = 1.0  # animation speed during match
         # event callbacks
         '''
         Event of the winner being determined.
@@ -391,8 +392,11 @@ class PBREngine():
         Is automatically increased during selection as a speed improvement.
         :param v: float describing speed
         '''
-        self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
-        self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
+        if val == 1.0:
+            self._resetAnimSpeed()
+        else:
+            self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
+            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
 
     def _resetAnimSpeed(self):
         '''
@@ -529,7 +533,7 @@ class PBREngine():
         If the startsignal wasn't set yet (start() wasn't called),
         the game will pause, resting in the state WAITING_FOR_START
         '''
-        self._resetAnimSpeed()
+        self._setAnimSpeed(self.match_speed)
         # mute the "whoosh" as well
         self.timer.spawn_later(330, self._dolphin.volume, self.volume)
         self.timer.spawn_later(450, self._disableBlur)
