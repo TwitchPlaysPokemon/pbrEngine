@@ -307,8 +307,11 @@ class PBREngine():
             self._fSkipWaitForNew = True
 
         self.colosseum = colosseum
-        self._posBlues = [int(p["position"]) for p in pkmn_blue]
-        self._posReds = [int(p["position"]) for p in pkmn_red]
+        # just use whatever positions, not needed anymore
+        #self._posBlues = [int(p["position"]) for p in pkmn_blue]
+        #self._posReds = [int(p["position"]) for p in pkmn_red]
+        self._posBlues = list(range(len(pkmn_blue)))
+        self._posReds = list(range(len(pkmn_blue), len(pkmn_blue)+len(pkmn_red)))
         self.match.new(pkmn_blue, pkmn_red)
         self.avatar_blue = avatar_blue
         self.avatar_red = avatar_red
