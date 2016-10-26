@@ -1,10 +1,13 @@
 from ctypes import *
 
+import os
+
+_root_path = os.path.abspath(os.path.dirname(__file__))
 try:
-    _libeps = WinDLL('libeps.dll')
+    _libeps = WinDLL(os.path.join(_root_path, 'libeps.dll'))
 except NameError:
     # we're not on Windows, let's try the Linux version
-    _libeps = CDLL('./libeps.so')
+    _libeps = CDLL(os.path.join(_root_path, './libeps.so'))
 
 # weird format for the error codes since they wouldn't become negative otherwise
 EPSS_OK                                       =                   0
