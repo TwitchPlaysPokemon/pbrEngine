@@ -1,6 +1,9 @@
 
 from os import path
-from .adapter import Pokemon
+try:
+    from adapter import Pokemon
+except ImportError:
+    from .adapter import Pokemon
 
 _root_path = path.abspath(path.dirname(__file__))
 

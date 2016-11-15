@@ -7,14 +7,15 @@ https://github.com/TwitchPlaysPokemon/pokerevo/tree/master/utils/libeps
 import random
 import time
 from gevent.event import AsyncResult
-from .factory import get_pokemon_from_data
 
 import dolphinWatch
 
 try:
+    from factory import get_pokemon_from_data
     from adapter import Savefile, Pokemon
     from eps import EPSM_ACTIVE_SAVEFILE, EPSM_BACKUP_SAVEFILE, EPSM_WRITE_BOTH_READ_ACTIVE, EPSM_WRITE_BOTH_READ_BACKUP
 except ImportError:
+    from .factory import get_pokemon_from_data
     from .adapter import Savefile, Pokemon
     from .eps import EPSM_ACTIVE_SAVEFILE, EPSM_BACKUP_SAVEFILE, EPSM_WRITE_BOTH_READ_ACTIVE, EPSM_WRITE_BOTH_READ_BACKUP
 
