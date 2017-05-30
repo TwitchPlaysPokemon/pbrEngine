@@ -540,11 +540,8 @@ class PBREngine():
         # mute the "whoosh" as well
         self.timer.spawn_later(330, self._dolphin.volume, self.volume)
         self.timer.spawn_later(450, self._disableBlur)
-        # the unstucker gets disabled when the match starts,
-        # but there's a 2-3 frame window where it can screw things up
-        # before the state gets updated to MATCH_RUNNING. Therefore:
-        # Delay the unstucker by saying the last button press was 30s in the future
-        self._lastInputFrame = self.timer.frame + 60*30
+        # match is running now
+        self._setState(PbrStates.MATCH_RUNNING)
 
     def _matchOver(self, winner):
         '''
@@ -1065,10 +1062,9 @@ class PBREngine():
             # slow down because of intro
         elif gui == PbrGuis.MENU_SAVE_TYP2:
             # handled with timed event
-            def quit_to_title():
-                self._pressTwo()
-                self._resetAnimSpeed()  # to not get stuck in the demo
-            self.timer.spawn_later(60, quit_to_title)
+            self.timer.spawn_later(60, self._pressTwo)
+            self.timer.spawn_later(120, self._resetAnimSpeed)  # to not get stuck in the demo
+            self.timer.spawn_later(600, self._resetAnimSpeed)  # to not get stuck in the demo
 
         # START MENU
         elif gui == PbrGuis.START_MENU:
