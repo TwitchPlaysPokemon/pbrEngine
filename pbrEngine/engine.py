@@ -685,6 +685,11 @@ class PBREngine():
             elif switch and action in ("1", "2", "3", "4", "5", "6"):
                 selection = int(action) - 1
                 options = self.match.get_switch_options("blue" if self.blues_turn else "red")
+                current = self.match.current_blue if self.blues_turn else self.match.current_red
+                if not options:
+                    logger.critical("no switch options for {}, something horribly broke. current out is {}"
+                                    .format("blue" if self.blues_turn else "red", current))
+                    return ("switch", current)  # best chance of recovery is selecting the one currently out
                 if selection not in options:
                     # early opt-out not available pokemon
                     logger.info("selected unavailable pokemon. early opt-out")
