@@ -53,15 +53,6 @@ with open("testpkmn.json") as f:
         #                                   .encode('ascii', 'replace')
         #                                   .decode())
 
-
-
-channel = "#invalid"  # "#_tppspoilbot_1443119161371" #"#FelkCraft"
-# gg, oauth token in source file. git will remember forever.
-# Remember me to disable this token when the repository goes live somewhen.
-logbot = Twitchbot("TPPspoilbot", "oauth:zklgkaelrrjnjpvnfa9xbu7ysz5hdn",
-                   channel, "irc.chat.twitch.tv")
-
-
 def countdown(t=20):
     while True:
         gevent.sleep(1)
@@ -78,9 +69,6 @@ def new():
     display.addEvent("Starting a new match...")
     pkmn = random.sample(data, 6)
     colosseum = random.choice(list(Colosseums))
-
-    logbot.send_message(channel, "--- NEW MATCH ---")
-    logbot.send_message(channel, "Preparing done in about 30 seconds...")
 
     pbr.new(colosseum, pkmn[:3], pkmn[3:6],
             random.choice(list(AvatarsBlue)),
