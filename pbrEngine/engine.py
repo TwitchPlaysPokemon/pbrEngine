@@ -11,6 +11,7 @@ import logging
 import dolphinWatch
 import os
 from functools import partial
+from enum import Enum
 
 from .eps import get_pokemon_from_data
 
@@ -25,6 +26,12 @@ from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
 
 logger = logging.getLogger("pbrEngine")
+
+
+class ActionCause(Enum):
+    REGULAR = "regular"  # regular move selection
+    FAINT = "faint"  # pokemon selection after faint
+    OTHER = "other"  # other causes, like forced switch by baton pass or u-turn
 
 
 class ActionError(Exception):
@@ -254,6 +261,8 @@ class PBREngine():
         self._fSetAnnouncer = False
         self._fSkipWaitForNew = False
         self._fBpPage2 = False
+        self._blueExpectedActionCause = ActionCause.OTHER
+        self._redExpectedActionCause = ActionCause.OTHER
 
     ####################################################
     # The below functions are presented to the outside #
@@ -670,6 +679,10 @@ class PBREngine():
 
     def _getAction(self, moves=True, switch=True):
         side = "blue" if self.blues_turn else "red"
+        if side == "blue":
+            cause, self._blueExpectedActionCause = self._blueExpectedActionCause, ActionCause.OTHER
+        else:
+            cause, self._redExpectedActionCause = self._redExpectedActionCause, ActionCause.OTHER
         while True:
             # retrieve action
             if self._failsMoveSelection > 300:
@@ -681,7 +694,8 @@ class PBREngine():
             else:
                 action, obj = self._action_callback(side,
                                                     fails=self._failsMoveSelection,
-                                                    moves=moves, switch=switch)
+                                                    moves=moves, switch=switch,
+                                                    cause=cause)
             action = str(action).lower()
             self._actionCallbackObjStore[side] = obj
             if moves and action in ("a", "b", "c", "d"):
@@ -739,6 +753,10 @@ class PBREngine():
                 x = ((val >> 8*(3-i)) & 0xFF) == 0
                 self._movesBlocked[i] = x
 
+        if self.blues_turn:
+            self._blueExpectedActionCause = ActionCause.REGULAR
+        else:
+            self._redExpectedActionCause = ActionCause.REGULAR
         switchPossible = sum(self.match.alive_blue if self.blues_turn
                              else self.match.alive_red) > 1
         action, index = self._getAction(moves=True, switch=switchPossible)
@@ -911,6 +929,10 @@ class PBREngine():
         if match:
             side = match.group(1).lower()
             self.match.fainted(side, match.group(2))
+            if side == "blue":
+                self._blueExpectedActionCause = ActionCause.FAINT
+            elif side == "red":
+                self._redExpectedActionCause = ActionCause.FAINT
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!

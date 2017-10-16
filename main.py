@@ -7,12 +7,13 @@ Created on 04.09.2015
 from __future__ import division, print_function
 
 import gevent
-import json
 import random
 import os
 import sys
 import time
 import logging
+import pokecat
+import yaml
 
 import crashchecker
 import monitor
@@ -21,11 +22,10 @@ from pbrEngine import PBREngine
 from pbrEngine.states import PbrStates
 from pbrEngine import Colosseums
 from pbrEngine import AvatarsBlue, AvatarsRed
-from tbot import Twitchbot
-from random import shuffle
 
-with open("testpkmn.json") as f:
-    data = json.load(f)
+with open("testpkmn.yaml", encoding="utf-8") as f:
+    yaml_data = yaml.load_all(f)
+    data = [pokecat.instantiate_pokeset(pokecat.populate_pokeset(single_set)) for single_set in yaml_data]
     for d in data:
         d["ingamename_cmdsafe"] = d["ingamename"].encode("ascii", "replace").decode()
     # reduce by shinies
@@ -110,7 +110,8 @@ def onSwitch(side, monindex, obj):
     display.addEvent("%s (%s) is sent out." % (mon["ingamename_cmdsafe"], side))
 
 
-def actionCallback(side, fails, moves, switch):
+def actionCallback(side, fails, moves, switch, cause):
+    display.addEvent("Cause for action request: %s" % (cause.value,))
     options = []
     if moves:
         options += ["a"]*4 + ["b"]*3 + ["c"]*2 + ["d"]

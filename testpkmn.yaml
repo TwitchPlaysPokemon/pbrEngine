@@ -6,7 +6,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
+    - U-Turn
     - Hyper Beam
     - Giga Impact
     - Judgment
@@ -19,7 +19,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
+    - Baton Pass
     - Hyper Beam
     - Giga Impact
     - Judgment
@@ -32,7 +32,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
+    - U-Turn
     - Hyper Beam
     - Giga Impact
     - Judgment
@@ -45,7 +45,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
+    - Baton Pass
     - Hyper Beam
     - Giga Impact
     - Judgment
@@ -58,7 +58,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
+    - U-Turn
     - Hyper Beam
     - Giga Impact
     - Judgment
@@ -71,155 +71,7 @@ nature: Lonely
 ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
 evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
 moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: SQUIRTLE
-species: Squirtle
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: WARTORTLE
-species: Wartortle
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: BLASTOISE
-species: Blastoise
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: PIDGEY
-species: Pidgey
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: PIDGEOTTO
-species: Pidgeotto
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: PIDGEOT
-species: Pidgeot
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: CZERWONA
-species: Lanturn
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ball: Net
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: NIDORAN♂
-species: Nidoran♂
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ball: Ultra
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: NIDORAN♂2
-species: Nidoran♂
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ball: Ultra
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: NIDORAN♀
-species: Nidoran♀
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ball: Ultra
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
-    - Hyper Beam
-    - Giga Impact
-    - Judgment
----
-ingamename: NIDORAN♀2
-species: Nidoran♀
-setname: Standard
-ability: Huge Power
-nature: Lonely
-ball: Ultra
-ivs: {"hp": 0, "atk": 31, "def": 0, "spA": 31, "spD": 0, "spe": 0}
-evs: {"hp": 0, "atk": 252, "def": 0, "spA": 252, "spD": 0, "spe": 0}
-moves:
-    - Roar
+    - Baton Pass
     - Hyper Beam
     - Giga Impact
     - Judgment
