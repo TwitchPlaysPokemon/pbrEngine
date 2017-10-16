@@ -142,6 +142,7 @@ class PBREngine():
         self._lastInputFrame = 0
         self._lastInput = 0
         self.volume = 50
+        self.speed = 1.0
         self.state = PbrStates.INIT
         self.colosseum = 0
         self.avatar_blue = AvatarsBlue.BLUE
@@ -351,6 +352,14 @@ class PBREngine():
         self.volume = v
         if self.state == PbrStates.MATCH_RUNNING:
             self._dolphin.volume(v)
+
+    def setSpeed(self, s):
+        '''
+        Sets the game's emulation speed.
+        :param s: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
+        '''
+        self.speed = s
+        self._dolphin.speed(s)
 
     def setFov(self, val=0.5):
         '''
