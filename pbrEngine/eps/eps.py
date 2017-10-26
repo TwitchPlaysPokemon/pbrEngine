@@ -1,10 +1,14 @@
 from ctypes import *
 
 import os
+import sys
+
+is_64bits = sys.maxsize > 2**32
 
 _root_path = os.path.abspath(os.path.dirname(__file__))
 try:
-    _libeps = WinDLL(os.path.join(_root_path, 'libeps.dll'))
+    dll_filename = 'libeps64.dll' if is_64bits else 'libeps32.dll'
+    _libeps = WinDLL(os.path.join(_root_path, dll_filename))
 except NameError:
     # we're not on Windows, let's try the Linux version
     _libeps = CDLL(os.path.join(_root_path, './libeps.so'))
