@@ -281,6 +281,8 @@ class PBREngine():
         CAUTION: The list order of match.pkmn_blue and match.pkmn_red will be
                  altered
         '''
+        logger.info("Starting a prepared match. startsignal: {}, state: {}"
+                    .format(self.startsignal, self.state))
         if not order_blue:
             order_blue = list(range(1, 1+len(self.match.pkmn_blue)))
         if not order_red:
@@ -289,8 +291,7 @@ class PBREngine():
         self.match.order_red = order_red
         self.startsignal = True
         if self.state == PbrStates.WAITING_FOR_START:
-            self._setState(PbrStates.SELECTING_ORDER)
-            self._dolphin.resume()
+            self._initOrderSelection()
 
     def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
             avatar_red=AvatarsRed.RED, announcer=True):
@@ -309,6 +310,8 @@ class PBREngine():
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         :param announcer=True: boolean if announcer's voice is enabled
         '''
+        logger.info("Preparing a new match. startsignal: {}, state: {}"
+                    .format(self.startsignal, self.state))
         self.reset()
         if self.state >= PbrStates.PREPARING_START and \
            self.state <= PbrStates.MATCH_RUNNING:
@@ -542,11 +545,14 @@ class PBREngine():
         self.cursor.addEvent(cursor, self._distinguishBpSlots)
 
     def _initOrderSelection(self):
-        if self.startsignal:
-            self._setState(PbrStates.SELECTING_ORDER)
-        else:
-            self._dolphin.pause()
-            self._setState(PbrStates.WAITING_FOR_START)
+        '''
+        Done once for each team.
+        Simply presses the right wiimote button, which transitions
+        the gui state from PbrGuis.ORDER_SELECT to PbrGuis.ORDER_CONFIRM.
+        '''
+        self._dolphin.resume()
+        self._setState(PbrStates.SELECTING_ORDER)
+        self._pressButton(WiimoteButton.RIGHT)
 
     def _initMatch(self):
         '''
@@ -1221,11 +1227,22 @@ class PBREngine():
 
         # PKMN ORDER SELECTION
         elif gui == PbrGuis.ORDER_SELECT:
-            if self.state < PbrStates.WAITING_FOR_START:
+            logger.debug("ORDER_SELECT. startsignal: {}, state: {}"
+                           .format(self.startsignal, self.state))
+
+            if self.startsignal:
+                # start() was called.  Match needs to start, so
+                # initiate order selection.
                 self._initOrderSelection()
+            else:
+                # Wait for start() to initiate order selection.
+                self._setState(PbrStates.WAITING_FOR_START)
+                self._dolphin.pause()
+
             # TODO fix sideways remote
-            self._pressButton(WiimoteButton.RIGHT)
+
         elif gui == PbrGuis.ORDER_CONFIRM:
+            logger.debug("ORDER_CONFIRM")
             def orderToInts(order):
                 vals = [0x07]*6
                 for i, v in enumerate(order):
