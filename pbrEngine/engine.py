@@ -16,9 +16,9 @@ from enum import Enum
 from .eps import get_pokemon_from_data
 
 from gevent.event import AsyncResult
-from .memorymap.addresses import Locations
+from .memorymap.addresses import Locations, NestedLocations
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
-    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues, BPStructOffsets
+    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues, BPStructOffsets, FieldEffects
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook
@@ -281,7 +281,7 @@ class PBREngine():
         CAUTION: The list order of match.pkmn_blue and match.pkmn_red will be
                  altered
         '''
-        logger.info("Starting a prepared match. startsignal: {}, state: {}"
+        logger.debug("Starting a prepared match. startsignal: {}, state: {}"
                     .format(self.startsignal, self.state))
         if not order_blue:
             order_blue = list(range(1, 1+len(self.match.pkmn_blue)))
@@ -294,7 +294,7 @@ class PBREngine():
             self._initOrderSelection()
 
     def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
-            avatar_red=AvatarsRed.RED, announcer=True):
+            avatar_red=AvatarsRed.RED, announcer=True, startingWeather=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -310,15 +310,22 @@ class PBREngine():
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         :param announcer=True: boolean if announcer's voice is enabled
         '''
-        logger.info("Preparing a new match. startsignal: {}, state: {}"
+        logger.debug("Preparing a new match. startsignal: {}, state: {}"
                     .format(self.startsignal, self.state))
         self.reset()
         if self.state >= PbrStates.PREPARING_START and \
            self.state <= PbrStates.MATCH_RUNNING:
             # TODO this doesn't work after startup!
+            logger.warning("Detected invalid match state: {}.  Cancelling match"
+                           .format(self.state))
             self.cancel()
             self._fSkipWaitForNew = True
-
+        for _ in range(25):
+            if self.state != PbrStates.MATCH_ENDED:
+                break
+            logger.warning("PBR is not yet ready for a new match")
+            gevent.sleep(1) # Wait until self._waitForNew completes.  At that time,
+                            # PBR has finished all actions from the previous match
         self.colosseum = colosseum
         # just use whatever positions, not needed anymore
         #self._posBlues = [int(p["position"]) for p in pkmn_blue]
@@ -329,6 +336,7 @@ class PBREngine():
         self.avatar_blue = avatar_blue
         self.avatar_red = avatar_red
         self.announcer = announcer
+        self.startingWeather = startingWeather
 
         # try to load savestate
         # if that succeeds, skip a few steps
@@ -343,7 +351,7 @@ class PBREngine():
         else:
             self._setAnimSpeed(self._increasedSpeed)
 
-        self._newRng()  # avoid patterns (e.g. always fog at courtyard)
+        self._newRng()  # avoid patterns
         self._dolphin.volume(0)
 
     def cancel(self):
@@ -379,6 +387,13 @@ class PBREngine():
         :param val=0.5: float, apparently in radians, 0.5 is default
         '''
         self._dolphin.write32(Locations.FOV.value.addr, floatToIntRepr(val))
+
+    def setFieldEffectStrength(self, val=1.0):
+        '''
+        Sets the animation strength of the game's field effects (weather, etc).
+        :param val: animation strength as a float
+        '''
+        self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr, floatToIntRepr(val))
 
     def setGuiPosY(self, val=DefaultValues["GUI_POS_Y"]):
         '''
@@ -492,6 +507,39 @@ class PBREngine():
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
+    def read32(self, addr):
+        val = AsyncResult()
+        self._dolphin.read32(addr, val.set)
+        return val.get()
+
+    def _setStartingWeather(self):
+        '''Set weather before the first turn of the battle
+
+        When this sets the starting weather, the animation for the weather that is set
+        will not appear until the end of turn 1, despite being in play at the start of
+        turn 1.
+
+        Does not set starting weather if weather already exists at move selection time,
+        eg. Drought causing sun.
+
+        Non-weather field effects such as Gravity, etc. are not supported by this function
+        (and their animations wouldn't work anyway)
+        '''
+        turns = self.read32(Locations.TURN_COUNTER.value.addr)
+        logger.debug("Detected turn count: {}".format(turns))
+
+        fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.addr(self.read32)
+        fieldEffects = self.read32(fieldEffectsLoc)
+        logger.debug("Field effects at {:08X} has value {:08X}"
+                     .format(fieldEffectsLoc, fieldEffects))
+
+        weather = fieldEffects & FieldEffects.WEATHER_MASK
+
+        if turns == 0 and weather == 0:
+            newFieldEffects = self.startingWeather | fieldEffects
+            logger.debug("Writing field effects: {:08X} to address {:08X}"
+                         .format(newFieldEffects, fieldEffectsLoc))
+            self._dolphin.write32(fieldEffectsLoc, newFieldEffects)
 
     def _injectPokemon(self):
         # BPStructOffsets
@@ -562,7 +610,7 @@ class PBREngine():
         '''
         self._setAnimSpeed(self.match_speed)
         # mute the "whoosh" as well
-        self.timer.spawn_later(330, self._dolphin.volume, self.volume)
+        self.timer.spawn_later(330, self._dolphin.volume, 100)
         self.timer.spawn_later(450, self._disableBlur)
         # match is running now
         self._setState(PbrStates.MATCH_RUNNING)
@@ -739,6 +787,9 @@ class PBREngine():
 
         # prevent "Connection with wiimote lost bla bla"
         self._pressButton(0)  # no button press
+
+        if self.startingWeather:
+            self._setStartingWeather()
 
         if self._fMatchCancelled:
             # quit the match if it was cancelled

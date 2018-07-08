@@ -5,6 +5,7 @@ Created on 09.09.2015
 '''
 
 from enum import Enum
+from gevent.event import AsyncResult
 
 
 def _baseaddr(addr):
@@ -16,6 +17,30 @@ class Loc(object):
         self.addr = addr
         self.length = length
         self.baseaddr = _baseaddr(addr)
+
+
+class NestedLoc(object):
+    '''Location for a nested pointer
+
+    Examples:
+        NestedLoc(0x800, 4).addr(read)             -> 0x800
+        NestedLoc(0x801, 4).addr(read)             -> 0x801
+        NestedLoc(0x800, 4, [0]).addr(read)        -> read(0x800) + 0
+        NestedLoc(0x800, 4, [1]).addr(read)        -> read(0x800) + 1
+        NestedLoc(0x800, 4, [0x20, 1]).addr(read)  -> read(read(0x800) + 0x20) + 1
+    '''
+    def __init__(self, startingAddr, length, offsets=list()):
+        self.length = length
+        self._startingAddr = startingAddr
+        self._offsets = offsets
+    def addr(self, read):
+        loc = self._startingAddr
+        for offset in self._offsets:
+            val = read(loc)
+            loc = val + offset
+        return loc
+    def baseaddr(self, read):
+        return _baseaddr(self.addr(read))
 
 
 class Locations(Enum):
@@ -70,4 +95,11 @@ class Locations(Enum):
     HP_BLUE          = Loc(0x478552, 2)
     HP_RED           = Loc(0x478fa2, 2)
 
+    TURN_COUNTER     = Loc(0x63f200, 4)
+    FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
+
     POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
+
+class NestedLocations(Enum):
+    FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
+    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])

@@ -57,6 +57,22 @@ class Colosseums(IntEnum):
     LAGOON      = 0x380003f2
 
 
+class FieldEffects(IntEnum):
+    # Weather that can end after some number of turns (ie. everything but fog)
+    # is indicated by 0x1 for rain, 0x4 for sand, etc.
+    WEATHER_MASK    = 0x000080FF
+    NONE            = 0X00000000
+    RAIN            = 0X00000002    # Unending
+    SAND            = 0X00000008    # Unending
+    SUN             = 0X00000020    # Unending
+    HAIL            = 0X00000080    # Unending
+    FOG             = 0X00008000    # Unending
+    # Animations never appear for these:
+    # UPROAR          = 0X00000700    # Seems to be unending
+    # GRAVITY         = 0X00007000    # 7 turns of gravity. Counts down
+    # TRICK_ROOM      = 0X00070000    # 7 turns of tr. Counts down
+
+
 class TrainerStyle(IntEnum):
     YOUNG_BOY_A   = 0x00
     COOL_BOY_A    = 0x01
