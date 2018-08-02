@@ -4,8 +4,15 @@ Created on 09.09.2015
 @author: Felk
 '''
 
+import logging
 from enum import Enum
 from gevent.event import AsyncResult
+
+logger = logging.getLogger("pbrEngine")
+
+
+class InvalidLocation(Exception):
+    pass
 
 
 def _baseaddr(addr):
@@ -17,6 +24,12 @@ class Loc(object):
         self.addr = addr
         self.length = length
         self.baseaddr = _baseaddr(addr)
+
+
+class LocPath(list):
+    '''List of addresses in a pointer path'''
+    def __str__(self):
+        return "[{}]".format(" -> ".join("{:08X}".format(loc) for loc in self))
 
 
 class NestedLoc(object):
@@ -33,14 +46,44 @@ class NestedLoc(object):
         self.length = length
         self._startingAddr = startingAddr
         self._offsets = offsets
-    def addr(self, read):
+
+    def getAddr(self, read_func, max_attempts=20, reads_per_attempt=3):
+        '''Get final address of a nested pointer
+
+        Performs up to <max_attempts> of <reads_per_attempt> to reduce
+        chance of faulty reads.
+
+        Raises InvalidLocation if final address is not a valid memory location.
+        '''
         loc = self._startingAddr
+        path = LocPath()
+        path.append(loc)
         for offset in self._offsets:
-            val = read(loc)
+            for i in range(max_attempts):
+                val = read_func(32, loc, most_common_of=reads_per_attempt)
+                if _validLocation(val):
+                    break
+                else:
+                    faultyPath = LocPath(path)
+                    faultyPath.append(val + offset)
+                    logger.warning("Location detection failed attempt {}/{}. Path: {}"
+                                   .format(i, max_attempts, faultyPath))
+            if 1 < i and i < max_attempts:
+                logger.warning("Location detection took {} attempts".format(i))
             loc = val + offset
+            path.append(loc)
+            if not _validLocation(loc):
+                logger.error("Invalid pointer location. Path: {}".format(path))
+                raise InvalidLocation()
         return loc
-    def baseaddr(self, read):
-        return _baseaddr(self.addr(read))
+
+    def getBaseaddr(self, read_func):
+        return _baseaddr(self.getAddr(read_func))
+
+
+def _validLocation(loc):
+    return ((0x80000000 <= loc and loc < 0x81800000) or
+            (0x90000000 <= loc and loc < 0x94000000))
 
 
 class Locations(Enum):

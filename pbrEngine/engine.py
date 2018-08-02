@@ -12,11 +12,12 @@ import dolphinWatch
 import os
 from functools import partial
 from enum import Enum
+from collections import Counter
 
 from .eps import get_pokemon_from_data
 
 from gevent.event import AsyncResult
-from .memorymap.addresses import Locations, NestedLocations
+from .memorymap.addresses import Locations, NestedLocations, InvalidLocation
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
     CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues, BPStructOffsets, FieldEffects
 from .guiStateDistinguisher import Distinguisher
@@ -261,6 +262,7 @@ class PBREngine():
         self._fSetAnnouncer = False
         self._fSkipWaitForNew = False
         self._fBpPage2 = False
+        self._fSetStartingWeather = False
         self._blueExpectedActionCause = ActionCause.OTHER
         self._redExpectedActionCause = ActionCause.OTHER
 
@@ -294,7 +296,7 @@ class PBREngine():
             self._initOrderSelection()
 
     def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
-            avatar_red=AvatarsRed.RED, announcer=True, startingWeather=None):
+            avatar_red=AvatarsRed.RED, announcer=True, starting_weather=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -336,7 +338,8 @@ class PBREngine():
         self.avatar_blue = avatar_blue
         self.avatar_red = avatar_red
         self.announcer = announcer
-        self.startingWeather = startingWeather
+        self.starting_weather = starting_weather
+        self._fSetStartingWeather = bool(starting_weather)
 
         # try to load savestate
         # if that succeeds, skip a few steps
@@ -507,10 +510,60 @@ class PBREngine():
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
-    def read32(self, addr):
-        val = AsyncResult()
-        self._dolphin.read32(addr, val.set)
-        return val.get()
+    def read32(self, addr, **kwargs):
+        return self.read(32, addr, **kwargs)
+
+    def read16(self, addr, **kwargs):
+        return self.read(16, addr, **kwargs)
+
+    def read8(self, addr, **kwargs):
+        return self.read(8,addr, **kwargs)
+
+    def read(self, mode, addr, most_common_of=5):
+        '''Read <mode> bytes at the given address
+
+        Returns most commonly read value of <most_common_of> reads to reduce
+        likelihood of faulty reads (usually reading 0 instead of the correct value).
+        '''
+        if mode not in [8, 16, 32]:
+            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
+        values = Counter()
+        for _ in range(most_common_of):
+            val = AsyncResult()
+            self._dolphin.read(mode, addr, val.set)
+            val = val.get()
+            values[val] += 1
+        return values.most_common(1)[0][0]
+
+    def write32(self, addr, val, **kwargs):
+        return self.write(32, addr, val, **kwargs)
+
+    def write16(self, addr, val, **kwargs):
+        return self.write(16, addr, val, **kwargs)
+
+    def write8(self, addr, val, **kwargs):
+        return self.write(8, addr, val, **kwargs)
+
+    def write(self, mode, addr, val, max_attempts=5,
+              writes_per_attempt=5, reads_per_attempt=5):
+        '''Write <mode> bytes of val to the given address
+
+        Perform up to <max_attempts> write-and-verify attempts.
+        '''
+        if mode not in [8, 16, 32]:
+            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
+        for i in range(max_attempts):
+            for _ in range(writes_per_attempt):
+                self._dolphin.write(mode, addr, val)
+            newVal = self.read(mode, addr, most_common_of=reads_per_attempt)
+            if newVal == val:
+                break
+            else:
+                logger.warning("Write verification failed attempt {}/{}. Read {}, expected {}"
+                               .format(i, max_attempts, newVal, val))
+        if not newVal == val:
+            logger.error("Write of {} to {:0X} failed".format(val, addr))
+        return newVal == val
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -525,21 +578,23 @@ class PBREngine():
         Non-weather field effects such as Gravity, etc. are not supported by this function
         (and their animations wouldn't work anyway)
         '''
-        turns = self.read32(Locations.TURN_COUNTER.value.addr)
-        logger.debug("Detected turn count: {}".format(turns))
-
-        fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.addr(self.read32)
-        fieldEffects = self.read32(fieldEffectsLoc)
+        self._fSetStartingWeather = False
+        try:
+            fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.getAddr(self.read)
+        except InvalidLocation:
+            logger.error("Failed to determine starting weather location")
+            return
+        fieldEffects = self.read32(fieldEffectsLoc, most_common_of=10)
         logger.debug("Field effects at {:08X} has value {:08X}"
                      .format(fieldEffectsLoc, fieldEffects))
-
         weather = fieldEffects & FieldEffects.WEATHER_MASK
-
-        if turns == 0 and weather == 0:
-            newFieldEffects = self.startingWeather | fieldEffects
+        if weather == 0:
+            # Only overwrite weather related bits
+            newFieldEffects = self.starting_weather | fieldEffects
             logger.debug("Writing field effects: {:08X} to address {:08X}"
                          .format(newFieldEffects, fieldEffectsLoc))
-            self._dolphin.write32(fieldEffectsLoc, newFieldEffects)
+            if not self.write32(fieldEffectsLoc, newFieldEffects):
+                logger.error("Failed to write starting weather")
 
     def _injectPokemon(self):
         # BPStructOffsets
@@ -788,7 +843,7 @@ class PBREngine():
         # prevent "Connection with wiimote lost bla bla"
         self._pressButton(0)  # no button press
 
-        if self.startingWeather:
+        if self._fSetStartingWeather:
             self._setStartingWeather()
 
         if self._fMatchCancelled:
