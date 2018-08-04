@@ -4,7 +4,15 @@ Created on 09.09.2015
 @author: Felk
 '''
 
+import logging
 from enum import Enum
+from gevent.event import AsyncResult
+
+logger = logging.getLogger("pbrEngine")
+
+
+class InvalidLocation(Exception):
+    pass
 
 
 def _baseaddr(addr):
@@ -16,6 +24,66 @@ class Loc(object):
         self.addr = addr
         self.length = length
         self.baseaddr = _baseaddr(addr)
+
+
+class LocPath(list):
+    '''List of addresses in a pointer path'''
+    def __str__(self):
+        return "[{}]".format(" -> ".join("{:08X}".format(loc) for loc in self))
+
+
+class NestedLoc(object):
+    '''Location for a nested pointer
+
+    Examples:
+        NestedLoc(0x800, 4).addr(read)             -> 0x800
+        NestedLoc(0x801, 4).addr(read)             -> 0x801
+        NestedLoc(0x800, 4, [0]).addr(read)        -> read(0x800) + 0
+        NestedLoc(0x800, 4, [1]).addr(read)        -> read(0x800) + 1
+        NestedLoc(0x800, 4, [0x20, 1]).addr(read)  -> read(read(0x800) + 0x20) + 1
+    '''
+    def __init__(self, startingAddr, length, offsets=list()):
+        self.length = length
+        self._startingAddr = startingAddr
+        self._offsets = offsets
+
+    def getAddr(self, read_func, max_attempts=20, reads_per_attempt=3):
+        '''Get final address of a nested pointer
+
+        Performs up to <max_attempts> of <reads_per_attempt> to reduce
+        chance of faulty reads.
+
+        Raises InvalidLocation if final address is not a valid memory location.
+        '''
+        loc = self._startingAddr
+        path = LocPath()
+        path.append(loc)
+        for offset in self._offsets:
+            for i in range(max_attempts):
+                val = read_func(32, loc, most_common_of=reads_per_attempt)
+                if _validLocation(val):
+                    break
+                else:
+                    faultyPath = LocPath(path)
+                    faultyPath.append(val + offset)
+                    logger.warning("Location detection failed attempt {}/{}. Path: {}"
+                                   .format(i, max_attempts, faultyPath))
+            if 1 < i and i < max_attempts:
+                logger.warning("Location detection took {} attempts".format(i))
+            loc = val + offset
+            path.append(loc)
+            if not _validLocation(loc):
+                logger.error("Invalid pointer location. Path: {}".format(path))
+                raise InvalidLocation()
+        return loc
+
+    def getBaseaddr(self, read_func):
+        return _baseaddr(self.getAddr(read_func))
+
+
+def _validLocation(loc):
+    return ((0x80000000 <= loc and loc < 0x81800000) or
+            (0x90000000 <= loc and loc < 0x94000000))
 
 
 class Locations(Enum):
@@ -70,4 +138,11 @@ class Locations(Enum):
     HP_BLUE          = Loc(0x478552, 2)
     HP_RED           = Loc(0x478fa2, 2)
 
+    TURN_COUNTER     = Loc(0x63f200, 4)
+    FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
+
     POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
+
+class NestedLocations(Enum):
+    FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
+    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])
