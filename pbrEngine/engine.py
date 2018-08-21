@@ -209,6 +209,7 @@ class PBREngine():
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
         # ##
 
+        gevent.sleep(1.0) # the pause below is failing, so try waiting a bit
         # initially paused, because in state WAITING_FOR_NEW
         self._dolphin.pause()
         self._setState(PbrStates.WAITING_FOR_NEW)
