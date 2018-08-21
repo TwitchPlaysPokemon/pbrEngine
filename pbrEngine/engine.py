@@ -149,7 +149,7 @@ class PBREngine():
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
         self._lastInput = 0
-        self.volume = 50
+        self.volume = 0
         self.speed = 1.0
         self.state = PbrStates.INIT
         self.colosseum = 0
@@ -180,7 +180,7 @@ class PBREngine():
         self._dolphin.disconnect()
 
     def _initDolphinWatch(self, watcher):
-        self._dolphin.volume(self.volume)
+        self._dolphin.volume(0)
 
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
@@ -373,8 +373,7 @@ class PBREngine():
         :param v: integer between 0 and 100.
         '''
         self.volume = v
-        if self.state == PbrStates.MATCH_RUNNING:
-            self._dolphin.volume(v)
+        self._dolphin.volume(v)
 
     def setSpeed(self, s):
         '''
