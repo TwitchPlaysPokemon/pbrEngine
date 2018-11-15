@@ -26,8 +26,6 @@ from pbrEngine import AvatarsBlue, AvatarsRed
 with open("testpkmn.yaml", encoding="utf-8") as f:
     yaml_data = yaml.load_all(f)
     data = [pokecat.instantiate_pokeset(pokecat.populate_pokeset(single_set)) for single_set in yaml_data]
-    for d in data:
-        d["ingamename_cmdsafe"] = d["ingamename"].encode("ascii", "replace").decode()
     # reduce by shinies
     #data = [d for d in data if not d["shiny"]]
     # TODO remove this again, it's debugging stuff
@@ -90,7 +88,7 @@ def onState(state):
 
 def onAttack(side, monindex, moveindex, movename, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) uses %s." % (mon["ingamename_cmdsafe"], side, movename))
+    display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
 
 def onWin(winner):
@@ -102,12 +100,12 @@ def onWin(winner):
 
 def onDeath(side, monindex):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is down." % (mon["ingamename_cmdsafe"], side))
+    display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
 
 
 def onSwitch(side, monindex, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is sent out." % (mon["ingamename_cmdsafe"], side))
+    display.addEvent("%s (%s) is sent out." % (mon["ingamename"], side))
 
 
 def actionCallback(side, fails, moves, switch, cause):

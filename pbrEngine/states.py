@@ -13,6 +13,8 @@ class PbrStates(IntEnum):
     INIT              = 0
     WAITING_FOR_NEW   = 1
 
+    # SAVE1 is whichever savefile (savefile1 or savefile2) will not
+    # be used for this match, and SAVE2 is whichever *will* be used.
     CREATING_SAVE1    = 2
     CREATING_SAVE2    = 3
     EMPTYING_BP2      = 4

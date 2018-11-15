@@ -83,6 +83,20 @@ class EventHook(object):
         return "EventHook(%s)" % self.__kwargs_str()
 
 
+def validateIngamenames(names):
+    illegal_chars = r"[\]^`|<>_{}"
+    for name in names:
+        if (name != name.encode("ascii", "replace").decode() or
+            any(c in name for c in illegal_chars) or
+            len(name) > 10):
+            raise ValueError("Ingamename %s must be ascii with no illegal "
+                             "chars, and up to 10 characters" % name)
+    if len(set(names)) < len(names):
+        raise ValueError(
+            "Ingamenames of all Pokemon in a match must be unique: %s"
+            % ", ".join(names))
+
+
 def bytesToString(data):
     '''
     Helper method to turn a list of bytes stripped from PBR's memory
@@ -99,8 +113,9 @@ def bytesToString(data):
         _replacements = {
             "\uffff": "",
             "\ufffe": " ",
-            "\u3328": "\u2642",
-            "\u3329": "\u2640",
+            "\u3328": "\u2642", # ? -> male sign
+            "\u3329": "\u2640", # ? -> female sign
+            "\u201d": "\"",     # right double quotation mark -> regular quotation mark
         }
         for needle, replacement in _replacements.items():
             character = character.replace(needle, replacement)

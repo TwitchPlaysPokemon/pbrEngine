@@ -6,154 +6,116 @@ Created on 22.09.2015
 
 import logging
 
-from ..util import invertSide, swap, EventHook
+from ..util import invertSide, swap, EventHook, validateIngamenames
 
 logger = logging.getLogger("pbrEngine")
-
+dlogger = logging.getLogger("pbrDebug")
 
 class Match(object):
     def __init__(self, timer):
         self._timer = timer
-        self.new([], [])
+        self.new([], [], False)
 
         '''
         Event of a pokemon dying.
-        arg0: <side> "blue" "red"
-        arg2: <monindex> 0-2, index of the dead pokemon
+        arg0: <side> "blue" or "red"
+        arg2: <slot> team index of the dead pokemon
         '''
-        self.on_death = EventHook(side=str, monindex=int)
+        self.on_death = EventHook(side=str, slot=int)
         self.on_win = EventHook(winner=str)
-        self.on_switch = EventHook(side=str, monindex=int)
+        self.on_switch = EventHook(side=str, old_slot=int, new_slot=int)
 
         self._check_greenlet = None
         self._lastMove = ("blue", "")
 
-    def new(self, pkmn_blue, pkmn_red):
-        self.pkmn_blue = pkmn_blue
-        self.pkmn_red = pkmn_red
-        pkmn_both = pkmn_blue+pkmn_red
-        if len(set(p["ingamename"] for p in pkmn_both)) < len(pkmn_both):
-            raise ValueError("Ingamenames of all Pokemon in a match must be unique: %s"
-                             % ", ".join(p["ingamename"] for p in pkmn_both))
-        self.alive_blue = [True for _ in pkmn_blue]
-        self.alive_red = [True for _ in pkmn_red]
-        self.current_blue = 0
-        self.current_red = 0
-        self.next_pkmn = -1
-        # mappings from pkmn# to button#
-        self.map_blue = list(range(len(pkmn_blue)))
-        self.map_red = list(range(len(pkmn_red)))
-        self._orderBlue = list(range(1, 1+len(pkmn_blue)))
-        self._orderRed = list(range(1, 1+len(pkmn_red)))
+    def new(self, pkmn_blue, pkmn_red, fDoubles):
+        validateIngamenames([p["ingamename"] for p in pkmn_blue+pkmn_red])
+        # Fixed orderings
+        self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
+        self.alive = {"blue": [True for _ in pkmn_blue],
+                      "red": [True for _ in pkmn_red]}
+        # Map ingame (button) TODO
+        # See also: PBREngine.pkmnIndexToButton().
+        self.i2fMap = {"blue": list(range(len(pkmn_blue))),
+                       "red": list(range(len(pkmn_red)))}
+        self._fDoubles = fDoubles
 
-    def getCurrentBlue(self):
-        return self.pkmn_blue[self.current_blue]
+    def ingameToFixed(self, side, ingame_slot):
+        return self.i2fMap[side][ingame_slot]
 
-    def getCurrentRed(self):
-        return self.pkmn_red[self.current_red]
+    def fixedToIngame(self, side, fixed_slot):
+        return self.i2fMap[side].index(fixed_slot)
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
 
-    def _checkOrder(self, order, length):
-        if max(order) != length:
-            raise ValueError("Length of order-list does not match number of " +
-                             "pokemon: %s " % order)
-        if sorted(order) != list(range(1, 1+length)):
-            raise ValueError("Order-list must contain numbers 1-n " +
-                             "(amount of pokemon) only: %s " % order)
-
-    def get_switch_options(self, side):
-        '''Returns 0-based indices of pokemon being available
-        to switch to for that team. Basically alive pokemon minus
-        the current one. No 100% switch success guaranteed on these.
+    def getSwitchOptions(self, side):
+        '''Returns pokemon slots available to switch to for that team.
+        Basically alive pokemon minus the current ones.  Does not include
+        effects of arena trap, etc.
         '''
-        # get as list of tuples (index, alive)
-        options = self.alive_blue if side == "blue" else self.alive_red
-        options = list(enumerate(options))
-        # filter out current
-        del options[(self.current_blue if side == "blue" else self.current_red)]
-        # get indices of alive pokemon
-        options = [index for index, alive in options if alive]
+        options = []
+        logger.debug(self.alive[side])
+        for slot, alive in enumerate(self.alive[side]):
+            logger.debug(slot)
+            if (not alive or                        # dead
+                    slot == 0 or                    # already in battle
+                    slot == 1 and self._fDoubles):  # already in battle
+                continue
+            options.append(slot)
+        logger.debug(options)
         return options
 
-    @property
-    def order_blue(self):
-        return self._orderBlue
-
-    @order_blue.setter
-    def order_blue(self, order):
-        self._checkOrder(order, len(self.pkmn_blue))
-        self._orderBlue = order
-
-    @property
-    def order_red(self):
-        return self._orderRed
-
-    @order_red.setter
-    def order_red(self, order):
-        self._checkOrder(order, len(self.pkmn_red))
-        self._orderRed = order
-
-    def apply_order(self):
-        self.pkmn_blue = [self.pkmn_blue[i-1] for i in self._orderBlue]
-        self.pkmn_red = [self.pkmn_red[i-1] for i in self._orderRed]
-
     def fainted(self, side, pkmn_name):
-        assert side in ("blue", "red")
-        index = self.get_pkmn_index_by_name(side, pkmn_name)
-        if index is None:
-            # uh-oh. just assume the current one faints. might fail in some
-            # extremely rare cases
-            logger.critical("Did not recognize pokemon name: %s", pkmn_name)
-            index = self.current_blue if side == "blue" else self.current_red
-        if side == "blue":
-            self.alive_blue[index] = False
-        else:
-            self.alive_red[index] = False
-        self.on_death(side=side, monindex=index)
+        slot = self.getSlotByName(side, pkmn_name)
+        if slot is None:
+            raise ValueError("Didn't recognize pokemon name: {} ", pkmn_name)
+        self.alive[side][slot] = False
+        self.on_death(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if not any(self.alive_blue) or not any(self.alive_red):
+        if not any(self.alive["blue"]) or not any(self.alive["red"]):
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
             # 11s delay = enough time for swampert (>7s death animation) to die
             self._check_greenlet = self._timer.spawn_later(660, self.checkWinner)
 
-    def switched(self, side, next_pkmn):
-        '''
-        Is called when a pokemon has been switch with another one.
-        Triggers the on_switch event and fixes the switch-mappings
-        '''
-        if side == "blue":
-            swap(self.map_blue, self.current_blue, next_pkmn)
-            self.current_blue = next_pkmn
-            self.on_switch(side=side, monindex=next_pkmn)
-        else:
-            swap(self.map_red, self.current_red, next_pkmn)
-            self.current_red = next_pkmn
-            self.on_switch(side=side, monindex=next_pkmn)
-
-    def get_pkmn_index_by_name(self, side, pkmn_name):
-        # check each pokemon if that is the one
-        for i, v in enumerate(self.pkmn_blue if side == "blue"
-                              else self.pkmn_red):
+    def getSlotByName(self, side, pkmn_name):
+        # Returns the slot of the pokemon with this name.
+        for i, v in enumerate(self.pkmn[side]):
             if v["ingamename"] == pkmn_name:
+                # dlogger.info("{}'s {} successfully recognized."
+                #              .format(side, pkmn_name))
                 return i
+        raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
+                         .format(pkmn_name, side, self.pkmn[side]))
+
+    def newInBattleName(self, side, new_slot, pkmn_name):
+        '''
+        The name of the in-battle pokemon at `new_slot` was changed to`pkmn_name`.
+        The new ingame ordering is equal to the old ingame ordering, with exactly
+        one swap applied. Note: In a double KO, blue selects its slot 0 and sends it out,
+        then does the same for its slot 1.  So it is still one swap at a time.
+        '''
+        old_slot = self.getSlotByName(side, pkmn_name)
+        if old_slot == new_slot:
+            dlogger.error("Not expected to fire")
+            return # Only needed to avoid triggering the on_switch event.
+        if not self.alive[side][old_slot]:
+            raise ValueError("Dead {} pokemon {} at new ingame new_slot {} swapped "
+                             "into battle. i2fMap: {}"
+                             .format(side, pkmn_name, new_slot, self.i2fMap))
+        swap(self.pkmn[side], old_slot, new_slot)
+        swap(self.alive[side], old_slot, new_slot)
+        swap(self.i2fMap[side], old_slot, new_slot)
+        self.on_switch(side=side, old_slot=old_slot, new_slot=new_slot)
 
     def draggedOut(self, side, pkmn_name):
-        # fix the order-mapping.
-        index = self.get_pkmn_index_by_name(side, pkmn_name)
-        if index is None:
-            # uh-oh, just assume the next one.
-            # will have a 50% chance of failure
-            self.switched(side, self.get_switch_options(side)[0])
-        else:
-            self.switched(side, index)
+        pass
 
     def checkWinner(self):
         '''
@@ -161,11 +123,10 @@ class Match(object):
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = not any(self.alive_blue)
-        deadRed = not any(self.alive_red)
+        deadBlue = not any(self.alive["blue"])
+        deadRed = not any(self.alive["red"])
         winner = "draw"
-        if deadBlue and deadRed:
-            # draw? check further
+        if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove
             if move.lower() in ("explosion", "selfdestruct", "self-destruct"):
                 winner = invertSide(side)

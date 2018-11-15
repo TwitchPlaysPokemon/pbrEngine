@@ -50,8 +50,8 @@ class Monitor(object):
                 ("X" if not self.pbr.match.alive_blue[i]
                  else (">" if i == self.pbr.match.current_blue
                        else " ")) if blue else " ",
-                blue["ingamename_cmdsafe"] if blue else " ",
-                red["ingamename_cmdsafe"] if red else " ",
+                blue["ingamename"] if blue else " ",
+                red["ingamename"] if red else " ",
                 ("X" if not self.pbr.match.alive_red[i]
                  else ("<" if i == self.pbr.match.current_red
                        else " ")) if red else " ",
