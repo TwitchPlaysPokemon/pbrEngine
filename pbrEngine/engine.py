@@ -89,7 +89,6 @@ class PBREngine():
         :param port: port of the dolphin instance to connect to
         :param savefile_dir: directory location of savestates
         :param savefile_name: filename of savefile with the announcer turned on
-        :param savefile_without_announcer_name: filename of savefile with the announcer turned off
         ''' 
         self._action_callback = action_callback
         self._distinguisher = Distinguisher(self._distinguishGui)
@@ -105,7 +104,7 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
-        self.match_speed = 1.0  # animation speed during match
+        self.matchStartAnimSpeed = 1.0  # animation speed during match
         # event callbacks
         '''
         Event of the winner being determined.
@@ -180,7 +179,8 @@ class PBREngine():
         self._lastInputFrame = 0
         self._lastInput = 0
         self.volume = 0
-        self.speed = 1.0
+        self.emuSpeed = 1.0
+        self.animSpeed = 1.0
         self.state = PbrStates.INIT
         self.colosseum = 0
         self.avatar_blue = AvatarsBlue.BLUE
@@ -348,7 +348,6 @@ class PBREngine():
         self._fEnteredBp = False
         self._fClearedBp = False
         self._fGuiPkmnUp = False
-        self._fSetAnnouncer = False  # True if announcer has been set properly for this savestate?
         self._fSkipWaitForNew = False
         self._fBpPage2 = False
 
@@ -388,7 +387,6 @@ class PBREngine():
         CAUTION: Currently only max. 3 pokemon per team supported.
         :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
-        :param announcer=True: boolean if announcer's voice is enabled
         '''
         logger.debug("Preparing a new match. startsignal: {}, state: {}"
                     .format(self.startsignal, self.state))
@@ -413,7 +411,6 @@ class PBREngine():
         self.match.new(pkmn_blue, pkmn_red, doubles)
         self.avatar_blue = avatar_blue
         self.avatar_red = avatar_red
-        self.announcer = announcer
         self._starting_weather = starting_weather
 
         self._setState(PbrStates.ENTERING_MAIN_MENU)
@@ -439,13 +436,48 @@ class PBREngine():
         self.volume = v
         self._dolphin.volume(v)
 
-    def setSpeed(self, s):
+    def setAnnouncer(self, is_announcer_on):
+        '''
+        Enables or disables the game's announcer. Takes immediate effect, even mid-battle.
+        :param is_announcer_on: bool indicating whether announcer should be on.
+        '''
+        if not isinstance(is_announcer_on, bool):
+            raise ValueError("is_announcer_on must be bool")
+        self.fAnnouncerOn = is_announcer_on
+
+        self._dolphin.write8(Locations.ANNOUNCER_FLAG, int(self.fAnnouncerOn))
+
+
+    def setEmuSpeed(self, s):
         '''
         Sets the game's emulation speed.
         :param s: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
         '''
-        self.speed = s
+        self.emuSpeed = s
         self._dolphin.speed(s)
+
+    def setAnimSpeed(self, val):
+        '''
+        Sets the game's animation speed.
+        Does not influence frame-based "animations" like text box speeds.
+        Does not influence loading times.
+        Is automatically increased during match setup as a speed improvement.
+        Is automatically reset to self.matchStartAnimSpeed when a match begins.
+        :param v: float describing speed
+        '''
+        self.animSpeed = val
+        if val == 1.0:
+            self._resetAnimSpeed()
+        else:
+            self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
+            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
+
+    def setMatchStartAnimSpeed(self, val):
+        '''
+        Sets the starting animation speed for the next match.
+        :param val: float describing speed
+        '''
+        self.matchStartAnimSpeed = val
 
     def setFov(self, val=0.5):
         '''
@@ -488,20 +520,6 @@ class PBREngine():
         '''
         self._dolphin.write32(Locations.BLUR1.value.addr, DefaultValues["BLUR1"])
         self._dolphin.write32(Locations.BLUR2.value.addr, DefaultValues["BLUR2"])
-
-    def _setAnimSpeed(self, val):
-        '''
-        Sets the game's animation speed.
-        Does not influence frame-based "animations" like text box speeds.
-        Does not influence loading times.
-        Is automatically increased during selection as a speed improvement.
-        :param v: float describing speed
-        '''
-        if val == 1.0:
-            self._resetAnimSpeed()
-        else:
-            self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
-            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
 
     def _resetAnimSpeed(self):
         '''
@@ -781,7 +799,7 @@ class PBREngine():
         '''
         Is called when a match start is initiated.
         '''
-        self._setAnimSpeed(self.match_speed)
+        self.setAnimSpeed(self.matchStartAnimSpeed)
         # mute the "whoosh" as well
         self.timer.spawn_later(330, self._dolphin.volume, 100)
         self.timer.spawn_later(450, self._disableBlur)
@@ -821,7 +839,7 @@ class PBREngine():
         self._dolphin.volume(0)
         self._resetBlur()
         self._select(3)  # Select Quit
-        self._setAnimSpeed(self._increasedSpeed)
+        self.setAnimSpeed(self._increasedSpeed)
         # make sure this input gets processed before a potential savestate-load
         self.timer.spawn_later(30, self._waitForNew)
 
@@ -1316,7 +1334,7 @@ class PBREngine():
         # START MENU
         if gui == PbrGuis.START_MENU:
             self._selectLater(10, 1)  # Select Colosseum Mode
-            self._setAnimSpeed(self._increasedSpeed)
+            self.setAnimSpeed(self._increasedSpeed)
         elif gui == PbrGuis.START_OPTIONS:
             self._pressLater(10, WiimoteButton.ONE)  # Backtrack
         elif gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
