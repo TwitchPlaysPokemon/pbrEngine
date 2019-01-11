@@ -270,9 +270,9 @@ class MoveInput(IntEnum):
 
 
 class LoadedBPOffsets(IntEnum):
-    GROUP1 = 0x0        # Only this data determines avatars for the battle.
-    GROUP2 = 0xbb8      # (Only?) this data determines pkmn for the battle.
-    GROUP3 = 0xbb8 * 2  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".
+    GROUP1 = 0x0         # Only this data determines avatars for the battle.
+    GROUP2 = 0x1bb0      # (Only?) this data determines pkmn for the battle.
+    GROUP3 = 0x1bb0 * 2  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".
 
     # Battle pass offsets within a group.
     BP_BLUE   = 0x0

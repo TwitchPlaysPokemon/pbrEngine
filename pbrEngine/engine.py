@@ -55,9 +55,7 @@ class ActionError(Exception):
 
 class PBREngine():
     def __init__(self, action_callback, host="localhost", port=6000,
-                 savefile_dir="pbr_savefiles",
-                 savefile_with_announcer_name="saveWithAnnouncer.state",
-                 savefile_without_announcer_name="saveWithoutAnnouncer.state"):
+                 savefile_dir="pbr_savefiles", savefile_name="save.state"):
         '''
         :param action_callback:
             Will be called when a player action needs to be determined.
@@ -90,7 +88,7 @@ class PBREngine():
         :param host: ip of the dolphin instance to connect to
         :param port: port of the dolphin instance to connect to
         :param savefile_dir: directory location of savestates
-        :param savefile_with_announcer_name: filename of savefile with the announcer turned on
+        :param savefile_name: filename of savefile with the announcer turned on
         :param savefile_without_announcer_name: filename of savefile with the announcer turned off
         ''' 
         self._action_callback = action_callback
@@ -100,8 +98,7 @@ class PBREngine():
         self._dolphin.onConnect(self._initDolphinWatch)
 
         os.makedirs(os.path.abspath(savefile_dir), exist_ok=True)
-        self._savefile1 = os.path.abspath(os.path.join(savefile_dir, savefile_with_announcer_name))
-        self._savefile2 = os.path.abspath(os.path.join(savefile_dir, savefile_without_announcer_name))
+        self._savefile = os.path.abspath(os.path.join(savefile_dir, savefile_name))
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
@@ -285,8 +282,7 @@ class PBREngine():
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
         # ##
 
-        gevent.sleep(1.0) # the pause below is failing, so try waiting a bit
-        # initially paused, because in state WAITING_FOR_NEW
+        gevent.sleep(1.0)
         self._dolphin.pause()
         self._setState(PbrStates.WAITING_FOR_NEW)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
@@ -411,30 +407,19 @@ class PBREngine():
             gevent.sleep(1) # Wait until self._waitForNew completes.  At that time,
                             # PBR has finished all actions from the previous match
         self.colosseum = colosseum
-        self._fDoubles = doubles = True
-        self._posBlues = list(range(len(pkmn_blue)))
-        self._posReds = list(range(len(pkmn_blue), len(pkmn_blue)+len(pkmn_red)))
+        self._fDoubles = doubles
+        self._posBlues = list(range(0, 1))
+        self._posReds = list(range(1, 3))
         self.match.new(pkmn_blue, pkmn_red, doubles)
         self.avatar_blue = avatar_blue
         self.avatar_red = avatar_red
         self.announcer = announcer
         self._starting_weather = starting_weather
 
-        # try to load savestate
-        # if that succeeds, skip a few steps
-        self._setState(PbrStates.EMPTYING_BP2)
-        self._dolphin.resume()
-        loaded_success = self._dolphin.load(self._savefile1 if announcer
-                                            else self._savefile2)
-        # wait until loaded, just to be sure
-        self.timer.sleep(80)
-        if not loaded_success:
-            self._setState(PbrStates.CREATING_SAVE1)
-        else:
-            self._setAnimSpeed(self._increasedSpeed)
-
+        self._setState(PbrStates.ENTERING_MAIN_MENU)
         self._newRng()  # avoid patterns
-        self._dolphin.volume(100)
+        self._dolphin.volume(0)
+        self._dolphin.resume()
 
     def cancel(self):
         '''
@@ -533,25 +518,24 @@ class PBREngine():
     def _stuckChecker(self):
         '''
         Shall be spawned as a Greenlet.
-        Checks if no input was performed within the last 5 i2fMap seconds.
+        Checks if no input was performed within the last 5 ingame seconds.
         If so, it assumes the last input got lost and repeats that.
         '''
         while True:
             self.timer.sleep(20)
-            # stuck limit: 5 seconds. No stuckchecker during match.
             if self.state == PbrStates.MATCH_RUNNING:
-                continue
-            limit = 300
-            if self.state in (PbrStates.CREATING_SAVE1,
-                              PbrStates.CREATING_SAVE2)\
-                    and self.gui not in (PbrGuis.MENU_MAIN,
-                                         PbrGuis.MENU_BATTLE_PASS,
-                                         PbrGuis.BPS_SELECT):
-                limit = 80
-            if self.gui == PbrGuis.RULES_BPS_CONFIRM:
-                limit = 600  # don't interrupt the injection
+                continue  # No stuckchecker during match
+            if self.state == PbrStates.ENTERING_MAIN_MENU:
+                limit = 20  # Just spam A really, stuck checker is relied on a lot here
+            elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
+                limit = 600  # 10 seconds- don't interrupt the injection
+            else:
+                limit = 300  # 5 seconds
+            print(self.state)
+            print(limit)
             if (self.timer.frame - self._lastInputFrame) > limit:
-                dlogger.warning("Stuck checker will press %s" % WiimoteButton(self._lastInput).name)
+                dlogger.warning("Stuck checker will press {}"
+                                .format(WiimoteButton(self._lastInput).name))
                 self._pressButton(self._lastInput)
 
     def _selectLater(self, frames, index):
@@ -684,10 +668,10 @@ class PBREngine():
                 dlogger.error("Failed to determine starting ib-blue location")
 
     def _firstMoveSelectionOfMatch(self):
+        self._fFirstMoveSelectionOfMatch = False
         if self._starting_weather:
             self._setStartingWeather()
         self._setupInBattlePkmn()
-        self._fFirstMoveSelectionOfMatch = False
 
 
     def temp_callback(self, side, slot, name, val):
@@ -783,23 +767,6 @@ class PBREngine():
     #        or processing "raw events"        #
     ############################################
 
-    def _confirmPkmn(self):
-        '''
-        Clicks on the confirmation button on a pokemon selection screen
-        for battle passes. Shall be called/spawned as a cursorevent after a
-        pokemon has been selected for a battlepass.
-        Must have that delay because the pokemon model has to load.
-        Adds the next cursorevent for getting back to the battle pass slot view
-        '''
-        self._pressTwo()
-        self._bp_offset += 1
-        if self.state == PbrStates.PREPARING_BP1:
-            self._posBlues.pop(0)
-        else:
-            self._posReds.pop(0)
-        cursor = CursorOffsets.BP_SLOTS - 1 + self._bp_offset
-        self.cursor.addEvent(cursor, self._distinguishBpSlots)
-
     def _initOrderSelection(self):
         '''
         Done once for each team.
@@ -840,8 +807,8 @@ class PBREngine():
             self._dolphin.pause()
             self._setState(PbrStates.WAITING_FOR_NEW)
         else:
-            self._setState(PbrStates.CREATING_SAVE1)
-            self._fSkipWaitForNew = False  # redundant?
+            self._setState(PbrStates.ENTERING_MAIN_MENU)
+            self._fSkipWaitForNew = False
 
     def _quitMatch(self):
         '''
@@ -853,7 +820,7 @@ class PBREngine():
         '''
         self._dolphin.volume(0)
         self._resetBlur()
-        self._select(3)
+        self._select(3)  # Select Quit
         self._setAnimSpeed(self._increasedSpeed)
         # make sure this input gets processed before a potential savestate-load
         self.timer.spawn_later(30, self._waitForNew)
@@ -1316,79 +1283,6 @@ class PBREngine():
         if val == 1:
             self._pressOne()
 
-    def _distinguishBpSlots(self):
-        # Decide what to do if we are looking at a battle pass...
-        # Chronologically: clear #2, clear #1, fill #1, fill #2
-        if self.state <= PbrStates.EMPTYING_BP2:
-            # We are still in the state of clearing the 2nd battle pass
-            if self._fClearedBp:
-                # There are no pokemon on this battle pass left
-                # Go back and start emptying battle pass #1
-                self._pressOne()
-                self._setState(PbrStates.EMPTYING_BP1)
-            else:
-                # There are still pokemon on the battle pass. Grab that.
-                # Triggers gui BPS_PKMN_GRABBED
-                self._select(CursorOffsets.BP_SLOTS)
-        elif self.state == PbrStates.EMPTYING_BP1:
-            # There are still old pokemon on blue's battle pass. Grab that.
-            # Triggers gui BPS_PKMN_GRABBED
-            if self._fClearedBp:
-                self._fClearedBp = False
-                self._setState(self.state + 1)
-                self._pressOne()
-            else:
-                self._select(CursorOffsets.BP_SLOTS)
-        elif self.state <= PbrStates.PREPARING_BP2:
-            # We are in the state of preparing the battlepasses
-            if (self.state == PbrStates.PREPARING_BP1 and not self._posBlues)\
-                    or (self.state == PbrStates.PREPARING_BP2 and not
-                        self._posReds):
-                # if the current battle pass has been filled with all pokemon:
-                # enter next state and go back
-                self._setState(self.state + 1)
-                self._pressOne()
-            else:
-                # The old pokemon have been cleared, click on last slot (#6) to
-                # start filling the slots
-                self._select(CursorOffsets.BP_SLOTS + 5)
-
-    def _distinguishBpsSelect(self):
-        self._bp_offset = 0
-        self._fEnteredBp = False
-        if self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2)\
-                and self._fSetAnnouncer:
-            self._resetAnimSpeed()
-            # wait for game to stabilize. maybe this causes the load fails.
-            gevent.sleep(0.5)
-            # announcer=True, state=save1:  savefile2
-            # announcer=True, state=save2:  savefile1
-            # announcer=False, state=save1: savefile1
-            # announcer=False, state=save2: savefile2
-            self._dolphin.save(self._savefile1 if self.announcer !=
-                               (self.state == PbrStates.CREATING_SAVE1)
-                               else self._savefile2)
-            gevent.sleep(1.0)  # I don't think this caused the saves to go corrupt, but better be save
-            self._setAnimSpeed(self._increasedSpeed)
-            self._fSetAnnouncer = False
-            self._setState(self.state + 1)
-
-        if self.state == PbrStates.EMPTYING_BP2:
-            self._fClearedBp = False
-            self._select_bp(self._prev_avatar_red)
-        elif self.state == PbrStates.EMPTYING_BP1:
-            self._fClearedBp = False
-            self._select_bp(self._prev_avatar_blue)
-        elif self.state == PbrStates.PREPARING_BP1:
-            self._select_bp(self.avatar_blue)
-        elif self.state == PbrStates.PREPARING_BP2:
-            self._prev_avatar_blue = self.avatar_blue
-            self._prev_avatar_red = self.avatar_red
-            self._select_bp(self.avatar_red)
-        else:
-            # done preparing or starting to prepare savestates
-            self._pressOne()
-
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
         if not gui:
@@ -1418,189 +1312,85 @@ class PBREngine():
         except:  # unrecognized gui, ignore
             dlogger.error("Unrecognized gui or state: {} / {}"
                           .format(gui, self.state))
-        # MAIN MENU
-        if gui == PbrGuis.MENU_MAIN:
-            if not self._fSetAnnouncer and self.state in\
-                    (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
-                self._select(CursorPosMenu.SAVE)
-            elif self.state < PbrStates.PREPARING_STAGE:
-                self._select(CursorPosMenu.BP)
-            else:
-                self._select(CursorPosMenu.BATTLE)
-                # hack correct stuff as "default"
-                # seems to not work? Not doing this anymore
-                # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.value.addr,
-                # BattleStyles.SINGLE)
-                # self._fSelectedSingleBattle = True
-                # self._dolphin.write32(Locations.DEFAULT_RULESET.value.addr,
-                # Rulesets.RULE_1)
-                # self._fSelectedTppRules = True
-        elif gui == PbrGuis.MENU_BATTLE_TYPE:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._select(2)
-        elif gui == PbrGuis.MENU_BATTLE_PASS:
-            if self.state >= PbrStates.PREPARING_STAGE or \
-                    (not self._fSetAnnouncer and self.state in
-                     (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2)):
-                self._pressOne()
-            else:
-                self._select(1)
-                self._fBpPage2 = False
-            self._setAnimSpeed(self._increasedSpeed)
-
-        elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._select(2)
-        elif gui == PbrGuis.MENU_BATTLE_REMOTES:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._select(1)
-        elif gui == PbrGuis.MENU_SAVE:
-            self._select(1)
-        elif gui == PbrGuis.MENU_SAVE_CONFIRM:
-            self._select(CursorPosMenu.SAVE_CONFIRM + 1)  # don't save
-        elif gui == PbrGuis.MENU_SAVE_CONTINUE:
-            self._select(2)  # no, quit please
-            # slow down because of intro
-        elif gui == PbrGuis.MENU_SAVE_TYP2:
-            # handled with timed event
-            self._pressLater(60, WiimoteButton.TWO)
-            # TODO: ferraro: what is this?
-            self.timer.spawn_later(120, self._resetAnimSpeed)  # to not get stuck in the demo
-            self.timer.spawn_later(600, self._resetAnimSpeed)  # to not get stuck in the demo
 
         # START MENU
-        elif gui == PbrGuis.START_MENU:
-            if not self._fSetAnnouncer and self.state in\
-                    (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
-                self._selectLater(10, 3)  # options
-            else:
-                self._selectLater(10, 1)  # colosseum mode
-        elif gui == PbrGuis.START_OPTIONS:
-            # announcer=True, state=save1:  set flag to 0
-            # announcer=True, state=save2:  set flag to 1
-            # announcer=False, state=save1: set flag to 1
-            # announcer=False, state=save2: set flag to 0
-            if self.announcer != (self.state == PbrStates.CREATING_SAVE1):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 1)
-            elif self.announcer != (self.state == PbrStates.CREATING_SAVE2):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 0)
-            self._pressLater(10, WiimoteButton.ONE)
-            self._fSetAnnouncer = True
-
-        elif gui in (PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE,
-                     PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO):
-            # START_SAVEFILE is not working,
-            # but I am relying on the unstucker anyway...
+        if gui == PbrGuis.START_MENU:
+            self._selectLater(10, 1)  # Select Colosseum Mode
             self._setAnimSpeed(self._increasedSpeed)
-            self._pressLater(10, WiimoteButton.TWO)
+        elif gui == PbrGuis.START_OPTIONS:
+            self._pressLater(10, WiimoteButton.ONE)  # Backtrack
+        elif gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
+                     PbrGuis.START_MODE, PbrGuis.START_SAVEFILE):
+            self._pressLater(10, WiimoteButton.TWO)  # Click through all these
 
-        # BATTLE PASS MENU
-        elif gui == PbrGuis.BPS_SELECT and\
-                self.state < PbrStates.PREPARING_START:
-            # done via cursorevents
-            self.cursor.addEvent(CursorOffsets.BPS, self._distinguishBpsSelect)
-        elif gui == PbrGuis.BPS_SLOTS and\
-                self.state < PbrStates.PREPARING_START:
-            if self.state < PbrStates.CREATING_SAVE2:
-                # accidentially entered BP
-                self._pressOne()
-            elif not self._fEnteredBp:
-                self._distinguishBpSlots()
-        elif gui == PbrGuis.BPS_PKMN_GRABBED:
-            self._select(CursorPosBP.REMOVE)
-        elif gui == PbrGuis.BPS_BOXES and\
-                self.state < PbrStates.PREPARING_START:
-            self._fEnteredBp = True
-            self._fClearedBp = True
-            #if self.state == PbrStates.EMPTYING_BP1:
-            #    self._setState(PbrStates.PREPARING_BP1)
-                # no need to go back to bp selection first, short-circuit
-            if self.state == PbrStates.PREPARING_BP1:
-                self._select(CursorOffsets.BOX + (self._posBlues[0] // 30))
-            elif self.state == PbrStates.PREPARING_BP2:
-                self._select(CursorOffsets.BOX + (self._posReds[0] // 30))
-            else:
-                self._pressOne()
-                self.cursor.addEvent(CursorOffsets.BP_SLOTS,
-                                     self._distinguishBpSlots)
-        elif gui == PbrGuis.BPS_PKMN and\
-                self.state < PbrStates.PREPARING_START:
-            if self.state == PbrStates.PREPARING_BP1:
-                self._select(CursorOffsets.PKMN + (self._posBlues[0] % 30))
-            else:
-                self._select(CursorOffsets.PKMN + (self._posReds[0] % 30))
-            self.cursor.addEvent(1, self._confirmPkmn)
-        elif gui == PbrGuis.BPS_PKMN_CONFIRM and\
-                self.state < PbrStates.PREPARING_START:
-            # handled with cursorevent, because the model loading has
-            # a delay and therefore breaks the indicator
-            pass
+        # MAIN MENU
+        elif gui == PbrGuis.MENU_MAIN:
+            self.state = PbrStates.PREPARING_STAGE
+            self._select(CursorPosMenu.BATTLE)  # select Battle option in main menu
+            # hack correct stuff as "default"
+            # seems to not work? Not doing this anymore
+            # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.value.addr,
+            # BattleStyles.SINGLE)
+            # self._fSelectedSingleBattle = True
+            # self._dolphin.write32(Locations.DEFAULT_RULESET.value.addr,
+            # Rulesets.RULE_1)
+            # self._fSelectedTppRules = True
+        elif gui == PbrGuis.MENU_BATTLE_TYPE:
+            self.state = PbrStates.PREPARING_STAGE  # Just in case the first didn't go through? Not sure if that can really happen
+            self._select(2)  # Select Free Battle
+        elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
+            self._select(2)  # Select 2 Players
+        elif gui == PbrGuis.MENU_BATTLE_REMOTES:
+                self._select(1)  # Select One Wiimote
 
         # RULES MENU (stage, settings etc, but not battle pass selection)
-        elif gui == PbrGuis.RULES_STAGE:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
-                self._select(CursorOffsets.STAGE)
-                self._setState(PbrStates.PREPARING_START)
-        elif gui == PbrGuis.RULES_SETTINGS:
+        elif gui == PbrGuis.RULES_STAGE:  # Set Colosseum
+            self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
+            self._select(CursorOffsets.STAGE)
+            self._setState(PbrStates.PREPARING_START)
+        elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
-                # cursorevents
                 self.cursor.addEvent(CursorOffsets.RULESETS, self._select,
-                                     False, CursorOffsets.RULESETS+1)
+                                     False, CursorOffsets.RULESETS+1)  # select the TPP ruleset
                 self.cursor.addEvent(CursorPosMenu.RULES_CONFIRM,
-                                     self._pressTwo)
-                self._select(1)
+                                     self._pressTwo)  # confirm selection of the TPP ruleset
+                self._select(1)  # Select "Choose a Rule", which will trigger the two events above, in order
                 self._fSelectedTppRules = True
             elif not self._fDoubles and not self._fSelectedSingleBattle:
-                self._select(2)
+                # Default battle style is Doubles
+                self._select(2)  # Select "Choose a Battle Style"
                 self._fSelectedSingleBattle = True
             else:
-                # this is always the case since the default-hacks
-                self._select(3)
-                self._fSelectedSingleBattle = False
-                self._fSelectedTppRules = False
+                self._select(3)  # Confirm the rules and battle style. This enters battle pass selection
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
-            self._select(1)
+            if self._fDoubles:
+                self._select(2)  # Accidentally entered menu? Pick Doubles, the default
+            else:
+                self._select(1)  # Pick Singles
+
+        # BATTLE PASS SELECTION
+        # Verify state is past PREPARING_START, since some of these gui values are also seen under other irrelevant circumstances
+        elif gui == PbrGuis.BPSELECT_SELECT and self.state >= PbrStates.PREPARING_START:
+            self._fBpPage2 = False
+            if not self._fBlueSelectedBP:  # Pick blue battle pass
+                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 0)
+                self._fBlueSelectedBP = True
+            else:  # Pick red battle pass
+                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 1)
+        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state >= PbrStates.PREPARING_START:
+            self._pressTwo()  # Confirm battle pass selection
         elif gui == PbrGuis.RULES_BPS_CONFIRM:
             # twice, just to be sure as I have seen it fail once
             self._injectPokemon()
             self._injectPokemon()
             self._pressTwo()
-            # skip the followup match intro
+            # start a greenlet that spams 2, to skip the followup match intro
             gevent.spawn_later(1, self._skipIntro)
-
-        # BATTLE PASS SELECTION
-        # (chronologically before PbrGuis.RULES_BPS_CONFIRM)
-        # overlaps with previous battle pass menu. Therefore the state checks
-        # TODO improve that, maybe cluster it together?
-        elif gui == PbrGuis.BPSELECT_SELECT and\
-                self.state >= PbrStates.PREPARING_START:
-            self._fBpPage2 = False
-            if self._fBlueSelectedBP:
-                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatar_red)
-                self._fBlueSelectedBP = False
-            else:
-                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatar_blue)
-                self._fBlueSelectedBP = True
-        elif gui == PbrGuis.BPSELECT_CONFIRM and\
-                self.state >= PbrStates.PREPARING_START:
-            self._pressTwo()
 
         # PKMN ORDER SELECTION
         elif gui == PbrGuis.ORDER_SELECT:
             logger.debug("ORDER_SELECT. startsignal: {}, state: {}"
                            .format(self.startsignal, self.state))
-
             if self.startsignal:
                 # start() was called.  Match needs to start, so
                 # initiate order selection.
@@ -1609,8 +1399,6 @@ class PBREngine():
                 # Wait for start() to initiate order selection.
                 self._setState(PbrStates.WAITING_FOR_START)
                 self._dolphin.pause()
-
-            # TODO fix sideways remote
 
         elif gui == PbrGuis.ORDER_CONFIRM:
             logger.debug("ORDER_CONFIRM")
@@ -1621,19 +1409,37 @@ class PBREngine():
                 # y u no explain, past me?
                 return (vals[0] << 24 | vals[1] << 16 | vals[2] << 8 | vals[3],
                         vals[4] << 8 | vals[5])
-            if self._fBlueChoseOrder:
-                self._fBlueChoseOrder = False
-                x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["red"]))))
-                self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
-                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
-                self._pressTwo()
-                self._initMatch()
-            else:
+            if not self._fBlueChoseOrder:
                 self._fBlueChoseOrder = True
                 x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["blue"]))))
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
                 self._pressTwo()
+            else:
+                x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["red"]))))
+                self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
+                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
+                self._pressTwo()
+                self._initMatch()
+
+        # BATTLE PASS MENU - not used anymore, just backtrack
+        elif gui == PbrGuis.MENU_BATTLE_PASS:
+            self._pressOne()  # Backtrack
+        elif gui == PbrGuis.BPS_SELECT:
+            self._pressOne()
+
+        # SAVE MENU - not used anymore, just backtrack
+        elif gui == PbrGuis.MENU_SAVE:
+            self._pressOne()
+        elif gui == PbrGuis.MENU_SAVE_CONFIRM:
+            self._select(CursorPosMenu.SAVE_CONFIRM + 1)  # Select No- don't save
+        elif gui == PbrGuis.MENU_SAVE_CONTINUE:
+            self._pressTwo()  # Select Continue playing
+        elif gui == PbrGuis.MENU_SAVE_TYP2:
+            # We're going back to the main menu, press 2 and reset speed
+            self._pressLater(60, WiimoteButton.TWO)
+            self.timer.spawn_later(120, self._resetAnimSpeed)  # to not get stuck in the demo
+            self.timer.spawn_later(600, self._resetAnimSpeed)  # to not get stuck in the demo
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:

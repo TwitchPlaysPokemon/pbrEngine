@@ -11,11 +11,11 @@ from enum import IntEnum
 
 class AvatarsBlue(IntEnum):
     BLUE   = 0
-    GREEN  = 2
-    YELLOW = 4
+    # GREEN  = 2
+    # YELLOW = 4
 
 
 class AvatarsRed(IntEnum):
     RED   = 1
-    BLACK = 3
-    PINK  = 5
+    # BLACK = 3
+    # PINK  = 5

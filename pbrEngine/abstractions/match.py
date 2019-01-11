@@ -104,7 +104,7 @@ class Match(object):
         old_slot = self.getSlotByName(side, pkmn_name)
         if old_slot == new_slot:
             dlogger.error("Not expected to fire")
-            return # Only needed to avoid triggering the on_switch event.
+            return  # No change; don't trigger self.on_switch().
         if not self.alive[side][old_slot]:
             raise ValueError("Dead {} pokemon {} at new ingame new_slot {} swapped "
                              "into battle. i2fMap: {}"
