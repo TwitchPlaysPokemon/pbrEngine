@@ -168,7 +168,7 @@ class Locations(Enum):
     SPEED_1          = Loc(0x642414, 4)
     SPEED_2          = Loc(0x642418, 4)
     FOV              = Loc(0x6426a0, 4)  # default 0.5
-    ANNOUNCER_FLAG   = Loc(0x47a96d, 1)  # just in start menu
+    ANNOUNCER_FLAG   = Loc(0xc076a0, 1)  # TODO
 
     GUI_POS_X        = Loc(0x642350, 4)  # default be830304
     GUI_POS_Y        = Loc(0x642354, 4)  # default 41700000

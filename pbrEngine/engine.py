@@ -198,14 +198,27 @@ class PBREngine():
 
     def connect(self):
         '''
-        Connects do Dolphin with dolphinWatch. Should be called when the
+        Connects to Dolphin with dolphinWatch. Should be called when the
         initialization (setting listeners etc.) is done.
+        Any existing connection is disconnected first.
+        Keeps retrying until successfully connected (see self._reconnect)
         '''
         self._dolphin.connect()
 
+    def _reconnect(self, watcher, reason):
+        if reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST:
+            # don't reconnect if we closed the connection on purpose
+            return
+        logger.warning("DolphinConnection connection closed, reconnecting...")
+        if reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED:
+            # just tried to establish a connection, give it a break
+            gevent.sleep(3)
+        # else reconnect immediately (CONNECTION_LOST or CONNECTION_CLOSED_BY_PEER)
+        self.connect()
+
     def disconnect(self):
         '''
-        Disconnects from Dolphin.
+        Disconnects from Dolphin. No reconnect attempts are made-
         connect() needs to be called to make this instance work again.
         '''
         self._dolphin.disconnect()
@@ -298,16 +311,6 @@ class PBREngine():
         for i in range(length):
             self._dolphin._subscribeMulti(loc.length, loc.addr+loc.length*i,
                                           callback)
-
-    def _reconnect(self, watcher, reason):
-        if (reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST):
-            # don't reconnect if we closed the connection on purpose
-            return
-        logger.warning("DolphinConnection connection closed, reconnecting...")
-        if (reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED):
-            # just tried to establish a connection, give it a break
-            gevent.sleep(3)
-        self.connect()
 
     def reset(self):
         # Used during matches.
@@ -436,17 +439,16 @@ class PBREngine():
         self.volume = v
         self._dolphin.volume(v)
 
-    def setAnnouncer(self, is_announcer_on):
+    def setAnnouncer(self, fAnnouncerOn):
         '''
         Enables or disables the game's announcer. Takes immediate effect, even mid-battle.
-        :param is_announcer_on: bool indicating whether announcer should be on.
+        :param fAnnouncerOn: bool indicating whether announcer should be on.
         '''
-        if not isinstance(is_announcer_on, bool):
-            raise ValueError("is_announcer_on must be bool")
-        self.fAnnouncerOn = is_announcer_on
+        if not isinstance(fAnnouncerOn, bool):
+            raise ValueError("fAnnouncerOn must be bool")
+        self.fAnnouncerOn = fAnnouncerOn
 
-        self._dolphin.write8(Locations.ANNOUNCER_FLAG, int(self.fAnnouncerOn))
-
+        self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, int(self.fAnnouncerOn))
 
     def setEmuSpeed(self, s):
         '''
@@ -544,13 +546,11 @@ class PBREngine():
             if self.state == PbrStates.MATCH_RUNNING:
                 continue  # No stuckchecker during match
             if self.state == PbrStates.ENTERING_MAIN_MENU:
-                limit = 20  # Just spam A really, stuck checker is relied on a lot here
+                limit = 20  # Only A spam needed, and stuck checker is expected to help
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
                 limit = 600  # 10 seconds- don't interrupt the injection
             else:
                 limit = 300  # 5 seconds
-            print(self.state)
-            print(limit)
             if (self.timer.frame - self._lastInputFrame) > limit:
                 dlogger.warning("Stuck checker will press {}"
                                 .format(WiimoteButton(self._lastInput).name))
