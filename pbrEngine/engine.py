@@ -8,11 +8,14 @@ import gevent
 import random
 import re
 import logging
-import dolphinWatch
+import logging.handlers
 import os
+import socket
+import dolphinWatch
 from functools import partial
 from enum import Enum
 from collections import Counter
+from contextlib import suppress
 
 from .eps import get_pokemon_from_data
 
@@ -43,11 +46,13 @@ handler.setFormatter(formatter)
 dlogger.addHandler(handler)
 dlogger.setLevel(logging.DEBUG)
 
+
 class ActionCause(Enum):
     """Reasons for why PBREngine called the action_callback."""
     REGULAR = "regular"  # regular move selection
     FAINT = "faint"  # pokemon selection after faint
     OTHER = "other"  # other causes, like forced switch by baton pass or u-turn
+
 
 class ActionError(Exception):
     pass
@@ -104,7 +109,6 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
-        self.matchStartAnimSpeed = 1.0  # animation speed during match
         # event callbacks
         '''
         Event of the winner being determined.
@@ -178,19 +182,23 @@ class PBREngine():
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
         self._lastInput = 0
-        self.volume = 0
-        self.emuSpeed = 1.0
-        self.animSpeed = 1.0
+
+        self._matchVolume = 100
+        self._fMatchAnnouncer = True
+        self._matchFov = 0.5
+        self._matchEmuSpeed = 1.0
+        self._matchAnimSpeed = 1.0
+        self._matchFieldEffectStrength = 1.0
+
         self.state = PbrStates.INIT
         self.colosseum = 0
         self.avatar_blue = AvatarsBlue.BLUE
         self.avatar_red = AvatarsRed.RED
         self._prev_avatar_blue = AvatarsBlue.BLUE
         self._prev_avatar_red = AvatarsRed.RED
-        self.announcer = True
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
-        self._starting_weather = None
+        self._startingWeather = None
         self.reset()
 
         # stuck checker
@@ -257,35 +265,49 @@ class PBREngine():
         self._distinguisher.distinguishMatch(gui_type)
 
     def _initDolphinWatch(self, watcher):
-        self._dolphin.volume(0)
-
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
         self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
-        self._subscribe(Locations.ORDER_LOCK_BLUE.value,            self._distinguishOrderLock)
-        self._subscribe(Locations.ORDER_LOCK_RED.value,             self._distinguishOrderLock)
-        self._subscribeMulti(Locations.ATTACK_TEXT.value,           self._distinguishAttack)
-        self._subscribeMulti(Locations.INFO_TEXT.value,             self._distinguishInfo)
-        self._subscribe(Locations.HP_BLUE.value,                    partial(self._distinguishHp, side="blue"))
-        self._subscribe(Locations.HP_RED.value,                     partial(self._distinguishHp, side="red"))
-        self._subscribe(Locations.STATUS_BLUE.value,                partial(self._distinguishStatus, side="blue"))
-        self._subscribe(Locations.STATUS_RED.value,                 partial(self._distinguishStatus, side="red"))
-        self._subscribeMulti(Locations.PNAME_BLUE.value,  partial(self._distinguishName, side="blue", slot=0))
-        self._subscribeMulti(Locations.PNAME_BLUE2.value, partial(self._distinguishName, side="blue", slot=1))
-        self._subscribeMulti(Locations.PNAME_RED.value,   partial(self._distinguishName, side="red", slot=0))
-        self._subscribeMulti(Locations.PNAME_RED2.value,  partial(self._distinguishName, side="red", slot=1))
-        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value, self._distinguishEffective)
+        self._subscribe(Locations.ORDER_LOCK_BLUE.value,  self._distinguishOrderLock)
+        self._subscribe(Locations.ORDER_LOCK_RED.value, self._distinguishOrderLock)
+        self._subscribeMulti(Locations.ATTACK_TEXT.value, self._distinguishAttack)
+        self._subscribeMulti(Locations.INFO_TEXT.value, self._distinguishInfo)
+        self._subscribe(Locations.HP_BLUE.value,
+                        partial(self._distinguishHp, side="blue"))
+        self._subscribe(Locations.HP_RED.value,
+                        partial(self._distinguishHp, side="red"))
+        self._subscribe(Locations.STATUS_BLUE.value,
+                        partial(self._distinguishStatus, side="blue"))
+        self._subscribe(Locations.STATUS_RED.value,
+                        partial(self._distinguishStatus, side="red"))
+        self._subscribeMulti(Locations.PNAME_BLUE.value,
+                             partial(self._distinguishName, side="blue", slot=0))
+        self._subscribeMulti(Locations.PNAME_BLUE2.value,
+                             partial(self._distinguishName, side="blue", slot=1))
+        self._subscribeMulti(Locations.PNAME_RED.value,
+                             partial(self._distinguishName, side="red", slot=0))
+        self._subscribeMulti(Locations.PNAME_RED2.value,
+                             partial(self._distinguishName, side="red", slot=1))
+        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value,
+                                 self._distinguishEffective)
         # de-multiplexing all these into single PbrGuis-enum using distinguisher
         self._subscribe(Locations.GUI_STATE_MATCH.value, self._distinguishMatch)
-        self._subscribe(Locations.GUI_STATE_BP.value,           self._distinguisher.distinguishBp)
-        self._subscribe(Locations.GUI_STATE_MENU.value,         self._distinguisher.distinguishMenu)
-        self._subscribe(Locations.GUI_STATE_RULES.value,        self._distinguisher.distinguishRules)
-        self._subscribe(Locations.GUI_STATE_ORDER.value,        self._distinguisher.distinguishOrder)
-        self._subscribe(Locations.GUI_STATE_BP_SELECTION.value, self._distinguisher.distinguishBpSelect)
-        self._subscribeMulti(Locations.GUI_TEMPTEXT.value,      self._distinguisher.distinguishStart)
-        self._subscribe(Locations.POPUP_BOX.value,              self._distinguisher.distinguishPopup)
+        self._subscribe(Locations.GUI_STATE_BP.value,
+                        self._distinguisher.distinguishBp)
+        self._subscribe(Locations.GUI_STATE_MENU.value,
+                        self._distinguisher.distinguishMenu)
+        self._subscribe(Locations.GUI_STATE_RULES.value,
+                        self._distinguisher.distinguishRules)
+        self._subscribe(Locations.GUI_STATE_ORDER.value,
+                        self._distinguisher.distinguishOrder)
+        self._subscribe(Locations.GUI_STATE_BP_SELECTION.value,
+                        self._distinguisher.distinguishBpSelect)
+        self._subscribeMulti(Locations.GUI_TEMPTEXT.value,
+                             self._distinguisher.distinguishStart)
+        self._subscribe(Locations.POPUP_BOX.value,
+                        self._distinguisher.distinguishPopup)
 
         self._subscribe(Locations.WHICH_MOVE.value, self._watcher2)
         self._subscribe(Locations.WHICH_PKMN.value, self._watcher3)
@@ -297,6 +319,8 @@ class PBREngine():
 
         gevent.sleep(1.0)
         self._dolphin.pause()
+        self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
+
         self._setState(PbrStates.WAITING_FOR_NEW)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
@@ -330,7 +354,6 @@ class PBREngine():
         self._fMatchCancelled = False
         self._fDoubles = False
         self._move_select_followup = None
-        self._fFirstMoveSelectionOfMatch = True
         self.active = {"blue": [None] * 2, "red": [None] * 2}
         # Move selection: expect REGULAR, set next to OTHER
         # Fainted: set next to FAINTED.
@@ -353,30 +376,15 @@ class PBREngine():
         self._fGuiPkmnUp = False
         self._fSkipWaitForNew = False
         self._fBpPage2 = False
+        self._fBattleStateReady = False
 
 
-    ####################################################
+    ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
     ####################################################
 
-    def start(self):
-        '''
-        Starts a prepared match.
-        If the selection is not finished for some reason
-        (state != WAITING_FOR_START), it will continue to prepare normally and
-        start the match once it's ready.
-        Otherwise calling start() will start the match by resuming the game.
-        '''
-        logger.debug("Starting a prepared match. startsignal: {}, state: {}"
-                    .format(self.startsignal, self.state))
-        self.startsignal = True
-        if self.state == PbrStates.WAITING_FOR_START:
-            self._initOrderSelection()
-
-    def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
-            avatar_red=AvatarsRed.RED, announcer=True, starting_weather=None,
-            doubles=False):
+    def new(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -408,18 +416,33 @@ class PBREngine():
             gevent.sleep(1) # Wait until self._waitForNew completes.  At that time,
                             # PBR has finished all actions from the previous match
         self.colosseum = colosseum
-        self._fDoubles = doubles
+        self._fDoubles = fDoubles
         self._posBlues = list(range(0, 1))
         self._posReds = list(range(1, 3))
-        self.match.new(pkmn_blue, pkmn_red, doubles)
-        self.avatar_blue = avatar_blue
-        self.avatar_red = avatar_red
-        self._starting_weather = starting_weather
+        self.match.new(teams, fDoubles)
+        if not avatars:
+            avatars = [AvatarsBlue.BLUE,AvatarsRed.RED]
+        self.avatar_blue = avatars[0]
+        self.avatar_red = avatars[1]
+        self._startingWeather = startingWeather
 
         self._setState(PbrStates.ENTERING_MAIN_MENU)
-        self._newRng()  # avoid patterns
-        self._dolphin.volume(0)
         self._dolphin.resume()
+        logger.debug("startsignal: {}, state: {}".format(self.startsignal, self.state))
+
+    def start(self):
+        '''
+        Starts a prepared match.
+        If the selection is not finished for some reason
+        (state != WAITING_FOR_START), it will continue to prepare normally and
+        start the match once it's ready.
+        Otherwise calling start() will start the match by resuming the game.
+        '''
+        logger.debug("Starting a prepared match. startsignal: {}, state: {}"
+                    .format(self.startsignal, self.state))
+        self.startsignal = True
+        if self.state == PbrStates.WAITING_FOR_START:
+            self._initOrderSelection()
 
     def cancel(self):
         '''
@@ -430,35 +453,75 @@ class PBREngine():
         '''
         self._fMatchCancelled = True
 
+    @property
+    def matchVolume(self):
+        return self._matchVolume
+
+    @matchVolume.setter
+    def matchVolume(self, v):
+        self._matchVolume = v
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self.setVolume(v)
+
     def setVolume(self, v):
         '''
-        Sets the game's volume during matches.
-        Will always be 0 during selection, regardless of this setting.
+        Sets the game's _matchVolume during matches.
+        Resets to 0 at the end of each match.
         :param v: integer between 0 and 100.
         '''
-        self.volume = v
         self._dolphin.volume(v)
 
-    def setAnnouncer(self, fAnnouncerOn):
+    @property
+    def matchAnnouncer(self):
+        return self._fMatchAnnouncer
+
+    @matchAnnouncer.setter
+    def matchAnnouncer(self, announcerOn):
+        self._fMatchAnnouncer = announcerOn
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self._setAnnouncer(announcerOn)
+
+    def _setAnnouncer(self, announcerOn):
         '''
         Enables or disables the game's announcer. Takes immediate effect, even mid-battle.
-        :param fAnnouncerOn: bool indicating whether announcer should be on.
+        :param announcerOn: bool indicating whether announcer should be on.
         '''
-        if not isinstance(fAnnouncerOn, bool):
-            raise ValueError("fAnnouncerOn must be bool")
-        self.fAnnouncerOn = fAnnouncerOn
+        if not isinstance(announcerOn, bool):
+            raise TypeError("announcerOn must be a bool")
+        self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, int(announcerOn))
 
-        self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, int(self.fAnnouncerOn))
+    @property
+    def matchEmuSpeed(self):
+        return self._matchEmuSpeed
 
-    def setEmuSpeed(self, s):
+    @matchEmuSpeed.setter
+    def matchEmuSpeed(self, speed):
+        self._matchEmuSpeed = speed
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self._setEmuSpeed(speed)
+
+    def _setEmuSpeed(self, speed):
         '''
         Sets the game's emulation speed.
-        :param s: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
+        :param speed: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
         '''
-        self.emuSpeed = s
-        self._dolphin.speed(s)
+        self._dolphin.speed(speed)
 
-    def setAnimSpeed(self, val):
+    @property
+    def matchAnimSpeed(self):
+        return self._matchAnimSpeed
+
+    @matchAnimSpeed.setter
+    def matchAnimSpeed(self, speed):
+        self._matchAnimSpeed = speed
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self._setAnimSpeed(speed)
+
+    def _setAnimSpeed(self, speed):
         '''
         Sets the game's animation speed.
         Does not influence frame-based "animations" like text box speeds.
@@ -467,33 +530,48 @@ class PBREngine():
         Is automatically reset to self.matchStartAnimSpeed when a match begins.
         :param v: float describing speed
         '''
-        self.animSpeed = val
-        if val == 1.0:
+        if speed == 1.0:
             self._resetAnimSpeed()
         else:
             self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
-            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
+            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(speed))
 
-    def setMatchStartAnimSpeed(self, val):
-        '''
-        Sets the starting animation speed for the next match.
-        :param val: float describing speed
-        '''
-        self.matchStartAnimSpeed = val
+    @property
+    def matchFov(self):
+        return self._matchFov
 
-    def setFov(self, val=0.5):
+    @matchFov.setter
+    def matchFov(self, val=0.5):
+        self._matchFov = val
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self._setFov(val)
+
+    def _setFov(self, val=0.5):
         '''
         Sets the game's field of view.
         :param val=0.5: float, apparently in radians, 0.5 is default
         '''
         self._dolphin.write32(Locations.FOV.value.addr, floatToIntRepr(val))
 
-    def setFieldEffectStrength(self, val=1.0):
+    @property
+    def matchFieldEffectStrength(self):
+        return self._matchFieldEffectStrength
+
+    @matchFieldEffectStrength.setter
+    def matchFieldEffectStrength(self, val=1.0):
+        self._matchFieldEffectStrength = val
+        if self.state == PbrStates.MATCH_RUNNING:
+            with suppress(socket.error):
+                self._setFieldEffectStrength(val)
+
+    def _setFieldEffectStrength(self, val=1.0):
         '''
         Sets the animation strength of the game's field effects (weather, etc).
         :param val: animation strength as a float
         '''
-        self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr, floatToIntRepr(val))
+        self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr,
+                              floatToIntRepr(val))
 
     def setGuiPosY(self, val=DefaultValues["GUI_POS_Y"]):
         '''
@@ -685,9 +763,11 @@ class PBREngine():
             except InvalidLocation:
                 dlogger.error("Failed to determine starting ib-blue location")
 
-    def _firstMoveSelectionOfMatch(self):
-        self._fFirstMoveSelectionOfMatch = False
-        if self._starting_weather:
+    def _initBattleState(self):
+        '''
+        Once the in-battle structures are ready, read/write weather and battle pkmn data
+        '''
+        if self._startingWeather:
             self._setStartingWeather()
         self._setupInBattlePkmn()
 
@@ -741,7 +821,7 @@ class PBREngine():
                      .format(fieldEffectsLoc, fieldEffects))
         weather = fieldEffects & FieldEffects.WEATHER_MASK
         if weather == 0:  # Only overwrite weather related bits
-            newFieldEffects = self._starting_weather | fieldEffects
+            newFieldEffects = self._startingWeather | fieldEffects
             logger.debug("Writing field effects: {:08X} to address {:08X}"
                          .format(newFieldEffects, fieldEffectsLoc))
             self._write32(fieldEffectsLoc, newFieldEffects)
@@ -795,16 +875,24 @@ class PBREngine():
         self._setState(PbrStates.SELECTING_ORDER)
         self._pressButton(WiimoteButton.RIGHT)
 
-    def _initMatch(self):
+    def _matchStart(self):
         '''
         Is called when a match start is initiated.
         '''
-        self.setAnimSpeed(self.matchStartAnimSpeed)
-        # mute the "whoosh" as well
-        self.timer.spawn_later(330, self._dolphin.volume, 100)
+        self._setAnimSpeed(1.0)
+        self.timer.spawn_later(330, self._matchStartDelayed)
         self.timer.spawn_later(450, self._disableBlur)
         # match is running now
         self._setState(PbrStates.MATCH_RUNNING)
+
+    def _matchStartDelayed(self):
+        # just after the "whoosh" sound, and right before the colosseum becomes visible
+        self.setVolume(self._matchVolume)
+        self._setFov(self._matchFov)
+        self._setEmuSpeed(self._matchEmuSpeed)
+        self._setAnimSpeed(self._matchAnimSpeed)
+        self._setAnnouncer(self._fMatchAnnouncer)
+        self._setFieldEffectStrength(self._matchFieldEffectStrength)
 
     def _matchOver(self, winner):
         '''
@@ -836,10 +924,12 @@ class PBREngine():
         Next state can either be waiting for a new match selection (pause),
         or directly starting one.
         '''
-        self._dolphin.volume(0)
         self._resetBlur()
         self._select(3)  # Select Quit
-        self.setAnimSpeed(self._increasedSpeed)
+        self.setVolume(0)  # Mute match setup beeping
+        self._setAnnouncer(True)  # Or it might not work for next match
+        self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
+        self._setEmuSpeed(1.0)  # Avoid possible timeout issues
         # make sure this input gets processed before a potential savestate-load
         self.timer.spawn_later(30, self._waitForNew)
 
@@ -1023,8 +1113,10 @@ class PBREngine():
         gevent.spawn(self._nextMoveWorker, recorded_state)
 
     def _nextMoveWorker(self, recorded_state):
-        if self._fFirstMoveSelectionOfMatch:
-            self._firstMoveSelectionOfMatch()
+        # Make modifications to in-battle state. Runs once per match.
+        if not self._fBattleStateReady:
+            self._fBattleStateReady = True
+            self._initBattleState()
         # prevent "Connection with wiimote lost bla bla"
         self._pressButton(WiimoteButton.NONE)  # no button press
 
@@ -1166,8 +1258,8 @@ class PBREngine():
         self._numMoveSelections = 0  # reset fails counter
 
     def _distinguishName(self, data, side, slot):
-        if self.state != PbrStates.MATCH_RUNNING:
-            return
+        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
+            return  # Names contain garbage
         assert 0 <= slot and slot <= 1
         if not self._fDoubles and slot == 1:
             return  # The second pokemon isn't in battle during singles.
@@ -1334,7 +1426,7 @@ class PBREngine():
         # START MENU
         if gui == PbrGuis.START_MENU:
             self._selectLater(10, 1)  # Select Colosseum Mode
-            self.setAnimSpeed(self._increasedSpeed)
+            self._setAnimSpeed(self._increasedSpeed)
         elif gui == PbrGuis.START_OPTIONS:
             self._pressLater(10, WiimoteButton.ONE)  # Backtrack
         elif gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
@@ -1438,7 +1530,7 @@ class PBREngine():
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
                 self._pressTwo()
-                self._initMatch()
+                self._matchStart()
 
         # BATTLE PASS MENU - not used anymore, just backtrack
         elif gui == PbrGuis.MENU_BATTLE_PASS:

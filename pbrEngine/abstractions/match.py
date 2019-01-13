@@ -6,7 +6,7 @@ Created on 22.09.2015
 
 import logging
 
-from ..util import invertSide, swap, EventHook, validateIngamenames
+from ..util import invertSide, swap, EventHook, sanitizeTeamIngamenames
 
 logger = logging.getLogger("pbrEngine")
 dlogger = logging.getLogger("pbrDebug")
@@ -14,8 +14,6 @@ dlogger = logging.getLogger("pbrDebug")
 class Match(object):
     def __init__(self, timer):
         self._timer = timer
-        self.new([], [], False)
-
         '''
         Event of a pokemon dying.
         arg0: <side> "blue" or "red"
@@ -28,8 +26,9 @@ class Match(object):
         self._check_greenlet = None
         self._lastMove = ("blue", "")
 
-    def new(self, pkmn_blue, pkmn_red, fDoubles):
-        validateIngamenames([p["ingamename"] for p in pkmn_blue+pkmn_red])
+    def new(self, teams, fDoubles):
+        sanitizeTeamIngamenames(teams)
+        pkmn_blue, pkmn_red = teams
         # Fixed orderings
         self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
         self.alive = {"blue": [True for _ in pkmn_blue],

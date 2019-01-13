@@ -7,6 +7,9 @@ Created on 04.09.2015
 import struct
 import inspect
 import gevent
+import logging
+
+logger = logging.getLogger("pbrEngine")
 
 
 class EventHook(object):
@@ -83,18 +86,46 @@ class EventHook(object):
         return "EventHook(%s)" % self.__kwargs_str()
 
 
-def validateIngamenames(names):
-    illegal_chars = r"[\]^`|<>_{}"
-    for name in names:
-        if (name != name.encode("ascii", "replace").decode() or
-            any(c in name for c in illegal_chars) or
-            len(name) > 10):
-            raise ValueError("Ingamename %s must be ascii with no illegal "
-                             "chars, and up to 10 characters" % name)
-    if len(set(names)) < len(names):
-        raise ValueError(
-            "Ingamenames of all Pokemon in a match must be unique: %s"
-            % ", ".join(names))
+def sanitizeTeamIngamenames(teams):
+    # ensure ingamenames contain valid chars
+    for team in teams:
+        for pkmn in team:
+            pkmn["ingamename"] = sanitizeName(pkmn["ingamename"])
+    # ensure ingamenames are unique
+    existing = set()
+    for team in teams:
+        for pkmn in team:
+            name = pkmn["ingamename"]
+            counter = 2
+            while name in existing:
+                appendix = "-{:d}".format(counter)
+                name = pkmn["ingamename"][:(10-len(appendix))] + appendix
+                counter += 1
+                # shouldn't be possible
+                assert counter < 999, "Failed to give unique ingamename to %s" % pkmn
+            pkmn["ingamename"] = name
+            existing.add(name)
+
+
+def sanitizeName(name):
+    new_name = ""
+    for char in name:
+        new_name += char if isCharValid(char) else "?"
+    return new_name[0:10]
+
+
+def isNameValid(name):
+    return all(isCharValid(char) for char in name)
+
+
+def isCharValid(char):
+    # This is PBR-specific.
+    if char in "\u2640\u2642":
+        return True  # Permit male & female symbols
+    if char in r"[\]^`|<>_{}":
+        return False  # Prevent PBR oddities
+    oval = ord(char)
+    return 32 <= oval and oval <= 126  # Disallow non-printing chars
 
 
 def bytesToString(data):
