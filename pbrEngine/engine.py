@@ -1096,6 +1096,11 @@ class PBREngine():
                 if target in (1, 2):  # foe team
                     target_side_index = int(side == "blue")
                     target_slot = target - 1
+                    opposing_side = "blue" if side == "red" else "red"
+                    if target_slot not in self.match.alive[opposing_side]:
+                        # Change target to the non-fainted opposing pkmn.
+                        # Some later gens do this automatically I think, but PBR doesn't.
+                        target_slot = 1 - target_slot
                 elif target in (0, -1):  # self team
                     target_side_index = int(side == "red")
                     if target == 0:  # self
@@ -1112,7 +1117,7 @@ class PBREngine():
                                  target)
                 next_pkmn = -1  # Indicates no next pokemon
             logger.debug("received action: {}".format(("move", next_move, next_pkmn)))
-            return ("move", next_move, next_pkmn)
+            return "move", next_move, next_pkmn
         elif primary in switches:
             next_pkmn = int(primary)
             logger.debug("received action: {}".format(("switch", next_pkmn)))

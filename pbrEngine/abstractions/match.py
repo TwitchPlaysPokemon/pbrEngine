@@ -31,8 +31,8 @@ class Match(object):
         pkmn_blue, pkmn_red = teams
         # Fixed orderings
         self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
-        self.alive = {"blue": [True for _ in pkmn_blue],
-                      "red": [True for _ in pkmn_red]}
+        self.alive = {"blue": list(range(len(pkmn_blue))),
+                       "red": list(range(len(pkmn_red)))}
         # Map ingame (button) TODO
         # See also: PBREngine.pkmnIndexToButton().
         self.i2fMap = {"blue": list(range(len(pkmn_blue))),
@@ -53,30 +53,29 @@ class Match(object):
         Basically alive pokemon minus the current ones.  Does not include
         effects of arena trap, etc.
         '''
-        options = []
-        logger.debug(self.alive[side])
-        for slot, alive in enumerate(self.alive[side]):
-            logger.debug(slot)
-            if (not alive or                        # dead
-                    slot == 0 or                    # already in battle
-                    slot == 1 and self._fDoubles):  # already in battle
-                continue
-            options.append(slot)
-        logger.debug(options)
-        return options
+        return [
+            slot for slot in self.alive[side]
+            if not slot == 0 and               # already in battle
+            not (slot == 1 and self._fDoubles) # already in battle
+        ]
 
     def fainted(self, side, pkmn_name):
         slot = self.getSlotByName(side, pkmn_name)
         if slot is None:
-            raise ValueError("Didn't recognize pokemon name: {} ", pkmn_name)
-        self.alive[side][slot] = False
+            logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
+            return
+        elif slot not in self.alive[side]:
+            logger.error("{} ({} {}) fainted, but was already marked as fainted"
+                         .format(pkmn_name, side, slot))
+            return
+        self.alive[side].remove(slot)
         self.on_death(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if not any(self.alive["blue"]) or not any(self.alive["red"]):
+        if not self.alive["blue"] or not self.alive["red"]:
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
@@ -93,26 +92,33 @@ class Match(object):
         raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
                          .format(pkmn_name, side, self.pkmn[side]))
 
-    def switched(self, side, new_slot, pkmn_name):
+    def switched(self, side, active_slot, pkmn_name):
         '''
-        A new in-battle name was detected, which indicates a switch.
-        The name of the in-battle pokemon at `new_slot` was changed to `pkmn_name`.
+        A new active Pokemon name was detected, which indicates a switch.
+        The name of the active pokemon at `active_slot` was changed to `pkmn_name`.
         The new ingame ordering is equal to the old ingame ordering, with exactly
-        one swap applied. Note: In a double KO, blue selects its slot 0 and sends it out,
-        then does the same for its slot 1.  So it is still one swap at a time.
+        one swap applied. Note: In a double KO, trainers select their new slot 0 and sends
+        it out, then do the same for their new slot 1.  So it is still one swap at a time.
         '''
-        old_slot = self.getSlotByName(side, pkmn_name)
-        if old_slot == new_slot:
+        inactive_slot = self.getSlotByName(side, pkmn_name)
+        if inactive_slot == active_slot:
             dlogger.error("Detected switch, but active Pokemon are unchanged.")
             return
-        if not self.alive[side][old_slot]:
-            raise ValueError("Dead {} pokemon {} at new ingame new_slot {} swapped "
+        if inactive_slot not in self.alive[side]:
+            raise ValueError("Dead {} pokemon {} at new ingame active_slot {} swapped "
                              "into battle. i2fMap: {}"
-                             .format(side, pkmn_name, new_slot, self.i2fMap))
-        swap(self.pkmn[side], old_slot, new_slot)
-        swap(self.alive[side], old_slot, new_slot)
-        swap(self.i2fMap[side], old_slot, new_slot)
-        self.on_switch(side=side, old_slot=old_slot, new_slot=new_slot)
+                             .format(side, pkmn_name, active_slot, self.i2fMap))
+        swap(self.pkmn[side], inactive_slot, active_slot)
+        swap(self.i2fMap[side], inactive_slot, active_slot)
+        # Alive just holds indices, so its swap is a bit different.
+        # The pkmn previously in `active_slot` might be fainted. The one previously in
+        # `inactive_slot` was sent out, so it's not fainted.
+        if active_slot not in self.alive[side]:
+            self.alive[side].remove(inactive_slot)
+            self.alive[side].append(active_slot)
+            self.alive[side] = sorted(self.alive[side])
+        # Otherwise both pkmn are alive, and the alive list is correct as-is
+        self.on_switch(side=side, old_slot=inactive_slot, new_slot=active_slot)
 
     def draggedOut(self, side, pkmn_name):
         pass
@@ -123,8 +129,8 @@ class Match(object):
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = not any(self.alive["blue"])
-        deadRed = not any(self.alive["red"])
+        deadBlue = not self.alive["blue"]
+        deadRed = not self.alive["red"]
         winner = "draw"
         if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove

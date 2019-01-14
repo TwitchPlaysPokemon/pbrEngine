@@ -9,6 +9,7 @@ logger = logging.getLogger("pbrEngine")
 
 class ActivePkmn:
     def __init__(self, side, slot, addr, dolphin, callback):
+        self.enabled = True
         self.side = side
         self.slot = slot
         self.addr = addr
@@ -18,6 +19,8 @@ class ActivePkmn:
 
         for offset in InBattlePkmnOffsets:
             def dolphin_callback(name, val):
+                if not self.enabled:
+                    return
                 if val != 0 and name in self._fields_last_zero_write:
                     delta = time() - self._fields_last_zero_write.pop(name)
                     logger.debug("Field {} was 0 for {:.2f}ms ({}, {})"
