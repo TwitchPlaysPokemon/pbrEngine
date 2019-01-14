@@ -198,7 +198,6 @@ class GuiStateOrderSelection(IntEnum):
     SELECT  = 0x03
     CONFIRM = 0x0e
 
-
 class GuiStateMatch(IntEnum):
     SWITCH_POPUP = 0x000800fd
 

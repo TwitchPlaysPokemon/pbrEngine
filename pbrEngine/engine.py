@@ -270,8 +270,6 @@ class PBREngine():
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
         self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
-        self._subscribe(Locations.ORDER_LOCK_BLUE.value,  self._distinguishOrderLock)
-        self._subscribe(Locations.ORDER_LOCK_RED.value, self._distinguishOrderLock)
         self._subscribeMulti(Locations.ATTACK_TEXT.value, self._distinguishAttack)
         self._subscribeMulti(Locations.INFO_TEXT.value, self._distinguishInfo)
         self._subscribe(Locations.HP_BLUE.value,
@@ -292,8 +290,8 @@ class PBREngine():
                              partial(self._distinguishName, side="red", slot=1))
         self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value,
                                  self._distinguishEffective)
-        # de-multiplexing all these into single PbrGuis-enum using distinguisher
         self._subscribe(Locations.GUI_STATE_MATCH.value, self._distinguishMatch)
+        # de-multiplexing all these into single PbrGuis-enum using distinguisher
         self._subscribe(Locations.GUI_STATE_BP.value,
                         self._distinguisher.distinguishBp)
         self._subscribe(Locations.GUI_STATE_MENU.value,
@@ -317,11 +315,8 @@ class PBREngine():
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
         # ##
 
-        gevent.sleep(1.0)
-        self._dolphin.pause()
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
-
-        self._setState(PbrStates.WAITING_FOR_NEW)
+        self._setState(PbrStates.ENTERING_BATTLE_MENU)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
     def _subscribe(self, loc, callback):
@@ -371,10 +366,8 @@ class PBREngine():
         self._fSelectedTppRules = False
         self._fBlueSelectedBP = False
         self._fBlueChoseOrder = False
-        self._fEnteredBp = False
-        self._fClearedBp = False
         self._fGuiPkmnUp = False
-        self._fSkipWaitForNew = False
+        self._fWaitForNew = True
         self._fBpPage2 = False
         self._fBattleStateReady = False
 
@@ -401,20 +394,23 @@ class PBREngine():
         '''
         logger.debug("Preparing a new match. startsignal: {}, state: {}"
                     .format(self.startsignal, self.state))
-        self.reset()
-        if self.state >= PbrStates.PREPARING_START and \
-           self.state <= PbrStates.MATCH_RUNNING:
-            # TODO this doesn't work after startup!
-            logger.warning("Detected invalid match state: {}.  Cancelling match"
-                           .format(self.state))
-            self.cancel()
-            self._fSkipWaitForNew = True
+
+        # Give PBR some time to quit the previous match, if needed.
         for _ in range(25):
             if self.state != PbrStates.MATCH_ENDED:
                 break
             logger.warning("PBR is not yet ready for a new match")
-            gevent.sleep(1) # Wait until self._waitForNew completes.  At that time,
-                            # PBR has finished all actions from the previous match
+            gevent.sleep(1)
+
+        #
+        # TODO: check this
+        if self.state > PbrStates.WAITING_FOR_NEW:
+            logger.warning("Detected invalid match state: {}.  Cancelling match"
+                           .format(self.state))
+            self.cancel()
+
+        self.reset()
+
         self.colosseum = colosseum
         self._fDoubles = fDoubles
         self._posBlues = list(range(0, 1))
@@ -426,9 +422,13 @@ class PBREngine():
         self.avatar_red = avatars[1]
         self._startingWeather = startingWeather
 
-        self._setState(PbrStates.ENTERING_MAIN_MENU)
-        self._dolphin.resume()
-        logger.debug("startsignal: {}, state: {}".format(self.startsignal, self.state))
+        if self.state == PbrStates.WAITING_FOR_NEW:
+            self._dolphin.resume()
+            gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
+            self._setState(PbrStates.PREPARING_STAGE)
+            self._select(2)  # Select Free Battle
+        else:  # self.state is either PbrStates.INIT or PbrStates.ENTERING_BATTLE_MENU
+            self._fWaitForNew = False  # No need to wait when we hit the battle menu
 
     def start(self):
         '''
@@ -438,11 +438,11 @@ class PBREngine():
         start the match once it's ready.
         Otherwise calling start() will start the match by resuming the game.
         '''
-        logger.debug("Starting a prepared match. startsignal: {}, state: {}"
-                    .format(self.startsignal, self.state))
+        logger.debug("Starting a prepared match.")
         self.startsignal = True
         if self.state == PbrStates.WAITING_FOR_START:
-            self._initOrderSelection()
+            self._dolphin.resume()
+            self._matchStart()
 
     def cancel(self):
         '''
@@ -621,9 +621,9 @@ class PBREngine():
         '''
         while True:
             self.timer.sleep(20)
-            if self.state == PbrStates.MATCH_RUNNING:
-                continue  # No stuckchecker during match
-            if self.state == PbrStates.ENTERING_MAIN_MENU:
+            if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW):
+                continue  # No stuckchecker during match & match end
+            if self.state == PbrStates.ENTERING_BATTLE_MENU:
                 limit = 20  # Only A spam needed, and stuck checker is expected to help
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
                 limit = 600  # 10 seconds- don't interrupt the injection
@@ -697,7 +697,7 @@ class PBREngine():
     def _read8(self, addr, **kwargs):
         return self._read(8, addr, **kwargs)
 
-    def _read(self, mode, addr, most_common_of=5):
+    def _read(self, mode, addr, most_common_of=1):
         '''Read <mode> bytes at the given address
 
         Returns most commonly read value of <most_common_of> reads to reduce
@@ -867,18 +867,54 @@ class PBREngine():
 
     def _initOrderSelection(self):
         '''
-        Done once for each team.
-        Simply presses the right wiimote button, which transitions
-        the gui state from PbrGuis.ORDER_SELECT to PbrGuis.ORDER_CONFIRM.
+        Select some Pokemon so we can pass through the order selection menus.
+        The true order will be injected a bit later at PbrGuis.ORDER_CONFIRM.
+        Done once for blue, then once for red.
         '''
         self._dolphin.resume()
-        self._setState(PbrStates.SELECTING_ORDER)
-        self._pressButton(WiimoteButton.RIGHT)
+        gevent.spawn(self._selectValidOrder)
+
+    def _selectValidOrder(self):
+        if not self._fBlueChoseOrder:
+            slot0Loc = Locations.ORDER_BLUE.value.addr
+            slot1Loc = Locations.ORDER_BLUE.value.addr + 1
+            validLoc = Locations.ORDER_VALID_BLUE.value.addr
+        else:
+            slot0Loc = Locations.ORDER_RED.value.addr
+            slot1Loc = Locations.ORDER_RED.value.addr + 1
+            validLoc = Locations.ORDER_VALID_RED.value.addr
+
+        # Select 1st slot. Confirm selection, retrying if needed
+        while self.state == PbrStates.SELECTING_ORDER:
+            self._pressButton(WiimoteButton.RIGHT)
+            self.timer.sleep(40)
+            if self._read8(slot0Loc) != 0:
+                break
+            logger.warning("Reselecting 1st pkmn")
+
+        if self._fDoubles:
+            # Select 2nd slot. Confirm selection, retrying if needed
+            while self.state == PbrStates.SELECTING_ORDER:
+                self._pressButton(WiimoteButton.UP)
+                self.timer.sleep(40)
+                if self._read8(slot1Loc) != 0:
+                    break
+                logger.warning("Reselecting 2nd pkmn")
+
+        # Bring up the PbrGuis.ORDER_CONFIRM prompt
+        while self.state == PbrStates.SELECTING_ORDER:
+            self._pressOne()
+            self.timer.sleep(40)
+            if self._read8(validLoc) != 1:  # This means order was confirmed
+                break
+            logger.warning("Reselecting order finished")
 
     def _matchStart(self):
         '''
         Is called when a match start is initiated.
         '''
+        gevent.sleep(0.5) # Wait a bit for dolphin to fully resume? Not sure if needed
+        self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         self.timer.spawn_later(330, self._matchStartDelayed)
         self.timer.spawn_later(450, self._disableBlur)
@@ -904,34 +940,23 @@ class PBREngine():
         if self.state != PbrStates.MATCH_RUNNING:
             return
         self._fMatchCancelled = False  # reset flag here
-        self.cursor.addEvent(1, self._quitMatch)
         self._setState(PbrStates.MATCH_ENDED)
+        self.cursor.addEvent(1, self._quitMatch)
         self.on_win(winner=winner)
-
-    def _waitForNew(self):
-        if not self._fSkipWaitForNew:
-            self._dolphin.pause()
-            self._setState(PbrStates.WAITING_FOR_NEW)
-        else:
-            self._setState(PbrStates.ENTERING_MAIN_MENU)
-            self._fSkipWaitForNew = False
 
     def _quitMatch(self):
         '''
         Is called as a cursorevent when the "Continue/Change Rules/Quit"
         options appear.
-        Clicks on "Quit" and resets the PBR engine into the next state.
-        Next state can either be waiting for a new match selection (pause),
-        or directly starting one.
+        Resets some match settings as needed.
+        Clicks on "Quit", which takes us to the Battle Menu (PbrGuis.MENU_BATTLE_TYPE)
         '''
         self._resetBlur()
-        self._select(3)  # Select Quit
         self.setVolume(0)  # Mute match setup beeping
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timeout issues
-        # make sure this input gets processed before a potential savestate-load
-        self.timer.spawn_later(30, self._waitForNew)
+        self._select(3)  # Select Quit
 
     def _nextPkmn(self):
         '''
@@ -1207,7 +1232,7 @@ class PBREngine():
 
     def _distinguishTurn(self, val):
         # See Locations.CURRENT_TURN
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         if val != self._turn + 1:
             raise ValueError("Detected val {}, expected {} (last val + 1)"
@@ -1219,7 +1244,7 @@ class PBREngine():
 
     def _distinguishSide(self, val):
         # See Locations.CURRENT_SIDE
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         if not val in (0, 1):
             raise ValueError("Invalid side detected: %d" % val)
@@ -1229,7 +1254,7 @@ class PBREngine():
 
     def _distinguishSlot(self, val):
         # See Locations.CURRENT_SLOT
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         if not val in (0, 1):
             raise ValueError("Invalid side detected: %d" % val)
@@ -1259,12 +1284,12 @@ class PBREngine():
 
     def _distinguishName(self, data, side, slot):
         if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
-            return  # Names contain garbage
+            return
         assert 0 <= slot and slot <= 1
         if not self._fDoubles and slot == 1:
             return  # The second pokemon isn't in battle during singles.
         name = bytesToString(data)
-        self.match.newInBattleName(side, slot, name)
+        self.match.switched(side, slot, name)
 
     def _distinguishHp(self, val, side):
         return
@@ -1386,13 +1411,6 @@ class PBREngine():
         # the 2nd pokemon to die and therefore needs a timer reset
         self.match.update_winning_checker()
 
-    def _distinguishOrderLock(self, val):
-        # This value becomes 1 if at least 1 pokemon has been selected for
-        # order. for both sides.
-        # Enables the gui to lock the order in. Bring up that gui by pressing 1
-        if val == 1:
-            self._pressOne()
-
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
         if not gui:
@@ -1435,26 +1453,24 @@ class PBREngine():
 
         # MAIN MENU
         elif gui == PbrGuis.MENU_MAIN:
-            self.state = PbrStates.PREPARING_STAGE
-            self._select(CursorPosMenu.BATTLE)  # select Battle option in main menu
-            # hack correct stuff as "default"
-            # seems to not work? Not doing this anymore
-            # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.value.addr,
-            # BattleStyles.SINGLE)
-            # self._fSelectedSingleBattle = True
-            # self._dolphin.write32(Locations.DEFAULT_RULESET.value.addr,
-            # Rulesets.RULE_1)
-            # self._fSelectedTppRules = True
+            self._select(CursorPosMenu.BATTLE)  # Select Battle option in main menu
+
+        # BATTLE MENU
         elif gui == PbrGuis.MENU_BATTLE_TYPE:
-            self.state = PbrStates.PREPARING_STAGE  # Just in case the first didn't go through? Not sure if that can really happen
-            self._select(2)  # Select Free Battle
+            if self._fWaitForNew:
+                self._setState(PbrStates.WAITING_FOR_NEW)
+                self._dolphin.pause()
+            else:
+                self._fWaitForNew = True  # Need to wait again after this match ends
+                self._setState(PbrStates.PREPARING_STAGE)
+                self._select(2)  # Select Free Battle
         elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
             self._select(2)  # Select 2 Players
         elif gui == PbrGuis.MENU_BATTLE_REMOTES:
                 self._select(1)  # Select One Wiimote
 
         # RULES MENU (stage, settings etc, but not battle pass selection)
-        elif gui == PbrGuis.RULES_STAGE:  # Set Colosseum
+        elif gui == PbrGuis.RULES_STAGE:  # Select Colosseum
             self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
             self._select(CursorOffsets.STAGE)
             self._setState(PbrStates.PREPARING_START)
@@ -1478,39 +1494,33 @@ class PBREngine():
             else:
                 self._select(1)  # Pick Singles
 
-        # BATTLE PASS SELECTION
+        # P1/P2 BATTLE PASS SELECTION
         # Verify state is past PREPARING_START, since some of these gui values are also seen under other irrelevant circumstances
-        elif gui == PbrGuis.BPSELECT_SELECT and self.state >= PbrStates.PREPARING_START:
+        elif gui == PbrGuis.BPSELECT_SELECT and self.state == PbrStates.PREPARING_START:
             self._fBpPage2 = False
             if not self._fBlueSelectedBP:  # Pick blue battle pass
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 0)
                 self._fBlueSelectedBP = True
             else:  # Pick red battle pass
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 1)
-        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state >= PbrStates.PREPARING_START:
+        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state == PbrStates.PREPARING_START:
             self._pressTwo()  # Confirm battle pass selection
-        elif gui == PbrGuis.RULES_BPS_CONFIRM:
+        elif gui == PbrGuis.RULES_BPS_CONFIRM and self.state == PbrStates.PREPARING_START:
             # twice, just to be sure as I have seen it fail once
             self._injectPokemon()
             self._injectPokemon()
             self._pressTwo()
-            # start a greenlet that spams 2, to skip the followup match intro
+            # Start a greenlet that spams 2, to skip the followup match intro.
+            # This takes us to PbrGuis.ORDER_SELECT.
             gevent.spawn_later(1, self._skipIntro)
 
         # PKMN ORDER SELECTION
-        elif gui == PbrGuis.ORDER_SELECT:
-            logger.debug("ORDER_SELECT. startsignal: {}, state: {}"
-                           .format(self.startsignal, self.state))
-            if self.startsignal:
-                # start() was called.  Match needs to start, so
-                # initiate order selection.
-                self._initOrderSelection()
-            else:
-                # Wait for start() to initiate order selection.
-                self._setState(PbrStates.WAITING_FOR_START)
-                self._dolphin.pause()
-
-        elif gui == PbrGuis.ORDER_CONFIRM:
+        elif (gui == PbrGuis.ORDER_SELECT and
+                self.state in (PbrStates.PREPARING_START, PbrStates.SELECTING_ORDER)):
+            self._setState(PbrStates.SELECTING_ORDER)
+            gevent.spawn(self._selectValidOrder())
+        # Inject the true match order, then click confirm.
+        elif gui == PbrGuis.ORDER_CONFIRM and self.state == PbrStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
             def orderToInts(order):
                 vals = [0x07]*6
@@ -1529,8 +1539,13 @@ class PBREngine():
                 x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["red"]))))
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
-                self._pressTwo()
-                self._matchStart()
+
+                if self.startsignal:  # Start the match!
+                    self._matchStart()
+                else:
+                    # Wait for a call to start()
+                    self._setState(PbrStates.WAITING_FOR_START)
+                    self._dolphin.pause()
 
         # BATTLE PASS MENU - not used anymore, just backtrack
         elif gui == PbrGuis.MENU_BATTLE_PASS:

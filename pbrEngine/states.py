@@ -10,25 +10,16 @@ from enum import IntEnum, unique
 # must be gapless
 @unique
 class PbrStates(IntEnum):
-    INIT              = 0
-    WAITING_FOR_NEW   = 1
+    INIT                 = 0
+    ENTERING_BATTLE_MENU = 1
+    WAITING_FOR_NEW      = 2
+    PREPARING_STAGE      = 3
+    PREPARING_START      = 4  # point of no return.
+    SELECTING_ORDER      = 5
+    WAITING_FOR_START    = 6
 
-    # # SAVE1 is whichever savefile (savefile1 or savefile2) will not
-    # # be used for this match, and SAVE2 is whichever *will* be used.
-    # CREATING_SAVE1    = 2
-    # CREATING_SAVE2    = 3
-    # EMPTYING_BP2      = 4
-    # EMPTYING_BP1      = 5
-    # PREPARING_BP1     = 6
-    # PREPARING_BP2     = 7
-    ENTERING_MAIN_MENU = 2
-    PREPARING_STAGE    = 3
-    PREPARING_START    = 4  # point of no return.
-    WAITING_FOR_START  = 5
-    SELECTING_ORDER    = 6
-
-    MATCH_RUNNING      = 7
-    MATCH_ENDED        = 8
+    MATCH_RUNNING        = 7
+    MATCH_ENDED          = 8
 
 
 @unique

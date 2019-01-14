@@ -145,10 +145,19 @@ class Locations(Enum):
     GUI_STATE_ORDER  = Loc(0x487445, 1)
     GUI_STATE_BP_SELECTION = Loc(0x476973, 1)
     GUI_TEMPTEXT     = Loc(0x4fd4a4, 72)
-    ORDER_BLUE       = Loc(0x48745c, 4)  # actually 1-6
-    ORDER_RED        = Loc(0x487468, 4)  # actually 1-6
-    ORDER_LOCK_BLUE  = Loc(0x487462, 1)
-    ORDER_LOCK_RED   = Loc(0x48746e, 1)
+
+    # One byte per pkmn. The value is the pkmn's slot for the match, or 0 if not selected.
+    ORDER_BLUE       = Loc(0x48745c, 6)
+    ORDER_RED        = Loc(0x487468, 6)
+
+    # 0 if the team order is invalid
+    # 1 if the team order is valid (at least 1 pokemon selected in singles, at least 2
+    # pokemon selected in doubles)
+    # A valid order is required in order to reach the order confirm gui (by pressing ONE)
+    # After pressing ONE, this has value 2. After confirming, this has value 3.
+    ORDER_VALID_BLUE  = Loc(0x487462, 1)
+    ORDER_VALID_RED   = Loc(0x48746e, 1)
+
     TOOLTIP_TOGGLE   = Loc(0x63ec10, 1)
     IDLE_TIMER       = Loc(0x476654, 2)
     FRAMECOUNT       = Loc(0x63fc2c, 4)  # goes up by 60 per second

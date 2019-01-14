@@ -9,10 +9,8 @@ into uniform abstracted PBR states and events.
 '''
 
 from .states import PbrGuis
-from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules,\
-                              GuiStateBpSelection
-from .memorymap.values import GuiStateOrderSelection, GuiStateMatch,\
-                              StatePopupBox
+from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
+from .memorymap.values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox
 from .util import bytesToString
 
 

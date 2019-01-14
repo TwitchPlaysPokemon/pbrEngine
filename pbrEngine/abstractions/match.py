@@ -93,17 +93,18 @@ class Match(object):
         raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
                          .format(pkmn_name, side, self.pkmn[side]))
 
-    def newInBattleName(self, side, new_slot, pkmn_name):
+    def switched(self, side, new_slot, pkmn_name):
         '''
-        The name of the in-battle pokemon at `new_slot` was changed to`pkmn_name`.
+        A new in-battle name was detected, which indicates a switch.
+        The name of the in-battle pokemon at `new_slot` was changed to `pkmn_name`.
         The new ingame ordering is equal to the old ingame ordering, with exactly
         one swap applied. Note: In a double KO, blue selects its slot 0 and sends it out,
         then does the same for its slot 1.  So it is still one swap at a time.
         '''
         old_slot = self.getSlotByName(side, pkmn_name)
         if old_slot == new_slot:
-            dlogger.error("Not expected to fire")
-            return  # No change; don't trigger self.on_switch().
+            dlogger.error("Detected switch, but active Pokemon are unchanged.")
+            return
         if not self.alive[side][old_slot]:
             raise ValueError("Dead {} pokemon {} at new ingame new_slot {} swapped "
                              "into battle. i2fMap: {}"
