@@ -143,12 +143,12 @@ class PBREngine():
         arg0: <side> "blue" "red"
         arg2: <slot> team index of the fainted pokemon
         '''
-        self.on_faint = EventHook(side=str, slot=int, alive=list, pokeset=dict,
+        self.on_faint = EventHook(side=str, slot=int, fainted=list, pokeset=dict,
                                   teams=dict, slotSOMap=dict, slotIGOMap=dict)
         self.match.on_faint += lambda side, slot: self.on_faint(
             side=side,
             slot=slot,
-            alive=deepcopy(self.match.alive),
+            fainted=deepcopy(self.match.fainted),
             pokeset=self.match.pkmn[side][slot],
             teams=self.match.pkmn,
             slotSOMap=deepcopy(self.match.slotSOMap),
@@ -1095,7 +1095,7 @@ class PBREngine():
             cause=cause,
             fails=self._numMoveSelections,
             switchesAvailable = self.match.switchesAvailable(side),
-            alive=deepcopy(self.match.alive),
+            fainted=deepcopy(self.match.fainted),
             activeData=self.active[side][slot].state,
             pokeset=self.match.pkmn[side][slot],
             teams=self.match.pkmn,  # TODO make shallowish copy
@@ -1131,7 +1131,7 @@ class PBREngine():
                     target_side_index = int(side == "blue")
                     target_slot = target - 1
                     opposing_side = "blue" if side == "red" else "red"
-                    if not self.match.alive[opposing_side][target_slot]:
+                    if self.match.fainted[opposing_side][target_slot]:
                         # Change target to the non-fainted opposing pkmn.
                         # Some later gens do this automatically I think, but PBR doesn't.
                         target_slot = 1 - target_slot

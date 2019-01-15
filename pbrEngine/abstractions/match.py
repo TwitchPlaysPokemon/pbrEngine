@@ -37,7 +37,7 @@ class Match(object):
 
         # These two fields keep teams in their ingame order.
         self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
-        self.alive = {"blue": [True] * len(pkmn_blue), "red": [True] * len(pkmn_red)}
+        self.fainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
 
         # This maps a pkmn's ingame order slot to its starting order slot. Both are
         # 0-indexed. Ex:
@@ -71,12 +71,12 @@ class Match(object):
     def switchesAvailable(self, side):
         '''
         Returns the ingame slots of the Pokemon available to switch to for this team.
-        Basically alive pokemon minus the current ones.  Does not include effects of
+        Basically fainted pokemon minus the current ones.  Does not include effects of
         arena trap, etc.
         '''
         return [
-            slot for slot, is_alive in enumerate(self.alive[side])
-            if is_alive and
+            slot for slot, is_fainted in enumerate(self.fainted[side]) if
+            not is_fainted and
             not slot == 0 and                  # already in battle
             not (slot == 1 and self._fDoubles) # already in battle
         ]
@@ -86,18 +86,18 @@ class Match(object):
         if slot is None:
             logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
             return
-        elif not self.alive[side][slot]:
+        elif self.fainted[side][slot]:
             logger.error("{} ({} {}) fainted, but was already marked as fainted"
                          .format(pkmn_name, side, slot))
             return
-        self.alive[side][slot] = False
+        self.fainted[side][slot] = True
         self.on_faint(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if not any(self.alive["blue"]) or not any(self.alive["red"]):
+        if all(self.fainted["blue"]) or all(self.fainted["red"]):
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
@@ -126,14 +126,14 @@ class Match(object):
         if slot_inactive == slot_active:
             dlogger.error("Detected switch, but active Pokemon are unchanged.")
             return
-        if not self.alive[side][slot_inactive]:
+        if self.fainted[side][slot_inactive]:
             raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
                              " into battle. slotSOMap: {}"
                              .format(side, pkmn_name, slot_active, self.slotSOMap))
         swap(self.pkmn[side], slot_inactive, slot_active)
         swap(self.slotSOMap[side], slot_inactive, slot_active)
-        swap(self.alive[side], slot_inactive, slot_active)
-        # Otherwise both pkmn are alive, and the alive list is correct as-is
+        swap(self.fainted[side], slot_inactive, slot_active)
+        # Otherwise both pkmn are fainted, and the fainted list is correct as-is
         self.on_switch(side=side, slot_active=slot_inactive, slot_inactive=slot_active)
 
     def draggedOut(self, side, pkmn_name):
@@ -141,12 +141,13 @@ class Match(object):
 
     def checkWinner(self):
         '''
+        TODO this will be an issue if we ever slow down below 1x speed. Why aren't we just spawning the match finished check when the quit menu comes up?
         Shall be called about 11 seconds after a fainted textbox appears.
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = not any(self.alive["blue"])
-        deadRed = not any(self.alive["red"])
+        deadBlue = all(self.fainted["blue"])
+        deadRed = all(self.fainted["red"])
         winner = "draw"
         if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove
