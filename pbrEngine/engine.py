@@ -149,8 +149,8 @@ class PBREngine():
             side=side,
             slot=slot,
             fainted=deepcopy(self.match.areFainted),
-            pokeset=self.match.pkmn[side][slot],
-            teams=self.match.pkmn,
+            pokeset=self.match.teams[side][slot],
+            teams=self.match.teams,
             slotSOMap=deepcopy(self.match.slotSOMap),
             slotIGOMap=deepcopy(self.match.slotIGOMap),
         )
@@ -632,10 +632,10 @@ class PBREngine():
         self.on_switch(side=side,
                        slot_active=slot_active,
                        slot_inactive=slot_inactive,
-                       pokeset_sentout=self.match.pkmn[side][slot_active],
-                       pokeset_recalled=self.match.pkmn[side][slot_inactive],
+                       pokeset_sentout=self.match.teams[side][slot_active],
+                       pokeset_recalled=self.match.teams[side][slot_inactive],
                        obj=self._actionCallbackObjStore[side][slot_inactive],
-        )
+                       )
         self._actionCallbackObjStore[side][slot_inactive] = None
 
     def _stuckChecker(self):
@@ -819,7 +819,7 @@ class PBREngine():
                     # PBR forces doubles battles to start with >=2 mons per side.
                     active = ActivePkmn(side, slot, activeLoc + offset,
                                         self._dolphin, callback,
-                                        self.match.pkmn[side][slot])
+                                        self.match.teams[side][slot])
                 offset += NestedLocations.ACTIVE_PKMN.value.length
                 self.active[side].append(active)
                 logger.info("Created IB pkmn: {} {} {}".format(side, slot, active))
@@ -858,8 +858,8 @@ class PBREngine():
             logger.error("Failed to determine bp structs location")
             return
 
-        for side_offset, data in ((LoadedBPOffsets.BP_BLUE, self.match.pkmn["blue"]),
-                                  (LoadedBPOffsets.BP_RED, self.match.pkmn["red"])):
+        for side_offset, data in ((LoadedBPOffsets.BP_BLUE, self.match.teams["blue"]),
+                                  (LoadedBPOffsets.BP_RED, self.match.teams["red"])):
             pkmnLoc = bp_groups_loc + LoadedBPOffsets.GROUP2 + side_offset + LoadedBPOffsets.PKMN
             for poke_i, pkmn_dict in enumerate(data):
                 pokemon = get_pokemon_from_data(pkmn_dict)
@@ -1105,8 +1105,8 @@ class PBREngine():
             switchesAvailable = self.match.switchesAvailable(side),
             fainted=deepcopy(self.match.areFainted),
             activeData=self.active[side][slot].state,
-            pokeset=self.match.pkmn[side][slot],
-            teams=self.match.pkmn,  # TODO make shallowish copy
+            pokeset=self.match.teams[side][slot],
+            teams=self.match.teams,  # TODO make shallowish copy
             slotSOMap=deepcopy(self.match.slotSOMap),
             slotIGOMap=deepcopy(self.match.slotIGOMap),
         )
@@ -1405,8 +1405,8 @@ class PBREngine():
                            slot=slot,
                            moveindex=0,  # FIXME or remove me
                            movename=moveName,
-                           pokeset=self.match.pkmn[side][slot],
-                           teams=self.match.pkmn,
+                           pokeset=self.match.teams[side][slot],
+                           teams=self.match.teams,
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None
 
@@ -1583,12 +1583,12 @@ class PBREngine():
                         vals[4] << 8 | vals[5])
             if not self._fBlueChoseOrder:
                 self._fBlueChoseOrder = True
-                x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["blue"]))))
+                x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["blue"]))))
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
                 self._pressTwo()
             else:
-                x1, x2 = orderToInts(list(range(1, 1+len(self.match.pkmn["red"]))))
+                x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["red"]))))
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
 

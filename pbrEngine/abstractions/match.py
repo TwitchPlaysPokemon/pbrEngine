@@ -36,7 +36,7 @@ class Match(object):
         # maps to which Pokemon.
 
         # These two fields keep teams in their ingame order.
-        self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
+        self.teams = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
         self.areFainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
 
         # This maps a pkmn's ingame order slot to its starting order slot. Both are
@@ -62,7 +62,7 @@ class Match(object):
         # <current ingame slot> = self.slotIGOMap[side][<slot at start of match>]
         result = {}
         for side in ("blue", "red"):
-            result[side] = [self.slotIGO(side, i) for i in range(len(self.pkmn[side]))]
+            result[side] = [self.slotIGO(side, i) for i in range(len(self.teams[side]))]
         return result
 
     def setLastMove(self, side, move):
@@ -106,13 +106,13 @@ class Match(object):
 
     def getSlotByName(self, side, pkmn_name):
         # Returns the slot of the pokemon with this name.
-        for i, v in enumerate(self.pkmn[side]):
+        for i, v in enumerate(self.teams[side]):
             if v["ingamename"] == pkmn_name:
                 # dlogger.info("{}'s {} successfully recognized."
                 #              .format(side, pkmn_name))
                 return i
         raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
-                         .format(pkmn_name, side, self.pkmn[side]))
+                         .format(pkmn_name, side, self.teams[side]))
 
     def switched(self, side, slot_active, pkmn_name):
         '''
@@ -130,7 +130,7 @@ class Match(object):
             raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
                              " into battle. slotSOMap: {}"
                              .format(side, pkmn_name, slot_active, self.slotSOMap))
-        swap(self.pkmn[side], slot_inactive, slot_active)
+        swap(self.teams[side], slot_inactive, slot_active)
         swap(self.slotSOMap[side], slot_inactive, slot_active)
         swap(self.areFainted[side], slot_inactive, slot_active)
         # Otherwise both pkmn are fainted, and the fainted list is correct as-is
