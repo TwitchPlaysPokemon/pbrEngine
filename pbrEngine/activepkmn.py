@@ -3,7 +3,7 @@ from time import time
 from functools import partial
 from collections import namedtuple
 
-from .memorymap.addresses import InBattlePkmnOffsets
+from .memorymap.addresses import ActivePkmnOffsets
 
 logger = logging.getLogger("pbrEngine")
 
@@ -39,7 +39,7 @@ class ActivePkmn:
                 self.fields["PP%d" % i] = 0
 
 
-        for offset in InBattlePkmnOffsets:
+        for offset in ActivePkmnOffsets:
             def dolphin_callback(name, val):
                 if not self.enabled:
                     return

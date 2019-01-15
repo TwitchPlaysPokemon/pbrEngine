@@ -135,7 +135,7 @@ class Locations(Enum):
     CURSOR_POS       = Loc(0x63eb9a, 2)
     ATTACK_TEAM_TEXT = Loc(0x47a579, 1)
 
-    # State of in battle move/pkmn select menus.
+    # State of move/pkmn select menus.
     # Same location as INPUT_EXECUTE, but it helps to make a logical distinction between
     # the two.  This identifier is used for reading, while INPUT_EXECUTE is for writing.
     GUI_STATE_MATCH  = Loc(0x478498, 4)
@@ -190,7 +190,7 @@ class Locations(Enum):
 
     POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
-class InBattlePkmnOffsets(Enum):
+class ActivePkmnOffsets(Enum):
     # SPECIES         = Loc(0x00, 2)
     # STAT_ATK        = Loc(0x02, 2)
     # STAT_DEF        = Loc(0x04, 2)

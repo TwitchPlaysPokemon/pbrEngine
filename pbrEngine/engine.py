@@ -787,7 +787,7 @@ class PBREngine():
         '''
         if self._startingWeather:
             self._setStartingWeather()
-        self._setupInBattlePkmn()
+        self._setupActivePkmn()
 
 
     def temp_callback(self, side, slot, name, val):
@@ -796,7 +796,7 @@ class PBREngine():
         logger.info("{} {}: {} is now {:0X}".format(side, slot, name, val))
 
 
-    def _setupInBattlePkmn(self):
+    def _setupActivePkmn(self):
         activeLoc = NestedLocations.ACTIVE_PKMN.value.getAddr(self._read)
         if activeLoc == -1:
             logger.error("Failed to determine location of active pkmn")
@@ -1319,7 +1319,7 @@ class PBREngine():
             return
         assert 0 <= slot and slot <= 1
         if not self._fDoubles and slot == 1:
-            return  # The second pokemon isn't in battle during singles.
+            return  # No second pokemon in singles.
         name = bytesToString(data)
         self.match.switched(side, slot, name)
 
