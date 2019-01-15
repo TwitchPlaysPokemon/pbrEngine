@@ -37,7 +37,7 @@ class Match(object):
 
         # These two fields keep teams in their ingame order.
         self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
-        self.fainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
+        self.areFainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
 
         # This maps a pkmn's ingame order slot to its starting order slot. Both are
         # 0-indexed. Ex:
@@ -75,7 +75,7 @@ class Match(object):
         arena trap, etc.
         '''
         return [
-            slot for slot, is_fainted in enumerate(self.fainted[side]) if
+            slot for slot, is_fainted in enumerate(self.areFainted[side]) if
             not is_fainted and
             not slot == 0 and                  # already in battle
             not (slot == 1 and self._fDoubles) # already in battle
@@ -86,18 +86,18 @@ class Match(object):
         if slot is None:
             logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
             return
-        elif self.fainted[side][slot]:
+        elif self.areFainted[side][slot]:
             logger.error("{} ({} {}) fainted, but was already marked as fainted"
                          .format(pkmn_name, side, slot))
             return
-        self.fainted[side][slot] = True
+        self.areFainted[side][slot] = True
         self.on_faint(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if all(self.fainted["blue"]) or all(self.fainted["red"]):
+        if all(self.areFainted["blue"]) or all(self.areFainted["red"]):
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
@@ -126,13 +126,13 @@ class Match(object):
         if slot_inactive == slot_active:
             dlogger.error("Detected switch, but active Pokemon are unchanged.")
             return
-        if self.fainted[side][slot_inactive]:
+        if self.areFainted[side][slot_inactive]:
             raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
                              " into battle. slotSOMap: {}"
                              .format(side, pkmn_name, slot_active, self.slotSOMap))
         swap(self.pkmn[side], slot_inactive, slot_active)
         swap(self.slotSOMap[side], slot_inactive, slot_active)
-        swap(self.fainted[side], slot_inactive, slot_active)
+        swap(self.areFainted[side], slot_inactive, slot_active)
         # Otherwise both pkmn are fainted, and the fainted list is correct as-is
         self.on_switch(side=side, slot_active=slot_inactive, slot_inactive=slot_active)
 
@@ -146,8 +146,8 @@ class Match(object):
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = all(self.fainted["blue"])
-        deadRed = all(self.fainted["red"])
+        deadBlue = all(self.areFainted["blue"])
+        deadRed = all(self.areFainted["red"])
         winner = "draw"
         if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove

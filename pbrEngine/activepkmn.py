@@ -14,7 +14,7 @@ moveData = namedtuple("ActiveMove", ["idNum", "pp"])
 
 class ActivePkmn:
     def __init__(self, side, slot, addr, dolphin, callback, starting_pokeset):
-        self.enabled = True
+        self._dolphin = dolphin
         self.side = side
         self.slot = slot
         self.addr = addr
@@ -41,8 +41,6 @@ class ActivePkmn:
 
         for offset in ActivePkmnOffsets:
             def dolphin_callback(name, val):
-                if not self.enabled:
-                    return
                 if val != 0 and name in self._fields_last_zero_write:
                     delta = time() - self._fields_last_zero_write.pop(name)
                     logger.debug("Field {} was 0 for {:.2f}ms ({}, {})"
@@ -66,6 +64,11 @@ class ActivePkmn:
             # dolphin_callback(42)
             # print()
             dolphin._subscribe(offset_length * 8, offset_addr, dolphin_callback)
+
+    def cleanup(self):
+        for offset in ActivePkmnOffsets:
+            offset_addr = self.addr + offset.value.addr
+            self._dolphin._unSubscribe(offset_addr)
 
     @property
     def state(self):

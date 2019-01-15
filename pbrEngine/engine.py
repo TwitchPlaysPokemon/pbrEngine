@@ -148,7 +148,7 @@ class PBREngine():
         self.match.on_faint += lambda side, slot: self.on_faint(
             side=side,
             slot=slot,
-            fainted=deepcopy(self.match.fainted),
+            fainted=deepcopy(self.match.areFainted),
             pokeset=self.match.pkmn[side][slot],
             teams=self.match.pkmn,
             slotSOMap=deepcopy(self.match.slotSOMap),
@@ -205,6 +205,8 @@ class PBREngine():
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._startingWeather = None
+
+        self.active = {"blue": [], "red": []}
         self.reset()
 
         # stuck checker
@@ -354,7 +356,12 @@ class PBREngine():
         self._fMatchCancelled = False
         self._fDoubles = False
         self._move_select_followup = None
-        self.active = {"blue": [None] * 2, "red": [None] * 2}
+
+        for side in ("blue", "red"):
+            for active in list(self.active[side]):
+                active.cleanup()
+                self.active[side].remove(active)
+
         # Move selection: expect REGULAR, set next to OTHER
         # Fainted: set next to FAINTED.
         self._expectedActionCause = {"blue": [ActionCause.OTHER] * 2,
@@ -814,7 +821,7 @@ class PBREngine():
                                         self._dolphin, callback,
                                         self.match.pkmn[side][slot])
                 offset += NestedLocations.ACTIVE_PKMN.value.length
-                self.active[side][slot] = active
+                self.active[side].append(active)
                 logger.info("Created IB pkmn: {} {} {}".format(side, slot, active))
 
 
@@ -959,6 +966,7 @@ class PBREngine():
         if self.state != PbrStates.MATCH_RUNNING:
             return
         self._fMatchCancelled = False  # reset flag
+        self._fWaitForNew = True  # fixme this is probably bad
         self._setState(PbrStates.MATCH_ENDED)
         self.cursor.addEvent(1, self._quitMatch)
         self.on_win(winner=winner)
@@ -1095,7 +1103,7 @@ class PBREngine():
             cause=cause,
             fails=self._numMoveSelections,
             switchesAvailable = self.match.switchesAvailable(side),
-            fainted=deepcopy(self.match.fainted),
+            fainted=deepcopy(self.match.areFainted),
             activeData=self.active[side][slot].state,
             pokeset=self.match.pkmn[side][slot],
             teams=self.match.pkmn,  # TODO make shallowish copy
@@ -1131,7 +1139,7 @@ class PBREngine():
                     target_side_index = int(side == "blue")
                     target_slot = target - 1
                     opposing_side = "blue" if side == "red" else "red"
-                    if self.match.fainted[opposing_side][target_slot]:
+                    if self.match.areFainted[opposing_side][target_slot]:
                         # Change target to the non-fainted opposing pkmn.
                         # Some later gens do this automatically I think, but PBR doesn't.
                         target_slot = 1 - target_slot
@@ -1429,7 +1437,7 @@ class PBREngine():
         if match:
             side = match.group(1).lower()
             self.match.getSlotByName(side, match.group(2))
-            self.match.fainted(side, match.group(2))
+            self.match.areFainted(side, match.group(2))
             self._expectedActionCause[side][self._slot] = ActionCause.FAINT
             return
 
