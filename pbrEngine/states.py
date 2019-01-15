@@ -24,15 +24,16 @@ class PbrStates(IntEnum):
 
 @unique
 class PbrGuis(IntEnum):
-    MENU_MAIN           = 1
-    MENU_BATTLE_TYPE    = 2
-    MENU_BATTLE_PLAYERS = 3
-    MENU_BATTLE_REMOTES = 4
-    MENU_BATTLE_PASS    = 5
-    MENU_SAVE           = 6
-    MENU_SAVE_CONFIRM   = 7
-    MENU_SAVE_CONTINUE  = 8
-    MENU_SAVE_TYP2      = 9  # thank you press 2
+    PRE_MENU_MAIN       = 1
+    MENU_MAIN           = 2
+    MENU_BATTLE_TYPE    = 3
+    MENU_BATTLE_PLAYERS = 4
+    MENU_BATTLE_REMOTES = 5
+    MENU_BATTLE_PASS    = 6
+    MENU_SAVE           = 7
+    MENU_SAVE_CONFIRM   = 8
+    MENU_SAVE_CONTINUE  = 9
+    MENU_SAVE_TYP2      = 10  # thank you press 2
 
     BPS_SELECT          = 11
     BPS_SLOTS           = 12

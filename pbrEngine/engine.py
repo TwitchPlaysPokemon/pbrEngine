@@ -322,7 +322,7 @@ class PBREngine():
         # ##
 
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
-        self._setState(PbrStates.ENTERING_BATTLE_MENU)
+        self._setState(PbrStates.INIT)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
     def _subscribe(self, loc, callback):
@@ -351,7 +351,6 @@ class PBREngine():
         self._next_pkmn = -1
         self._move_select_state = None
         self._numMoveSelections = 0
-        self.startsignal = False
         self._fMatchCancelled = False
         self._fDoubles = False
         self._move_select_followup = None
@@ -374,6 +373,7 @@ class PBREngine():
         self._fBlueChoseOrder = False
         self._fGuiPkmnUp = False
         self._fWaitForNew = True
+        self._fWaitForStart = True
         self._fBpPage2 = False
         self._fBattleStateReady = False
 
@@ -398,8 +398,8 @@ class PBREngine():
         :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         '''
-        logger.debug("Preparing a new match. startsignal: {}, state: {}"
-                    .format(self.startsignal, self.state))
+        logger.debug("Preparing a new match. _fWaitForStart: {}, state: {}"
+                     .format(self._fWaitForStart, self.state))
 
         # Give PBR some time to quit the previous match, if needed.
         for _ in range(25):
@@ -413,8 +413,11 @@ class PBREngine():
         if self.state > PbrStates.WAITING_FOR_NEW:
             logger.warning("Detected invalid match state: {}. Resetting dolphin"
                            .format(self.state))
+
+            self._dolphin.stop()
+            gevent.sleep(1)
             self._dolphin.reset()
-            self._setState(PbrStates.ENTERING_BATTLE_MENU)
+            self._setState(PbrStates.INIT)
 
         self.reset()
 
@@ -446,10 +449,13 @@ class PBREngine():
         Otherwise calling start() will start the match by resuming the game.
         '''
         logger.debug("Starting a prepared match.")
-        self.startsignal = True
         if self.state == PbrStates.WAITING_FOR_START:
+            # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
             self._matchStart()
+        else:  # Start the match as soon as it's ready.
+            self._fWaitForStart = False
+
 
     def cancel(self):
         '''
@@ -635,8 +641,8 @@ class PBREngine():
             self.timer.sleep(20)
             if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW):
                 continue  # No stuckchecker during match & match end
-            if self.state == PbrStates.ENTERING_BATTLE_MENU:
-                limit = 20  # Only A spam needed, and stuck checker is expected to help
+            if self.state == PbrStates.INIT:
+                limit = 45  # Only A spam needed, and stuck checker is expected to help
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
                 limit = 600  # 10 seconds- don't interrupt the injection
             else:
@@ -1480,6 +1486,12 @@ class PBREngine():
         elif gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
                      PbrGuis.START_MODE, PbrGuis.START_SAVEFILE):
             self._pressLater(10, WiimoteButton.TWO)  # Click through all these
+        elif gui == PbrGuis.PRE_MENU_MAIN:
+            # Receptionist bows her head. When she's done bowing the main
+            # menu will pop up- no need to press anything.
+            # Change state to stop stuckchecker's 2 spam, or it might take us into the DS
+            # storage menu.
+            self._setState(PbrStates.ENTERING_BATTLE_MENU)
 
         # MAIN MENU
         elif gui == PbrGuis.MENU_MAIN:
@@ -1487,6 +1499,8 @@ class PBREngine():
 
         # BATTLE MENU
         elif gui == PbrGuis.MENU_BATTLE_TYPE:
+            # Decide whether to wait for a call to new(), or proceed if it the match
+            # has already been received.
             if self._fWaitForNew:
                 self._setState(PbrStates.WAITING_FOR_NEW)
                 self._dolphin.pause()
@@ -1570,12 +1584,11 @@ class PBREngine():
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
 
-                if self.startsignal:  # Start the match!
-                    self._matchStart()
-                else:
-                    # Wait for a call to start()
+                if self._fWaitForStart:  # Wait for a call to start()
                     self._setState(PbrStates.WAITING_FOR_START)
                     self._dolphin.pause()
+                else:  # Start the match!
+                    self._matchStart()
 
         # BATTLE PASS MENU - not used anymore, just backtrack
         elif gui == PbrGuis.MENU_BATTLE_PASS:

@@ -164,6 +164,7 @@ class GuiStateBP(IntEnum):
 
 
 class GuiStateMenu(IntEnum):
+    PRE_MAIN_MENU   = 0x33
     MAIN_MENU       = 0x2d
     BATTLE_PASS     = 0x39
     BATTLE_TYPE     = 0x40

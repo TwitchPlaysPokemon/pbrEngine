@@ -45,6 +45,7 @@ class Distinguisher(object):
 
 # Main Menu
 _map_menu = {
+    GuiStateMenu.PRE_MAIN_MENU : PbrGuis.PRE_MENU_MAIN,
     GuiStateMenu.MAIN_MENU     : PbrGuis.MENU_MAIN,
     GuiStateMenu.BATTLE_PASS   : PbrGuis.MENU_BATTLE_PASS,
     GuiStateMenu.BATTLE_TYPE   : PbrGuis.MENU_BATTLE_TYPE,
