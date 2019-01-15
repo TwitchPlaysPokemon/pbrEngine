@@ -16,6 +16,7 @@ from functools import partial
 from enum import Enum
 from collections import Counter
 from contextlib import suppress
+from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
@@ -52,10 +53,6 @@ class ActionCause(Enum):
     REGULAR = "regular"  # regular move selection
     FAINT = "faint"  # pokemon selection after faint
     OTHER = "other"  # other causes, like forced switch by baton pass or u-turn
-
-
-class ActionError(Exception):
-    pass
 
 
 class PBREngine():
@@ -140,15 +137,23 @@ class PBREngine():
               to this event. None if the callback wasn't called (e.g. Rollout)
         '''
         self.on_attack = EventHook(side=str, slot=int, moveindex=int,
-                                  movename=str, obj=object)
+                                  movename=str, pokeset=dict, teams=dict, obj=object)
         '''
-        Event of a pokemon dying.
+        Event of a pokemon fainting.
         arg0: <side> "blue" "red"
-        arg2: <slot> team index of the dead pokemon
+        arg2: <slot> team index of the fainted pokemon
         '''
-        self.on_death = EventHook(side=str, slot=int)
-        self.match.on_death += lambda side, slot: self.on_death(
-            side=side, slot=slot)
+        self.on_faint = EventHook(side=str, slot=int, alive=list, pokeset=dict,
+                                  teams=dict, slotSOMap=dict, slotIGOMap=dict)
+        self.match.on_faint += lambda side, slot: self.on_faint(
+            side=side,
+            slot=slot,
+            alive=deepcopy(self.match.alive),
+            pokeset=self.match.pkmn[side][slot],
+            teams=self.match.pkmn,
+            slotSOMap=deepcopy(self.match.slotSOMap),
+            slotIGOMap=deepcopy(self.match.slotIGOMap),
+        )
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
@@ -157,8 +162,9 @@ class PBREngine():
         arg3: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
         '''
-        self.on_switch = EventHook(side=str, old_slot=int,
-                                   new_slot=int, obj=object)
+        self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
+                                   pokeset_sentout=dict, pokeset_recalled=dict,
+                                   obj=object)
         '''
         Event of information text appearing in one of those black boxes.
         Also includes fly-by texts (It's super/not very effective!, A critical hit!)
@@ -405,9 +411,10 @@ class PBREngine():
         #
         # TODO: check this
         if self.state > PbrStates.WAITING_FOR_NEW:
-            logger.warning("Detected invalid match state: {}.  Cancelling match"
+            logger.warning("Detected invalid match state: {}. Resetting dolphin"
                            .format(self.state))
-            self.cancel()
+            self._dolphin.reset()
+            self._setState(PbrStates.ENTERING_BATTLE_MENU)
 
         self.reset()
 
@@ -608,10 +615,15 @@ class PBREngine():
         self._dolphin.write32(Locations.SPEED_1.value.addr, DefaultValues["SPEED1"])
         self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
-    def _switched(self, side, old_slot, new_slot):
-        self.on_switch(side=side, old_slot=old_slot, new_slot=new_slot,
-                      obj=self._actionCallbackObjStore[side][new_slot])
-        self._actionCallbackObjStore[side][new_slot] = None
+    def _switched(self, side, slot_active, slot_inactive):
+        self.on_switch(side=side,
+                       slot_active=slot_active,
+                       slot_inactive=slot_inactive,
+                       pokeset_sentout=self.match.pkmn[side][slot_active],
+                       pokeset_recalled=self.match.pkmn[side][slot_inactive],
+                       obj=self._actionCallbackObjStore[side][slot_inactive],
+        )
+        self._actionCallbackObjStore[side][slot_inactive] = None
 
     def _stuckChecker(self):
         '''
@@ -793,10 +805,11 @@ class PBREngine():
                 else:
                     # PBR forces doubles battles to start with >=2 mons per side.
                     active = ActivePkmn(side, slot, activeLoc + offset,
-                                        self._dolphin, callback)
+                                        self._dolphin, callback,
+                                        self.match.pkmn[side][slot])
                 offset += NestedLocations.ACTIVE_PKMN.value.length
                 self.active[side][slot] = active
-                print("Created IB pkmn: {} {} {}".format(side, slot, active))
+                logger.info("Created IB pkmn: {} {} {}".format(side, slot, active))
 
 
     def _setStartingWeather(self):
@@ -933,13 +946,13 @@ class PBREngine():
     def _matchOver(self, winner):
         '''
         Is called when the current match ended and a winner is determined.
-        Sets the cursorevent for when the "Continue/Change Rules/Quit"
+        Sets the cursorevent to run self._quitMatch when the "Continue/Change Rules/Quit"
         options appear.
         Calls the on_win-callback and triggers a matchlog-message.
         '''
         if self.state != PbrStates.MATCH_RUNNING:
             return
-        self._fMatchCancelled = False  # reset flag here
+        self._fMatchCancelled = False  # reset flag
         self._setState(PbrStates.MATCH_ENDED)
         self.cursor.addEvent(1, self._quitMatch)
         self.on_win(winner=winner)
@@ -955,7 +968,7 @@ class PBREngine():
         self.setVolume(0)  # Mute match setup beeping
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
-        self._setEmuSpeed(1.0)  # Avoid possible timeout issues
+        self._setEmuSpeed(1.0)  # Avoid possible timing issues?
         self._select(3)  # Select Quit
 
     def _nextPkmn(self):
@@ -1062,70 +1075,78 @@ class PBREngine():
         turn = self._turn + 2 - int(bool(switch_only)) - 1
         side = self._side
         slot = self._slot
-        # Currently we allow all moves to be selected.
-        moves = [] if switch_only else ["a", "b", "c", "d"]
-        # Disallow selecting Pokemon not present: crash risk.
-        switches = self.match.getSwitchOptions(side)
         # TODO: disallow selecting Pokemon not present: crash risk
-        targets = None if switch_only else [[1, 2, 0, -1] for _ in moves]
         # `cause` will get ActionCause.OTHER, unless _nextMove() just set it to
         # ActionCause.REGULAR, or a detected faint set it to ActionCause.FAINT.
         cause = self._expectedActionCause[side][slot]
         self._expectedActionCause[side][slot] = ActionCause.OTHER
 
-        # retrieve action
+        # Retrieve actions from the upper layer.
         primary, target, obj = self._action_callback(
-            turn=turn, side=side, slot=slot, cause=cause,
-            fails=self._numMoveSelections)
+            turn=turn,
+            side=side,
+            slot=slot,
+            cause=cause,
+            fails=self._numMoveSelections,
+            switchesAvailable = self.match.switchesAvailable(side),
+            alive=deepcopy(self.match.alive),
+            activeData=self.active[side][slot].state,
+            pokeset=self.match.pkmn[side][slot],
+            teams=self.match.pkmn,  # TODO make shallowish copy
+            slotSOMap=deepcopy(self.match.slotSOMap),
+            slotIGOMap=deepcopy(self.match.slotIGOMap),
+        )
+
+        # TODO: i don't think we want to write anything in this function, because the action callback could sleep too long and the data from it could be bogus or something
         self._actionCallbackObjStore[self._side][self._slot] = obj
 
-        # Convert actions to int where possible.
+        # Convert actions to int where possible, and validate them.
         primary = str(primary).lower()
-        if primary in ("0", "1", "2", "3", "4", "5"):
+        if primary in ("a", "b", "c", "d"):  # Chose a move.
+            isMove = True
+            assert not switch_only, ("Move %s was selected, but only switches are valid."
+                                     % primary)
+        else:  # Chose a switch.
+            isMove = False
             primary = int(primary)
-        if target in ("-1", "0", "1", "2"):
+            assert 0 <= primary <= 5, ("Switch action must be between 0 and 5"
+                                       " inclusive, got %s" % primary)
+        if target is not None:
             target = int(target)
+            assert -1 <= target <= 2, ("Target action must be between -1 and 2"
+                                       " inclusive, got %d" % target)
 
-        if primary in moves:
+        # Determine target, if needed, and return the actions.
+        if isMove:  # Chose a move
             next_move = ord(primary.lower()) - ord('a')
-            if self._fDoubles:
-                logger.debug("Side: {} target: {} slot: {}"
-                            .format(side, target, slot))
-
+            if self._fDoubles:  # Chose a move in Doubles mode.
                 # determine target side index & target slot
                 if target in (1, 2):  # foe team
                     target_side_index = int(side == "blue")
                     target_slot = target - 1
                     opposing_side = "blue" if side == "red" else "red"
-                    if target_slot not in self.match.alive[opposing_side]:
+                    if not self.match.alive[opposing_side][target_slot]:
                         # Change target to the non-fainted opposing pkmn.
                         # Some later gens do this automatically I think, but PBR doesn't.
                         target_slot = 1 - target_slot
-                elif target in (0, -1):  # self team
+                else:  # target is in (0, -1). Self team
                     target_side_index = int(side == "red")
                     if target == 0:  # self
                         target_slot = slot
                     else:  # ally
                         target_slot = 1 - slot
-                else:
-                    raise ActionError("Forbidden doubles target: %r " % target)
                 next_pkmn = target_side_index + 2 * target_slot
-                
-            else:
-                if target is not None:
-                    logger.error("Target must be None in Singles, was %r",
-                                 target)
+            else:  # Chose a move in Singles mode.
+                assert target is None, "Target must be None in Singles, was %r" % target
                 next_pkmn = -1  # Indicates no next pokemon
-            logger.debug("received action: {}".format(("move", next_move, next_pkmn)))
-            return "move", next_move, next_pkmn
-        elif primary in switches:
-            next_pkmn = int(primary)
-            logger.debug("received action: {}".format(("switch", next_pkmn)))
-            return ("switch", next_pkmn)
-        else:
-            raise ActionError("Invalid player action: %r "
-                              "with moves: %s and switches: %s" %
-                              (primary, moves, switches))
+            action = ("move", next_move, next_pkmn)
+            logger.debug("transformed action: {}".format(action))
+            return action
+        else:  # Chose a switch
+            next_pkmn = primary
+            action = ("switch", next_pkmn)
+            logger.debug("transformed action: {}".format(action))
+            return action
 
     def _nextMove(self):
         '''
@@ -1348,7 +1369,7 @@ class PBREngine():
         # 2nd line starts 0x40 bytes later and contains the move name only
         line = bytesToString(data[:0x40]).strip()
         # convert, then remove "!"
-        move = bytesToString(data[0x40:]).strip()[:-1]
+        moveName = bytesToString(data[0x40:]).strip()[:-1]
 
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
@@ -1363,11 +1384,15 @@ class PBREngine():
                                  2 * match.start(3), 0x73)
             side = match.group(1).lower()
             slot = self.match.getSlotByName(side, match.group(2))
-            self.match.setLastMove(side, move)
+            self.match.setLastMove(side, moveName)
             # reset fails counter
             self._numMoveSelections = 0
-            self.on_attack(side=side, slot=slot, moveindex=0,
-                           movename=move,
+            self.on_attack(side=side,
+                           slot=slot,
+                           moveindex=0,  # FIXME or remove me
+                           movename=moveName,
+                           pokeset=self.match.pkmn[side][slot],
+                           teams=self.match.pkmn,
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None
 
@@ -1573,6 +1598,8 @@ class PBREngine():
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
+            # TODO IS THIS SAFE?
+            self._setState(PbrStates.MATCH_RUNNING)
             # try early: shift gui back to normal position
             if self.hide_gui:
                 self.setGuiPosY(100000.0)

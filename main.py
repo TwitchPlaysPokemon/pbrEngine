@@ -157,7 +157,7 @@ def main():
     pbr.on_state += onState
     pbr.on_win += onWin
     pbr.on_attack += onAttack
-    pbr.on_death += onDeath
+    pbr.on_faint += onDeath
     pbr.on_switch += onSwitch
     pbr.connect()
     pbr.on_gui += lambda gui: display.reprint()

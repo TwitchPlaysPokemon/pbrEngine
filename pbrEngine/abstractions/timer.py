@@ -35,7 +35,7 @@ class Timer(object):
     def spawn_later(self, frames, job, *args, **kwargs):
         '''
         Spawns a new greenlet that performs an action in a given time,
-        based on i2fMap frames as a timesource.
+        based on ingame frames as a timesource.
         Returns the greenlet that gets spawned.
         '''
         return gevent.spawn(self.sleepThen, frames, job, *args, **kwargs)

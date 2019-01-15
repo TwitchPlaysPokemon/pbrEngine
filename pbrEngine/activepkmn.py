@@ -1,14 +1,19 @@
 import logging
 from time import time
 from functools import partial
+from collections import namedtuple
 
 from .memorymap.addresses import InBattlePkmnOffsets
 
 logger = logging.getLogger("pbrEngine")
 
+ActivePkmnData = namedtuple("ActivePkmn",
+                            ["currHP", "move1", "move2", "move3", "move4"])
+moveData = namedtuple("ActiveMove", ["idNum", "pp"])
+
 
 class ActivePkmn:
-    def __init__(self, side, slot, addr, dolphin, callback):
+    def __init__(self, side, slot, addr, dolphin, callback, starting_pokeset):
         self.enabled = True
         self.side = side
         self.slot = slot
@@ -16,6 +21,23 @@ class ActivePkmn:
         self.fields = {}
         self.callback = callback
         self._fields_last_zero_write = {}
+
+        # Set initial values. An ActivePkmn object is only initialized when the
+        # battle state is ready to be read from, which is currently when we see the first
+        # move selection menu (It's actually ready a few seconds prior to that, but I
+        # haven't found anything better to serve as a battle state ready indicator.
+        # Unfortunately, it takes some time for dolphin to respond with the current
+        # values- hence we need initial values in place for the 1st move selection of
+        # the match.
+        self.fields["MAX_HP"] = self.fields["CURR_HP"] = starting_pokeset["stats"]["hp"]
+        for i in range(1, 5):
+            try:
+                self.fields["MOVE%d" % i] = starting_pokeset["moves"][i-1]["id"]
+                self.fields["PP%d" % i] = starting_pokeset["moves"][i-1]["pp"]
+            except IndexError:
+                self.fields["MOVE%d" % i] = 0
+                self.fields["PP%d" % i] = 0
+
 
         for offset in InBattlePkmnOffsets:
             def dolphin_callback(name, val):
@@ -45,3 +67,17 @@ class ActivePkmn:
             # print()
             dolphin._subscribe(offset_length * 8, offset_addr, dolphin_callback)
 
+    @property
+    def state(self):
+        return ActivePkmnData(
+            currHP=self.fields["CURR_HP"],
+            # maxHP=self.fields["MAXHP"],
+            move1=moveData(idNum=self.fields["MOVE1"],
+                           pp=self.fields["PP1"]),
+            move2=moveData(idNum=self.fields["MOVE2"],
+                           pp=self.fields["PP2"]),
+            move3=moveData(idNum=self.fields["MOVE3"],
+                           pp=self.fields["PP3"]),
+            move4=moveData(idNum=self.fields["MOVE4"],
+                           pp=self.fields["PP4"]),
+        )

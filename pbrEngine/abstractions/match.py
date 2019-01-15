@@ -15,47 +15,69 @@ class Match(object):
     def __init__(self, timer):
         self._timer = timer
         '''
-        Event of a pokemon dying.
+        Event of a pokemon fainting.
         arg0: <side> "blue" or "red"
         arg2: <slot> team index of the dead pokemon
         '''
-        self.on_death = EventHook(side=str, slot=int)
+        self.on_faint = EventHook(side=str, slot=int)
         self.on_win = EventHook(winner=str)
-        self.on_switch = EventHook(side=str, old_slot=int, new_slot=int)
+        self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int)
 
         self._check_greenlet = None
         self._lastMove = ("blue", "")
 
     def new(self, teams, fDoubles):
+        self._fDoubles = fDoubles
         sanitizeTeamIngamenames(teams)
         pkmn_blue, pkmn_red = teams
-        # Fixed orderings
+
+        # Switches during gameplay cause the ingame team order to deviate from the
+        # starting team order. The ingame order is what actually determines which button
+        # maps to which Pokemon.
+
+        # These two fields keep teams in their ingame order.
         self.pkmn = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
-        self.alive = {"blue": list(range(len(pkmn_blue))),
-                       "red": list(range(len(pkmn_red)))}
-        # Map ingame (button) TODO
-        # See also: PBREngine.pkmnIndexToButton().
-        self.i2fMap = {"blue": list(range(len(pkmn_blue))),
-                       "red": list(range(len(pkmn_red)))}
-        self._fDoubles = fDoubles
+        self.alive = {"blue": [True] * len(pkmn_blue), "red": [True] * len(pkmn_red)}
 
-    def ingameToFixed(self, side, ingame_slot):
-        return self.i2fMap[side][ingame_slot]
+        # This maps a pkmn's ingame order slot to its starting order slot. Both are
+        # 0-indexed. Ex:
+        # <slot at start of match> = self.slotSOMap[side][<current ingame slot>]
+        self.slotSOMap = {"blue": list(range(len(pkmn_blue))),
+                                "red": list(range(len(pkmn_red)))}
 
-    def fixedToIngame(self, side, fixed_slot):
-        return self.i2fMap[side].index(fixed_slot)
+    def slotSO(self, side, slotIGO):
+        """Get a Pokemon's starting order slot given its ingame order slot
+        """
+        return self.slotSOMap[side][slotIGO]
+
+    def slotIGO(self, side, slotSO):
+        """Get a Pokemon's ingame order slot given its starting order slot
+        """
+        return self.slotSOMap[side].index(slotSO)
+
+    @property
+    def slotIGOMap(self):
+        # This maps a pkmn's starting order slot to its ingame order slot. Both are
+        # 0-indexed. Ex:
+        # <current ingame slot> = self.slotIGOMap[side][<slot at start of match>]
+        result = {}
+        for side in ("blue", "red"):
+            result[side] = [self.slotIGO(side, i) for i in range(len(self.pkmn[side]))]
+        return result
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
 
-    def getSwitchOptions(self, side):
-        '''Returns pokemon slots available to switch to for that team.
-        Basically alive pokemon minus the current ones.  Does not include
-        effects of arena trap, etc.
+    def switchesAvailable(self, side):
+        '''
+        Returns the ingame slots of the Pokemon available to switch to for this team.
+        Basically alive pokemon minus the current ones.  Does not include effects of
+        arena trap, etc.
         '''
         return [
-            slot for slot in self.alive[side]
-            if not slot == 0 and               # already in battle
+            slot for slot, is_alive in enumerate(self.alive[side])
+            if is_alive and
+            not slot == 0 and                  # already in battle
             not (slot == 1 and self._fDoubles) # already in battle
         ]
 
@@ -64,18 +86,18 @@ class Match(object):
         if slot is None:
             logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
             return
-        elif slot not in self.alive[side]:
+        elif not self.alive[side][slot]:
             logger.error("{} ({} {}) fainted, but was already marked as fainted"
                          .format(pkmn_name, side, slot))
             return
-        self.alive[side].remove(slot)
-        self.on_death(side=side, slot=slot)
+        self.alive[side][slot] = False
+        self.on_faint(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if not self.alive["blue"] or not self.alive["red"]:
+        if not any(self.alive["blue"]) or not any(self.alive["red"]):
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
@@ -92,33 +114,27 @@ class Match(object):
         raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
                          .format(pkmn_name, side, self.pkmn[side]))
 
-    def switched(self, side, active_slot, pkmn_name):
+    def switched(self, side, slot_active, pkmn_name):
         '''
         A new active Pokemon name was detected, which indicates a switch.
-        The name of the active pokemon at `active_slot` was changed to `pkmn_name`.
+        The name of the active pokemon at `slot_active` was changed to `pkmn_name`.
         The new ingame ordering is equal to the old ingame ordering, with exactly
         one swap applied. Note: In a double KO, trainers select their new slot 0 and sends
         it out, then do the same for their new slot 1.  So it is still one swap at a time.
         '''
-        inactive_slot = self.getSlotByName(side, pkmn_name)
-        if inactive_slot == active_slot:
+        slot_inactive = self.getSlotByName(side, pkmn_name)
+        if slot_inactive == slot_active:
             dlogger.error("Detected switch, but active Pokemon are unchanged.")
             return
-        if inactive_slot not in self.alive[side]:
-            raise ValueError("Dead {} pokemon {} at new ingame active_slot {} swapped "
-                             "into battle. i2fMap: {}"
-                             .format(side, pkmn_name, active_slot, self.i2fMap))
-        swap(self.pkmn[side], inactive_slot, active_slot)
-        swap(self.i2fMap[side], inactive_slot, active_slot)
-        # Alive just holds indices, so its swap is a bit different.
-        # The pkmn previously in `active_slot` might be fainted. The one previously in
-        # `inactive_slot` was sent out, so it's not fainted.
-        if active_slot not in self.alive[side]:
-            self.alive[side].remove(inactive_slot)
-            self.alive[side].append(active_slot)
-            self.alive[side] = sorted(self.alive[side])
+        if not self.alive[side][slot_inactive]:
+            raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
+                             " into battle. slotSOMap: {}"
+                             .format(side, pkmn_name, slot_active, self.slotSOMap))
+        swap(self.pkmn[side], slot_inactive, slot_active)
+        swap(self.slotSOMap[side], slot_inactive, slot_active)
+        swap(self.alive[side], slot_inactive, slot_active)
         # Otherwise both pkmn are alive, and the alive list is correct as-is
-        self.on_switch(side=side, old_slot=inactive_slot, new_slot=active_slot)
+        self.on_switch(side=side, slot_active=slot_inactive, slot_inactive=slot_active)
 
     def draggedOut(self, side, pkmn_name):
         pass
@@ -129,8 +145,8 @@ class Match(object):
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = not self.alive["blue"]
-        deadRed = not self.alive["red"]
+        deadBlue = not any(self.alive["blue"])
+        deadRed = not any(self.alive["red"])
         winner = "draw"
         if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove
