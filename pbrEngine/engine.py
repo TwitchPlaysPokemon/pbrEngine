@@ -50,9 +50,9 @@ dlogger.setLevel(logging.DEBUG)
 
 class ActionCause(Enum):
     """Reasons for why PBREngine called the action_callback."""
-    REGULAR = "regular"  # regular move selection
-    FAINT = "faint"  # pokemon selection after faint
-    OTHER = "other"  # other causes, like forced switch by baton pass or u-turn
+    REGULAR = "regular"  # Regular selection- choose a move or switch.
+    FAINT = "faint"  # Switch selection only, because a Pokemon fainted.
+    OTHER = "other"  # Switch selection only, due to some other cause- like baton pass or u-turn.
 
 
 class PBREngine():
@@ -939,7 +939,7 @@ class PBREngine():
         '''
         Is called when a match start is initiated.
         '''
-        gevent.sleep(0.5) # Wait a bit for dolphin to fully resume? Not sure if needed
+        # gevent.sleep(0) # TODO Wait a bit for better TPP timing, ie with overlay & music fade outs
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         self.timer.spawn_later(330, self._matchStartDelayed)
