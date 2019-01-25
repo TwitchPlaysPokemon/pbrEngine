@@ -18,8 +18,8 @@ class ActivePkmn:
         self.side = side
         self.slot = slot
         self.addr = addr
-        self.fields = {}
         self.callback = callback
+        self.fields = {}
         self._fields_last_zero_write = {}
 
         # Set initial values. An ActivePkmn object is only initialized when the
@@ -38,19 +38,26 @@ class ActivePkmn:
                 self.fields["MOVE%d" % i] = 0
                 self.fields["PP%d" % i] = 0
 
-
         for offset in ActivePkmnOffsets:
             def dolphin_callback(name, val):
                 if val != 0 and name in self._fields_last_zero_write:
-                    delta = time() - self._fields_last_zero_write.pop(name)
-                    logger.debug("Field {} was 0 for {:.2f}ms ({}, {})"
-                                   .format(name, delta * 1000, side, slot))
-                if name in self.fields:
-                    if val == 0:
-                        self._fields_last_zero_write[name] = time()
-                        return  # Possible bad memory read :/
-                    if val == self.fields[name]:
-                        return  # Here because we ignored a possible bad mem read
+                    delta_ms = 1000 * (time() - self._fields_last_zero_write.pop(name))
+                    delta_text = ("Field {} was 0 for {:.2f}ms ({}, {})"
+                                  .format(name, delta_ms, side, slot))
+                    # Anything lingering over 2 seconds
+                    if delta_ms < 5000:
+                        if delta_ms > 100:
+                            logger.error(delta_text)
+                        else:
+                            logger.debug(delta_text)
+                if name not in self.fields:
+                    logger.error("Unrecognized active pkmn field: %s" % name)
+                    return
+                if val == 0:
+                    self._fields_last_zero_write[name] = time()
+                    return  # Possible bad memory read :/
+                if val == self.fields[name]:
+                    return  # Here because we ignored a possible bad mem read
                 self.fields[name] = val
                 callback(name, val)
             dolphin_callback = partial(dolphin_callback, offset.name)
@@ -72,6 +79,15 @@ class ActivePkmn:
 
     @property
     def state(self):
+        # If a field was zero for longer than 200ms, assume it's actually zero
+        now = time()
+        for name, last_zero_write in list(self._fields_last_zero_write.items()):
+            delta_ms = 1000 * (now - last_zero_write)
+            if delta_ms > 200:
+                del self._fields_last_zero_write[name]
+                self.fields[name] = 0
+                self.callback(name, 0)
+
         return ActivePkmnData(
             currHP=self.fields["CURR_HP"],
             # maxHP=self.fields["MAXHP"],

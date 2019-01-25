@@ -44,8 +44,9 @@ class PbrGuis(IntEnum):
 
     RULES_STAGE         = 21
     RULES_SETTINGS      = 22
-    RULES_BATTLE_STYLE  = 23
-    RULES_BPS_CONFIRM   = 24
+    RULES_RULESETS      = 23
+    RULES_BATTLE_STYLE  = 24
+    RULES_BPS_CONFIRM   = 25
 
     BPSELECT_SELECT     = 31
     BPSELECT_CONFIRM    = 32

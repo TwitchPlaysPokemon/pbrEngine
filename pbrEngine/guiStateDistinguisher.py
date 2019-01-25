@@ -71,6 +71,7 @@ _map_bps = {
 _map_rules = {
     GuiStateRules.STAGE_SELECTION: PbrGuis.RULES_STAGE,
     GuiStateRules.OVERVIEW       : PbrGuis.RULES_SETTINGS,
+    GuiStateRules.RULESET        : PbrGuis.RULES_RULESETS,
     GuiStateRules.BATTLE_STYLE   : PbrGuis.RULES_BATTLE_STYLE,
     GuiStateRules.BP_CONFIRM     : PbrGuis.RULES_BPS_CONFIRM,
 }

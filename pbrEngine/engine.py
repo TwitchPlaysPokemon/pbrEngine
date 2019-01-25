@@ -32,21 +32,6 @@ from .activepkmn import ActivePkmn
 
 logger = logging.getLogger("pbrEngine")
 
-dlogger = logging.getLogger("pbrDebug")
-log_path = r"C:\Users\cal\Documents\main\prog\tpp\tpp\tpp repo\logs"
-log_path = os.path.join(log_path, "pbrengine.log")
-log_path = os.path.abspath(log_path)
-#print(log_path)
-# set up the file logger
-formatter = logging.Formatter(
-    "[%(asctime)s] %(lineno)d\t%(message)s")  # same as default
-handler = logging.handlers.RotatingFileHandler(log_path, maxBytes=1024 * 1024 * 10,
-                                               backupCount=20,
-                                               encoding='utf-8')
-handler.setFormatter(formatter)
-dlogger.addHandler(handler)
-dlogger.setLevel(logging.DEBUG)
-
 
 class ActionCause(Enum):
     """Reasons for why PBREngine called the action_callback."""
@@ -56,8 +41,8 @@ class ActionCause(Enum):
 
 
 class PBREngine():
-    def __init__(self, action_callback, host="localhost", port=6000,
-                 savefile_dir="pbr_savefiles", savefile_name="save.state"):
+    def __init__(self, action_callback, crash_callback, host="localhost", port=6000,
+                 debug_allow_early_start=False):
         '''
         :param action_callback:
             Will be called when a player action needs to be determined.
@@ -89,17 +74,16 @@ class PBREngine():
             either the on_switch or on_attack callback if this command succeeds.
         :param host: ip of the dolphin instance to connect to
         :param port: port of the dolphin instance to connect to
-        :param savefile_dir: directory location of savestates
-        :param savefile_name: filename of savefile with the announcer turned on
-        ''' 
+        '''
+        logger.info("Initializing PBREngine")
         self._action_callback = action_callback
+        self._crash_callback = crash_callback
+        self._debug_allow_early_start = debug_allow_early_start
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
+        self._fTryReconnect = True
         self._dolphin.onDisconnect(self._reconnect)
         self._dolphin.onConnect(self._initDolphinWatch)
-
-        os.makedirs(os.path.abspath(savefile_dir), exist_ok=True)
-        self._savefile = os.path.abspath(os.path.join(savefile_dir, savefile_name))
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
@@ -219,24 +203,30 @@ class PBREngine():
         Any existing connection is disconnected first.
         Keeps retrying until successfully connected (see self._reconnect)
         '''
+        self._fTryReconnect = True
         self._dolphin.connect()
 
     def _reconnect(self, watcher, reason):
+        if not self._fTryReconnect:
+            return
         if reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST:
             # don't reconnect if we closed the connection on purpose
             return
-        logger.warning("DolphinConnection connection closed, reconnecting...")
+        logger.warning("DolphinConnection connection closed, reconnecting in 3s...")
         if reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED:
             # just tried to establish a connection, give it a break
             gevent.sleep(3)
+            if not self._fTryReconnect:  # check again
+                return
         # else reconnect immediately (CONNECTION_LOST or CONNECTION_CLOSED_BY_PEER)
-        self.connect()
+        self._dolphin.connect()
 
     def disconnect(self):
         '''
-        Disconnects from Dolphin. No reconnect attempts are made-
+        Disconnects from Dolphin.
         connect() needs to be called to make this instance work again.
         '''
+        self._fTryReconnect = False  # prevent reconnect attempts
         self._dolphin.disconnect()
 
     def _watcher2(self, data):
@@ -246,6 +236,7 @@ class PBREngine():
 
     def _distinguishMatch(self, data):
         logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
+        prevGuiStateMatch = self._guiStateMatch
         gui_type = data >> 16 & 0xff
         pkmn_input_type = data & 0xff
 
@@ -255,7 +246,7 @@ class PBREngine():
             # through yet).
             self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
 
-            self._fLastGuiWasSwitchPopup = (self._guiStateMatch ==
+            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
                                             GuiStateMatch.SWITCH_POPUP)
 
             # True when the pkmn menu pops up, and remains true until it is gone.
@@ -269,8 +260,9 @@ class PBREngine():
 
         self._guiStateMatch = data
 
-        # Run self._distinguishGui() with the gui.
-        self._distinguisher.distinguishMatch(gui_type)
+        if prevGuiStateMatch >> 16 & 0xff != gui_type:
+            # If not a duplicate, run self._distinguishGui() with the gui.
+            self._distinguisher.distinguishMatch(gui_type)
 
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
@@ -354,6 +346,7 @@ class PBREngine():
         self._move_select_state = None
         self._numMoveSelections = 0
         self._fMatchCancelled = False
+        self._fMatchRetrying = False
         self._fDoubles = False
         self._move_select_followup = None
 
@@ -405,7 +398,7 @@ class PBREngine():
         :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
         :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         '''
-        logger.debug("Preparing a new match. _fWaitForStart: {}, state: {}"
+        logger.debug("Received call to new(). _fWaitForStart: {}, state: {}"
                      .format(self._fWaitForStart, self.state))
 
         # Give PBR some time to quit the previous match, if needed.
@@ -415,16 +408,10 @@ class PBREngine():
             logger.warning("PBR is not yet ready for a new match")
             gevent.sleep(1)
 
-        #
-        # TODO: check this
         if self.state > PbrStates.WAITING_FOR_NEW:
-            logger.warning("Detected invalid match state: {}. Resetting dolphin"
+            logger.warning("Invalid match preparation state: {}. Crashing"
                            .format(self.state))
-
-            self._dolphin.stop()
-            gevent.sleep(1)
-            self._dolphin.reset()
-            self._setState(PbrStates.INIT)
+            self._crash_callback("Early preparation start")
 
         self.reset()
 
@@ -455,7 +442,12 @@ class PBREngine():
         start the match once it's ready.
         Otherwise calling start() will start the match by resuming the game.
         '''
-        logger.debug("Starting a prepared match.")
+        logger.debug("Received call to start(). _fWaitForStart: {}, state: {}"
+                     .format(self._fWaitForStart, self.state))
+        if self.state > PbrStates.WAITING_FOR_START:
+            if not self._debug_allow_early_start:
+                self._crash_callback("Early match start")
+            return
         if self.state == PbrStates.WAITING_FOR_START:
             # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
@@ -463,8 +455,7 @@ class PBREngine():
         else:  # Start the match as soon as it's ready.
             self._fWaitForStart = False
 
-
-    def cancel(self):
+    def cancel(self, retry=False):
         '''
         Cancels the current/upcoming match at the next move selection menu.
         Does nothing if the match is already over.
@@ -472,6 +463,7 @@ class PBREngine():
         but the result will be reported as "draw"!
         '''
         self._fMatchCancelled = True
+        self._fMatchRetrying = retry
 
     @property
     def matchVolume(self):
@@ -649,13 +641,13 @@ class PBREngine():
             if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW):
                 continue  # No stuckchecker during match & match end
             if self.state == PbrStates.INIT:
-                limit = 45  # Only A spam needed, and stuck checker is expected to help
+                limit = 45  # Spam A to get us through a bunch of menus
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
                 limit = 600  # 10 seconds- don't interrupt the injection
             else:
                 limit = 300  # 5 seconds
             if (self.timer.frame - self._lastInputFrame) > limit:
-                dlogger.warning("Stuck checker will press {}"
+                logger.info("Stuck checker will press {}"
                                 .format(WiimoteButton(self._lastInput).name))
                 self._pressButton(self._lastInput)
 
@@ -679,14 +671,14 @@ class PBREngine():
         self._lastInputFrame = self.timer.frame
         self._lastInput = button
         if button != 0:
-            dlogger.info("> " + WiimoteButton(button).name)
+            logger.info("> " + WiimoteButton(button).name)
         self._dolphin.wiiButton(0, button)
 
     def _select(self, index):
         '''Changes the cursor position and presses Two.
         Often used, therefore bundled.'''
         self.cursor.setPos(index)
-        dlogger.info("Cursor set to {}, will press {}"
+        logger.info("Cursor set to {}, will press {}"
                      .format(index, WiimoteButton.TWO.name))
         self._pressButton(WiimoteButton.TWO)
 
@@ -706,7 +698,7 @@ class PBREngine():
         if self.state == state:
             return
         self.state = state
-        dlogger.info("[State] " + PbrStates(state).name)
+        logger.info("[State] " + PbrStates(state).name)
         self.on_state(state=state)
 
     def _newRng(self):
@@ -775,18 +767,18 @@ class PBREngine():
             try:
                 fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.getAddr(self._read)
                 fieldEffects = self._read32(fieldEffectsLoc, most_common_of=5)
-                dlogger.info("Field effects at {:08X} has value {:08X}"
+                logger.info("Field effects at {:08X} has value {:08X}"
                              .format(fieldEffectsLoc, fieldEffects))
             except InvalidLocation:
-                dlogger.error("Failed to determine starting weather location")
+                logger.error("Failed to determine starting weather location")
 
             try:
                 ibBlueLoc = NestedLocations.IB_BLUE.value.getAddr(self._read)
                 ibBlue = self._read16(ibBlueLoc, most_common_of=5)
-                dlogger.info("Blue species at {:08X} has value {:08X}"
+                logger.info("Blue species at {:08X} has value {:08X}"
                              .format(ibBlueLoc, ibBlue))
             except InvalidLocation:
-                dlogger.error("Failed to determine starting ib-blue location")
+                logger.error("Failed to determine starting ib-blue location")
 
     def _initBattleState(self):
         '''
@@ -939,6 +931,7 @@ class PBREngine():
         '''
         Is called when a match start is initiated.
         '''
+        logger.info("Starting PBR match")
         # gevent.sleep(0) # TODO Wait a bit for better TPP timing, ie with overlay & music fade outs
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
@@ -965,11 +958,15 @@ class PBREngine():
         '''
         if self.state != PbrStates.MATCH_RUNNING:
             return
-        self._fMatchCancelled = False  # reset flag
-        self._fWaitForNew = True  # fixme this is probably bad
+        retry = self._fMatchRetrying
+        # reset flags
+        self._fMatchCancelled = False
+        self._fMatchRetrying = False
+        self._fWaitForNew = True
         self._setState(PbrStates.MATCH_ENDED)
         self.cursor.addEvent(1, self._quitMatch)
-        self.on_win(winner=winner)
+        if not retry:
+            self.on_win(winner=winner)
 
     def _quitMatch(self):
         '''
@@ -1139,10 +1136,10 @@ class PBREngine():
                     target_side_index = int(side == "blue")
                     target_slot = target - 1
                     opposing_side = "blue" if side == "red" else "red"
-                    if self.match.areFainted[opposing_side][target_slot]:
-                        # Change target to the non-fainted opposing pkmn.
-                        # Some later gens do this automatically I think, but PBR doesn't.
-                        target_slot = 1 - target_slot
+                    # if self.match.areFainted[opposing_side][target_slot]:
+                    #     # Change target to the non-fainted opposing pkmn.
+                    #     # Some later gens do this automatically I think, but PBR doesn't.
+                    #     target_slot = 1 - target_slot
                 else:  # target is in (0, -1). Self team
                     target_side_index = int(side == "red")
                     if target == 0:  # self
@@ -1437,7 +1434,7 @@ class PBREngine():
         if match:
             side = match.group(1).lower()
             self.match.getSlotByName(side, match.group(2))
-            self.match.areFainted(side, match.group(2))
+            self.match.fainted(side, match.group(2))
             self._expectedActionCause[side][self._slot] = ActionCause.FAINT
             return
 
@@ -1475,14 +1472,14 @@ class PBREngine():
         self.gui = gui
 
         try:
-            dlogger.debug("[Gui] {}  ({})".format(
+            logger.debug("[Gui] {}  ({})".format(
                 PbrGuis(gui).name, PbrStates(self.state).name))
             if gui == backup:
                 # Expected with some guis, such as RULES_SETTINGS.
-                dlogger.warning("[Duplicate Gui] {}  ({})".format(
+                logger.info("[Duplicate Gui] {}  ({})".format(
                     PbrGuis(gui).name, PbrStates(self.state).name))
         except:  # unrecognized gui, ignore
-            dlogger.error("Unrecognized gui or state: {} / {}"
+            logger.error("Unrecognized gui or state: {} / {}"
                           .format(gui, self.state))
 
         # START MENU
@@ -1529,9 +1526,9 @@ class PBREngine():
         elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
                 self.cursor.addEvent(CursorOffsets.RULESETS, self._select,
-                                     False, CursorOffsets.RULESETS+1)  # select the TPP ruleset
+                                     False, CursorOffsets.RULESETS+1)  # Select the TPP ruleset
                 self.cursor.addEvent(CursorPosMenu.RULES_CONFIRM,
-                                     self._pressTwo)  # confirm selection of the TPP ruleset
+                                     self._pressTwo)  # Confirm selection of the TPP ruleset
                 self._select(1)  # Select "Choose a Rule", which will trigger the two events above, in order
                 self._fSelectedTppRules = True
             elif not self._fDoubles and not self._fSelectedSingleBattle:
@@ -1540,6 +1537,11 @@ class PBREngine():
                 self._fSelectedSingleBattle = True
             else:
                 self._select(3)  # Confirm the rules and battle style. This enters battle pass selection
+        elif gui == PbrGuis.RULES_RULESETS:  # The main rules menu
+            # Unused, but picked up for logging purposes. Picking up this gui also
+            # prevents the appearance of a duplicate RULES_SETTINGS gui when we go back
+            # to that menu
+            pass
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
             if self._fDoubles:
                 self._select(2)  # Accidentally entered menu? Pick Doubles, the default
@@ -1620,7 +1622,12 @@ class PBREngine():
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
             # TODO IS THIS SAFE?
-            self._setState(PbrStates.MATCH_RUNNING)
+            if self.state != PbrStates.MATCH_RUNNING:
+                if self._debug_allow_early_start:
+                    self._setState(PbrStates.MATCH_RUNNING)
+                else:
+                    self._crash_callback("Detected early start")
+                    return
             # try early: shift gui back to normal position
             if self.hide_gui:
                 self.setGuiPosY(100000.0)
@@ -1665,10 +1672,10 @@ class PBREngine():
         else:
             self.gui = backup  # Reject the gui change.
             try:
-                dlogger.debug("[Gui Rejected] {}  ({})".format(
+                logger.debug("[Gui Rejected] {}  ({})".format(
                     PbrGuis(gui).name, PbrStates(self.state).name))
             except:
-                dlogger.error("Unrecognized gui or state: {} / {}"
+                logger.error("Unrecognized gui or state: {} / {}"
                               .format(gui, self.state))
             return  # Don't trigger the on_gui event.
 
