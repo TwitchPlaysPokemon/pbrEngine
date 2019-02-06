@@ -202,3 +202,17 @@ def invertSide(side):
     a hassle for api-writer and user. So it's just a string.'''
     return "blue" if side == "red" else ("red" if side == "blue" else "draw")
 
+def killUnlessCurrent(greenlet, greenlet_name):
+    '''Kill a greenlet, unless it is the current greenlet running
+
+    :param greenlet: greenlet to kill
+    :param greenlet_name: Name of greenlet, for logging purposes
+    '''
+    if not greenlet:
+        logger.debug("%s greenlet was not running" % greenlet_name)
+    elif (greenlet == gevent.getcurrent()):
+        logger.debug("%s greenlet is the current one; not killing" % greenlet_name)
+    else:
+        logger.debug("Killing {2}.\nCurrent greenlet: {0}\n{2} greenlet: {1}"
+                     .format(gevent.getcurrent(), greenlet, greenlet_name))
+        greenlet.kill(block=False)

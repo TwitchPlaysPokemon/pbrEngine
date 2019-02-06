@@ -12,6 +12,7 @@ import logging.handlers
 import os
 import socket
 import dolphinWatch
+from dolphinWatch import DisconnectReason
 from functools import partial
 from enum import Enum
 from collections import Counter
@@ -25,7 +26,7 @@ from .memorymap.addresses import Locations, NestedLocations, InvalidLocation
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, LoadedBPOffsets, FieldEffects
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
-from .util import bytesToString, floatToIntRepr, EventHook
+from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .avatars import AvatarsBlue, AvatarsRed
 from .activepkmn import ActivePkmn
@@ -81,9 +82,9 @@ class PBREngine():
         self._debug_allow_early_start = debug_allow_early_start
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
-        self._fTryReconnect = True
-        self._dolphin.onDisconnect(self._reconnect)
+        self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
+        self._dolphin.onDisconnect(self._onDisconnect)
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
@@ -195,39 +196,57 @@ class PBREngine():
 
         # stuck checker
         gevent.spawn(self._stuckChecker)
+        self._stuckcrasher_start_greenlet = None
+        self._stuckcrasher_prepare_greenlet = None
 
-    def connect(self):
+    def start(self):
         '''
         Connects to Dolphin with dolphinWatch. Should be called when the
         initialization (setting listeners etc.) is done.
         Any existing connection is disconnected first.
-        Keeps retrying until successfully connected (see self._reconnect)
+        If can't connect, this keeps retrying every 3 seconds until either:
+        - it successfully connects (see self._reconnect())
+        - self.disconnect() is called
         '''
-        self._fTryReconnect = True
         self._dolphin.connect()
+        self._stuckcrasher_start_greenlet = gevent.spawn_later(
+            40, self._stuckcrasher_start)
 
-    def _reconnect(self, watcher, reason):
-        if not self._fTryReconnect:
-            return
-        if reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST:
-            # don't reconnect if we closed the connection on purpose
-            return
-        logger.warning("DolphinConnection connection closed, reconnecting in 3s...")
-        if reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED:
-            # just tried to establish a connection, give it a break
-            gevent.sleep(3)
-            if not self._fTryReconnect:  # check again
-                return
-        # else reconnect immediately (CONNECTION_LOST or CONNECTION_CLOSED_BY_PEER)
-        self._dolphin.connect()
+    def _stuckcrasher_start(self):
+        if self.state < PbrStates.WAITING_FOR_NEW:
+            self._crash_callback(reason="Stuck in start menus")
 
-    def disconnect(self):
+    def _stuckcrasher_prepare(self):
+        if self.state < PbrStates.WAITING_FOR_START:
+            self._crash_callback(reason="Stuck in preparation menus")
+
+    def _onDisconnect(self, watcher, reason):
+        '''
+        Called whenever the DolphinConnection finds itself disconnected from Dolphin.
+        :param watcher: The DolphinConnection instance, which is also self._dolphin
+        :param reason: Enum member of dolphinWatch.DisconnectReason
+        '''
+        if reason == DisconnectReason.CONNECTION_NOT_ESTABLISHED:
+            if self._reconnectAttempts <= 3:
+                self._reconnectAttempts += 1
+                logger.warning("Dolphin connection not established yet. Reconnecting in 3s...")
+                gevent.sleep(3)
+                self._dolphin.connect()  # recursion
+            else:
+                self._reconnectAttempts = 0
+                raise RuntimeError("Dolphin connection not established after 5 attempts, giving up")
+        else:
+            self._reconnectAttempts = 0
+
+    def stop(self):
         '''
         Disconnects from Dolphin.
         connect() needs to be called to make this instance work again.
         '''
-        self._fTryReconnect = False  # prevent reconnect attempts
+        self._reconnectAttempts = 0
         self._dolphin.disconnect()
+        killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
+        killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
 
     def _watcher2(self, data):
         logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
@@ -346,14 +365,14 @@ class PBREngine():
         self._move_select_state = None
         self._numMoveSelections = 0
         self._fMatchCancelled = False
-        self._fMatchRetrying = False
         self._fDoubles = False
         self._move_select_followup = None
 
         for side in ("blue", "red"):
             for active in list(self.active[side]):
-                active.cleanup()
-                self.active[side].remove(active)
+                with suppress(Exception):
+                    active.cleanup()
+            self.active[side] = []
 
         # Move selection: expect REGULAR, set next to OTHER
         # Fainted: set next to FAINTED.
@@ -383,7 +402,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def new(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None):
+    def matchNew(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -412,6 +431,7 @@ class PBREngine():
             logger.warning("Invalid match preparation state: {}. Crashing"
                            .format(self.state))
             self._crash_callback("Early preparation start")
+            return
 
         self.reset()
 
@@ -427,14 +447,25 @@ class PBREngine():
         self._startingWeather = startingWeather
 
         if self.state == PbrStates.WAITING_FOR_NEW:
-            self._dolphin.resume()
-            gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
-            self._setState(PbrStates.PREPARING_STAGE)
-            self._select(2)  # Select Free Battle
-        else:  # self.state is either PbrStates.INIT or PbrStates.ENTERING_BATTLE_MENU
-            self._fWaitForNew = False  # No need to wait when we hit the battle menu
+            self._selectFreeBattle()
+        else:
+            assert self.state < PbrStates.WAITING_FOR_NEW
+            self._fWaitForNew = False
 
-    def start(self):
+    def _selectFreeBattle(self):
+        '''
+        Select Free Battle to kick off match preparation from the MENU_BATTLE_TYPE gui.
+        This is the first step following PbrStates.WAITING_FOR_NEW.
+        '''
+        self._fWaitForNew = True  # Need to wait again after this match ends
+        self._stuckcrasher_prepare_greenlet = gevent.spawn_later(
+            40, self._stuckcrasher_prepare)
+        self._dolphin.resume()  # We might be paused if we were at WAITING_FOR_NEW
+        gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
+        self._setState(PbrStates.PREPARING_STAGE)
+        self._select(2)  # Select Free Battle
+
+    def matchStart(self):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason
@@ -445,6 +476,7 @@ class PBREngine():
         logger.debug("Received call to start(). _fWaitForStart: {}, state: {}"
                      .format(self._fWaitForStart, self.state))
         if self.state > PbrStates.WAITING_FOR_START:
+            # Early start. Crash if needed, and return
             if not self._debug_allow_early_start:
                 self._crash_callback("Early match start")
             return
@@ -455,7 +487,7 @@ class PBREngine():
         else:  # Start the match as soon as it's ready.
             self._fWaitForStart = False
 
-    def cancel(self, retry=False):
+    def cancel(self):
         '''
         Cancels the current/upcoming match at the next move selection menu.
         Does nothing if the match is already over.
@@ -463,7 +495,6 @@ class PBREngine():
         but the result will be reported as "draw"!
         '''
         self._fMatchCancelled = True
-        self._fMatchRetrying = retry
 
     @property
     def matchVolume(self):
@@ -958,15 +989,14 @@ class PBREngine():
         '''
         if self.state != PbrStates.MATCH_RUNNING:
             return
-        retry = self._fMatchRetrying
         # reset flags
         self._fMatchCancelled = False
-        self._fMatchRetrying = False
-        self._fWaitForNew = True
+        self._fWaitForNew = self._fWaitForStart = True
         self._setState(PbrStates.MATCH_ENDED)
+        killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
+        killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
         self.cursor.addEvent(1, self._quitMatch)
-        if not retry:
-            self.on_win(winner=winner)
+        self.on_win(winner=winner)
 
     def _quitMatch(self):
         '''
@@ -1510,9 +1540,7 @@ class PBREngine():
                 self._setState(PbrStates.WAITING_FOR_NEW)
                 self._dolphin.pause()
             else:
-                self._fWaitForNew = True  # Need to wait again after this match ends
-                self._setState(PbrStates.PREPARING_STAGE)
-                self._select(2)  # Select Free Battle
+                self._selectFreeBattle()
         elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
             self._select(2)  # Select 2 Players
         elif gui == PbrGuis.MENU_BATTLE_REMOTES:

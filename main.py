@@ -57,7 +57,7 @@ def countdown(t=20):
         t -= 1
         if t <= 0:
             t = 0
-            pbr.start()
+            pbr.matchStart()
             break
 
 
@@ -68,9 +68,9 @@ def new():
     pkmn = random.sample(data, 6)
     colosseum = random.choice(list(Colosseums))
 
-    pbr.new(colosseum, pkmn[:3], pkmn[3:6],
-            random.choice(list(AvatarsBlue)),
-            random.choice(list(AvatarsRed)))
+    pbr.matchNew(colosseum, pkmn[:3], pkmn[3:6],
+                 random.choice(list(AvatarsBlue)),
+                 random.choice(list(AvatarsRed)))
     # pbr.new(colosseum, [data[398]], [data[9], data[10], data[12]])
     # pbr.new(random.randint(0,9),
     #         random.sample([data[201], data[49], data[359]],
