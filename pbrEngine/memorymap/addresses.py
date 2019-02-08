@@ -15,19 +15,23 @@ class InvalidLocation(Exception):
     pass
 
 
-def _baseaddr(addr):
+def baseaddr(addr):
     return addr - (addr % 4)
+
+
+def isValidLoc(loc):
+    return ((0x80000000 <= loc and loc < 0x81800000) or
+            (0x90000000 <= loc and loc < 0x94000000))
 
 
 class Loc(object):
     def __init__(self, addr, length):
         self.addr = addr
         self.length = length
-        self.baseaddr = _baseaddr(addr)
 
 
 class LocPath(list):
-    '''List of addresses in a pointer path'''
+    '''A pretty-printing list of memory addresses in a pointer path'''
     def __str__(self):
         return "[{}]".format(" -> ".join("{:08X}".format(loc) for loc in self))
 
@@ -36,55 +40,19 @@ class NestedLoc(object):
     '''Location for a nested pointer
 
     Examples:
-        NestedLoc(0x800, 4).addr(read)             -> 0x800
-        NestedLoc(0x801, 4).addr(read)             -> 0x801
-        NestedLoc(0x800, 4, [0]).addr(read)        -> read(0x800) + 0
-        NestedLoc(0x800, 4, [1]).addr(read)        -> read(0x800) + 1
-        NestedLoc(0x800, 4, [0x20, 1]).addr(read)  -> read(read(0x800) + 0x20) + 1
+        NestedLoc(0x800, 4)            -> 0x800
+        NestedLoc(0x801, 4)            -> 0x801
+        NestedLoc(0x800, 4, [0])       -> MEM(0x800) + 0
+        NestedLoc(0x800, 4, [1])       -> MEM(0x800) + 1
+        NestedLoc(0x800, 4, [0x20, 1]) -> MEM(MEM(0x800) + 0x20) + 1
     '''
     def __init__(self, startingAddr, length, offsets=None):
+        self.startingAddr = startingAddr
         self.length = length
-        self._startingAddr = startingAddr
-        self._offsets = offsets if offsets else []
+        self.offsets = offsets if offsets else []
 
-    def getAddr(self, read_func, max_attempts=20, reads_per_attempt=3):
-        '''Get final address of a nested pointer
-
-        Performs up to <max_attempts> of <reads_per_attempt> to reduce
-        chance of faulty reads.
-
-        Returns None if final address is not a valid memory location.
-        '''
-        loc = self._startingAddr
-        path = LocPath()
-        path.append(loc)
-        for offset in self._offsets:
-            i = val = 0
-            for i in range(max_attempts):
-                val = read_func(32, loc, most_common_of=reads_per_attempt)
-                if _validLocation(val):
-                    break
-                else:
-                    faultyPath = LocPath(path)
-                    faultyPath.append(val + offset)
-                    logger.warning("Location detection failed attempt {}/{}. Path: {}"
-                                   .format(i, max_attempts, faultyPath))
-            if 1 < i and i < max_attempts:
-                logger.warning("Location detection took {} attempts".format(i))
-            loc = val + offset
-            path.append(loc)
-            if not _validLocation(loc):
-                logger.error("Invalid pointer location. Path: {}".format(path))
-                return None
-        return loc
-
-    def getBaseaddr(self, read_func):
-        return _baseaddr(self.getAddr(read_func))
-
-
-def _validLocation(loc):
-    return ((0x80000000 <= loc and loc < 0x81800000) or
-            (0x90000000 <= loc and loc < 0x94000000))
+    def __str__(self):
+        return "({}, {}, {})".format(self.startingAddr, self.length, self.offsets)
 
 
 class Locations(Enum):
@@ -190,6 +158,31 @@ class Locations(Enum):
 
     POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
+    PRE_BATTLE_BLUE = Loc(0x922b8bc0, 4)
+    PRE_BATTLE_RED = Loc(0x922b8bc0, 4)
+
+class NestedLocations(Enum):
+    # Pointer to the first of three groups of battle passes.
+    # Each group contains a copy of the battle passes for P1 and P2.
+    # The battle pass data is copied to these three groups from elsewhere in memory
+    # after P1 and P2 select their battle passes for the match (i.e., just before
+    # reaching the "Start Battle" menu).
+    LOADED_BPASSES_GROUPS   = NestedLoc(0x918F4FFC, 4, [0x58dcc])
+    RULESET                 = NestedLoc(0x918F4FFC, 4, [0x58a06])
+
+    # Locations change between but not during matches.
+    FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
+    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])
+
+    # 192 bytes per pkmn.  Order is:
+    # blue slot 0 -> red slot 0 -> blue slot 1 -> red slot 1
+    # Slot 1 mons are only present in doubles.
+    # Location changes between but not during matches.
+    ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])
+    NON_VOLATILE_PKMN  = NestedLoc(0x6405C0, 192, [0x68])
+    PRE_BATTLE_PKMN    = NestedLoc(0x6405f4, 4, [0x4, 0x4, 0x0])
+
+
 class ActivePkmnOffsets(Enum):
     # SPECIES         = Loc(0x00, 2)
     # STAT_ATK        = Loc(0x02, 2)
@@ -218,25 +211,6 @@ class ActivePkmnOffsets(Enum):
     CURR_HP         = Loc(0x4e, 2)
     # MAX_HP          = Loc(0x52, 2)
     # TOXIC_COUNTUP   = Loc(0x6E, 1)
-    # STATUS          = Loc(0x6E, 1)
+    # STATUS          = Loc(0x6F, 1)
     # ITEM            = Loc(0x78, 1)
     # POKEBALL        = Loc(0x7f, 1)
-
-
-class NestedLocations(Enum):
-    # Pointer to the first of three groups of battle passes.
-    # Each group contains a copy of the battle passes for P1 and P2.
-    # The battle pass data is copied to these three groups from elsewhere in memory
-    # after P1 and P2 select their battle passes for the match (i.e., just before
-    # reaching the "Start Battle" menu).
-    LOADED_BPASSES_GROUPS   = NestedLoc(0x918F4FFC, 4, [0x58dcc])
-
-    # Locations change between but not during matches.
-    FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
-    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])
-
-    # 192 bytes per pkmn.  Order is:
-    # blue slot 0 -> red slot 0 -> blue slot 1 -> red slot 1
-    # Slot 1 mons are only present in doubles.
-    # Location changes between but not during matches.
-    ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])

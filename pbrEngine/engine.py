@@ -15,19 +15,18 @@ import dolphinWatch
 from dolphinWatch import DisconnectReason
 from functools import partial
 from enum import Enum
-from collections import Counter
 from contextlib import suppress
 from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
-from gevent.event import AsyncResult
-from .memorymap.addresses import Locations, NestedLocations, InvalidLocation
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, LoadedBPOffsets, FieldEffects
+from .memorymap.addresses import Locations, NestedLocations
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, LoadedBPOffsets, FieldEffects, PreBattlePkmnOffsets
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
+from .abstractions.dolphinIO import DolphinIO
 from .avatars import AvatarsBlue, AvatarsRed
 from .activepkmn import ActivePkmn
 
@@ -82,6 +81,7 @@ class PBREngine():
         self._debug_allow_early_start = debug_allow_early_start
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
+        self._dolphinIO = DolphinIO(self._dolphin, self._crash_callback)
         self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
         self._dolphin.onDisconnect(self._onDisconnect)
@@ -190,6 +190,8 @@ class PBREngine():
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._startingWeather = None
+        self._inputTimer = 0  # no limit
+        self._battleTimer = 0  # no limit
 
         self.active = {"blue": [], "red": []}
         self.reset()
@@ -402,7 +404,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchNew(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None):
+    def matchPrepare(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -445,6 +447,8 @@ class PBREngine():
         self.avatar_blue = avatars[0]
         self.avatar_red = avatars[1]
         self._startingWeather = startingWeather
+        self._inputTimer = inputTimer
+        self._battleTimer = battleTimer
 
         if self.state == PbrStates.WAITING_FOR_NEW:
             self._selectFreeBattle()
@@ -736,81 +740,6 @@ class PBREngine():
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
-    def _read32(self, addr, **kwargs):
-        return self._read(32, addr, **kwargs)
-
-    def _read16(self, addr, **kwargs):
-        return self._read(16, addr, **kwargs)
-
-    def _read8(self, addr, **kwargs):
-        return self._read(8, addr, **kwargs)
-
-    def _read(self, mode, addr, most_common_of=1):
-        '''Read <mode> bytes at the given address
-
-        Returns most commonly read value of <most_common_of> reads to reduce
-        likelihood of faulty reads (usually reading 0 instead of the correct value).
-        '''
-        if mode not in [8, 16, 32]:
-            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
-        values = Counter()
-        for _ in range(most_common_of):
-            val = AsyncResult()
-            self._dolphin.read(mode, addr, val.set)
-            val = val.get()
-            values[val] += 1
-        return values.most_common(1)[0][0]
-
-    def _write32(self, addr, val, **kwargs):
-        return self._write(32, addr, val, **kwargs)
-
-    def _write16(self, addr, val, **kwargs):
-        return self._write(16, addr, val, **kwargs)
-
-    def _write8(self, addr, val, **kwargs):
-        return self._write(8, addr, val, **kwargs)
-
-    def _write(self, mode, addr, val, max_attempts=5,
-               writes_per_attempt=5, reads_per_attempt=5):
-        '''Write <mode> bytes of val to the given address
-
-        Perform up to <max_attempts> write-and-verify attempts.
-        '''
-        newVal = None
-        if mode not in [8, 16, 32]:
-            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
-        for i in range(max_attempts):
-            for _ in range(writes_per_attempt):
-                self._dolphin.write(mode, addr, val)
-            newVal = self._read(mode, addr, most_common_of=reads_per_attempt)
-            if newVal == val:
-                break
-            else:
-                logger.warning("Write verification failed attempt {}/{}. Read {}, expected {}"
-                               .format(i, max_attempts, newVal, val))
-        if not newVal == val:
-            logger.error("Write of {} to {:0X} failed".format(val, addr))
-        return newVal == val
-
-    def _checkNestedLocs(self):
-        while True:
-            self.timer.sleep(20)
-            try:
-                fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.getAddr(self._read)
-                fieldEffects = self._read32(fieldEffectsLoc, most_common_of=5)
-                logger.info("Field effects at {:08X} has value {:08X}"
-                             .format(fieldEffectsLoc, fieldEffects))
-            except InvalidLocation:
-                logger.error("Failed to determine starting weather location")
-
-            try:
-                ibBlueLoc = NestedLocations.IB_BLUE.value.getAddr(self._read)
-                ibBlue = self._read16(ibBlueLoc, most_common_of=5)
-                logger.info("Blue species at {:08X} has value {:08X}"
-                             .format(ibBlueLoc, ibBlue))
-            except InvalidLocation:
-                logger.error("Failed to determine starting ib-blue location")
-
     def _initBattleState(self):
         '''
         Once the in-battle structures are ready, read/write weather and battle pkmn data
@@ -827,11 +756,9 @@ class PBREngine():
 
 
     def _setupActivePkmn(self):
-        activeLoc = NestedLocations.ACTIVE_PKMN.value.getAddr(self._read)
-        if activeLoc == -1:
-            logger.error("Failed to determine location of active pkmn")
+        activeLoc = self._dolphinIO.readNestedAddr(NestedLocations.ACTIVE_PKMN)
+        if not activeLoc:
             return
-
         offset = 0
         for slot in (0, 1):
             for side in ("blue", "red"):
@@ -845,8 +772,96 @@ class PBREngine():
                                         self.match.teams[side][slot])
                 offset += NestedLocations.ACTIVE_PKMN.value.length
                 self.active[side].append(active)
-                logger.info("Created IB pkmn: {} {} {}".format(side, slot, active))
+                logger.info("Created ActivePkmn: {} {} {}".format(side, slot, active))
 
+    def checkNestedLocs(self):  # TODO move elsewhere, this is just debugging code
+        while True:
+            self.timer.sleep(20)
+            fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
+            if fieldEffectsLoc:
+                fieldEffects = self._dolphinIO.read32(fieldEffectsLoc, most_common_of=5)
+                logger.info("Field effects at {:08X} has value {:08X}"
+                            .format(fieldEffectsLoc, fieldEffects))
+
+            ibBlueLoc = self._dolphinIO.readNestedAddr(NestedLocations.IB_BLUE)
+            if ibBlueLoc:
+                ibBlue = self._dolphinIO.read16(ibBlueLoc, most_common_of=5)
+                logger.info("Blue species at {:08X} has value {:08X}"
+                            .format(ibBlueLoc, ibBlue))
+
+    def _readTest(self):
+        '''Test many reads of '''
+        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
+        if not preBattleLoc:
+            return
+        logger.debug("preloc: {:0X}".format(preBattleLoc))
+        expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
+        while True:
+            logger.warning("Reading HP many times")
+            for i in range(20000):
+                hp = self._dolphinIO.read16(preBattleLoc + PreBattlePkmnOffsets.CURR_HP,
+                                            num_reads=2)
+                if hp != expectedHP:
+                    logger.error("HP was {}".format(hp))
+                if i % 500 == 0:
+                    logger.info("(read %d so far)" % i)
+                    # prevent "Connection with wiimote lost bla bla"
+                    self._pressButton(WiimoteButton.NONE)  # no button press
+            logger.warning("Done reading, sleeping for a bit")
+            gevent.sleep(5)
+
+    def _writeTest(self):
+        '''Test many reads of '''
+        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
+        # TODO
+        # if not preBattleLoc:
+        #     return
+        # logger.debug("preloc: {:0X}".format(preBattleLoc))
+        # expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
+        # while True:
+        #     logger.warning("Reading HP many times")
+        #     for i in range(20000):
+        #         hp = self._dolphinIO.read16(preBattleLoc + PreBattlePkmnOffsets.CURR_HP,
+        #                                     num_reads=2)
+        #         if hp != expectedHP:
+        #             logger.error("HP was {}".format(hp))
+        #         if i % 500 == 0:
+        #             logger.info("(read %d so far)" % i)
+        #             # prevent "Connection with wiimote lost bla bla"
+        #             self._pressButton(WiimoteButton.NONE)  # no button press
+        #     logger.warning("Done reading, sleeping for a bit")
+        #     gevent.sleep(5)
+
+    def _setupPreBattlePkmn(self):
+        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
+        if not preBattleLoc:
+            return
+        for side in ("blue", "red"):
+            for slot, pokeset in enumerate(self.match.teams[side]):
+                logger.info("Testing side {}, slot {}".format(side, slot))
+                success = False
+                pkmnLoc = (preBattleLoc +
+                           int(side == "red") * PreBattlePkmnOffsets.RED_TEAM +
+                           slot * PreBattlePkmnOffsets.PKMN_LENGTH)
+                expected_moves = [move["id"] for move in pokeset["moves"]]
+                while len(expected_moves) < 4:
+                    expected_moves.append(0)
+                for baseMovesOffset in range(0x00, 0x90, 0x10):
+                    moves = [self._dolphinIO.read16(pkmnLoc + baseMovesOffset + 2 * moveOffset)
+                             for moveOffset in range(4)]
+                    logger.debug(moves)
+                    if moves == expected_moves:
+                        success = True
+                        logger.info("good pre pkmn")
+                        break
+                if not (pokeset["stats"]["hp"] ==
+                        self._dolphinIO.read16(pkmnLoc + PreBattlePkmnOffsets.CURR_HP) ==
+                        self._dolphinIO.read16(pkmnLoc + PreBattlePkmnOffsets.MAX_HP)):
+                    success = False
+                if not success:
+                    logger.debug(pokeset["moves"])
+                    self._crash_callback(reason="Incorrect pokemon detected")
+                    return
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -861,11 +876,10 @@ class PBREngine():
         Non-weather field effects such as Gravity, etc. are not supported by this function
         (and their animations wouldn't work anyway)
         '''
-        fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.getAddr(self._read)
-        if fieldEffectsLoc == -1:
-            logger.error("Failed to determine starting weather location")
+        fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
+        if not fieldEffectsLoc:
             return
-        fieldEffects = self._read32(fieldEffectsLoc, most_common_of=10)
+        fieldEffects = self._dolphinIO.read32(fieldEffectsLoc, most_common_of=10)
         logger.debug("Field effects at {:08X} has value {:08X}"
                      .format(fieldEffectsLoc, fieldEffects))
         weather = fieldEffects & FieldEffects.WEATHER_MASK
@@ -876,14 +890,12 @@ class PBREngine():
             self._write32(fieldEffectsLoc, newFieldEffects)
 
     def _injectPokemon(self):
-        bp_groups_loc = NestedLocations.LOADED_BPASSES_GROUPS.value.getAddr(self._read)
-        if bp_groups_loc == -1:
-            logger.error("Failed to determine bp structs location")
+        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        if not bpGroupsLoc:
             return
-
         for side_offset, data in ((LoadedBPOffsets.BP_BLUE, self.match.teams["blue"]),
                                   (LoadedBPOffsets.BP_RED, self.match.teams["red"])):
-            pkmnLoc = bp_groups_loc + LoadedBPOffsets.GROUP2 + side_offset + LoadedBPOffsets.PKMN
+            pkmnLoc = bpGroupsLoc + LoadedBPOffsets.GROUP2 + side_offset + LoadedBPOffsets.PKMN
             for poke_i, pkmn_dict in enumerate(data):
                 pokemon = get_pokemon_from_data(pkmn_dict)
                 pokebytes = pokemon.to_bytes()
@@ -894,6 +906,15 @@ class PBREngine():
                 gevent.sleep(0.1)
                 self._dolphin.resume()
                 self.timer.sleep(20)
+
+    def _injectRules(self):
+        rulesetLoc = self._dolphinIO.readNestedAddr(NestedLocations.RULESET)
+        if not rulesetLoc:
+            return
+        logger.info("Setting input timer to %d" % self._inputTimer)
+        self._dolphin.write8(rulesetLoc + RulesetOffsets.MOVE_TIMER, self._inputTimer)
+        logger.info("Setting battle timer to %d" % self._battleTimer)
+        self._dolphin.write8(rulesetLoc + RulesetOffsets.BATTLE_TIMER, self._battleTimer)
 
     def pkmnSlotToButton(self, slot):
         # TODO fix sideways remote
@@ -937,7 +958,7 @@ class PBREngine():
         while self.state == PbrStates.SELECTING_ORDER:
             self._pressButton(WiimoteButton.RIGHT)
             self.timer.sleep(40)
-            if self._read8(slot0Loc) != 0:
+            if self._dolphinIO.read8(slot0Loc) != 0:
                 break
             logger.warning("Reselecting 1st pkmn")
 
@@ -946,7 +967,7 @@ class PBREngine():
             while self.state == PbrStates.SELECTING_ORDER:
                 self._pressButton(WiimoteButton.UP)
                 self.timer.sleep(40)
-                if self._read8(slot1Loc) != 0:
+                if self._dolphinIO.read8(slot1Loc) != 0:
                     break
                 logger.warning("Reselecting 2nd pkmn")
 
@@ -954,7 +975,7 @@ class PBREngine():
         while self.state == PbrStates.SELECTING_ORDER:
             self._pressOne()
             self.timer.sleep(40)
-            if self._read8(validLoc) != 1:  # This means order was confirmed
+            if self._dolphinIO.read8(validLoc) != 1:  # This means order was confirmed
                 break
             logger.warning("Reselecting order finished")
 
@@ -968,6 +989,7 @@ class PBREngine():
         self._setAnimSpeed(1.0)
         self.timer.spawn_later(330, self._matchStartDelayed)
         self.timer.spawn_later(450, self._disableBlur)
+        self.timer.spawn_later(450, self._setupPreBattlePkmn)
         # match is running now
         self._setState(PbrStates.MATCH_RUNNING)
 
@@ -1591,6 +1613,7 @@ class PBREngine():
             # twice, just to be sure as I have seen it fail once
             self._injectPokemon()
             self._injectPokemon()
+            self._injectRules()
             self._pressTwo()
             # Start a greenlet that spams 2, to skip the followup match intro.
             # This takes us to PbrGuis.ORDER_SELECT.
