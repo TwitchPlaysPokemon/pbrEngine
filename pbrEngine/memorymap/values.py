@@ -330,22 +330,4 @@ class LoadedBPOffsets(IntEnum):
     #     PKMN_BLUE = 0x5AB74
     #     PKMN_RED  = 0x5B94C
 
-
-class PreBattlePkmnOffsets(IntEnum):
-    RED_TEAM        = 0x400
-    PKMN_LENGTH     = 0xA4
-    # Relative to some multiple of 0x10
-    MOVE1           = 0x0
-    MOVE2           = 0x2
-    MOVE3           = 0x4
-    MOVE4           = 0x6
-    PP1             = 0x7
-    PP2             = 0x8
-    PP3             = 0x9
-    PP4             = 0xA
-
-    TOXIC_COUNTUP   = 0x92
-    STATUS          = 0x93
-    CURR_HP         = 0x96
-    MAX_HP          = 0x98
     

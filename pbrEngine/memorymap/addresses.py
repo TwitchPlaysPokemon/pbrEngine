@@ -174,15 +174,42 @@ class NestedLocations(Enum):
     FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
     FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])
 
-    # 192 bytes per pkmn.  Order is:
+    # Modifiable active pkmn data, including volatile conditions.  Order is:
     # blue slot 0 -> red slot 0 -> blue slot 1 -> red slot 1
     # Slot 1 mons are only present in doubles.
     # Location changes between but not during matches.
     ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])
-    NON_VOLATILE_PKMN  = NestedLoc(0x6405C0, 192, [0x68])
-    PRE_BATTLE_PKMN    = NestedLoc(0x6405f4, 4, [0x4, 0x4, 0x0])
+
+    # Fixed-order non-volitile pkmn data.
+    # Non-volatile means this data does not contain any bytes for volatile conditions like
+    # confuse, transform effects, mimic effects, etc.
+    # Modifiable for inactive mons only. A4 bytes per pkmn.
+    NON_VOLATILE_BLUE  = NestedLoc(0x6405C0, 0xA4, [0x68, 0x0])
+    NON_VOLATILE_RED   = NestedLoc(0x6405C0, 0xA4, [0x6C, 0x0])
+
+    # Fixed-order non-volitile pkmn data. Modifiable only after colosseum comes into view
+    # and before the first mons get sent out.  A4 bytes per pkmn.
+    PRE_BATTLE_BLUE    = NestedLoc(0x6405f4, 0xA4, [0x4, 0x4, 0x0])
+    PRE_BATTLE_RED     = NestedLoc(0x6405f4, 0xA4, [0x4, 0x8, 0x0])
 
 
+class NonvolatilePkmnOffsets(Enum):
+    # Moves & PP are relative to some multiple of 0x10, which changes from match to match
+    MOVE1           = Loc(0x0, 2)
+    MOVE2           = Loc(0x2, 2)
+    MOVE3           = Loc(0x4, 2)
+    MOVE4           = Loc(0x6, 2)
+    PP1             = Loc(0x8, 1)
+    PP2             = Loc(0x9, 1)
+    PP3             = Loc(0xA, 1)
+    PP4             = Loc(0xB, 1)
+
+    TOXIC_COUNTUP   = Loc(0x92, 1)
+    STATUS          = Loc(0x93, 1)
+    CURR_HP         = Loc(0x96, 2)
+    MAX_HP          = Loc(0x98, 2)
+    
+    
 class ActivePkmnOffsets(Enum):
     # SPECIES         = Loc(0x00, 2)
     # STAT_ATK        = Loc(0x02, 2)

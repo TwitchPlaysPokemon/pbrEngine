@@ -5,6 +5,7 @@ Created on 22.09.2015
 '''
 
 import logging
+from copy import deepcopy
 
 from ..util import invertSide, swap, EventHook, sanitizeTeamIngamenames
 
@@ -43,27 +44,52 @@ class Match(object):
         # 0-indexed. Ex:
         # <slot at start of match> = self.slotSOMap[side][<current ingame slot>]
         self.slotSOMap = {"blue": list(range(len(pkmn_blue))),
-                                "red": list(range(len(pkmn_red)))}
+                          "red": list(range(len(pkmn_red)))}
 
-    def slotSO(self, side, slotIGO):
-        """Get a Pokemon's starting order slot given its ingame order slot
-        """
-        return self.slotSOMap[side][slotIGO]
+    def teamsCopy(self):
+        return {"blue": list(self.teams["blue"]), "red": list(self.teams["red"])}
 
-    def slotIGO(self, side, slotSO):
-        """Get a Pokemon's ingame order slot given its starting order slot
-        """
-        return self.slotSOMap[side].index(slotSO)
+    def getFrozenSlotConverter(self):
+        slotSOMap = deepcopy(self.slotSOMap)
+        def frozenSlotConverter(convertTo, slotOrTeamOrTeams, side=None):
+            return self.slotConvert(convertTo, slotOrTeamOrTeams, side, slotSOMap)
+        return frozenSlotConverter
 
-    @property
-    def slotIGOMap(self):
-        # This maps a pkmn's starting order slot to its ingame order slot. Both are
-        # 0-indexed. Ex:
-        # <current ingame slot> = self.slotIGOMap[side][<slot at start of match>]
-        result = {}
-        for side in ("blue", "red"):
-            result[side] = [self.slotIGO(side, i) for i in range(len(self.teams[side]))]
-        return result
+    def slotConvert(self, convertTo, slotOrTeamOrTeams, side=None, slotSOMap=None):
+        convertTo = convertTo.upper()
+        convertTo = ("SO" if convertTo == "STARTING" else
+                     "IGO" if convertTo == "INGAME" else convertTo)
+        slotSOMap = slotSOMap or self.slotSOMap
+        assert convertTo in ("SO", "IGO"), "conversion must be SO or IGO"
+        if isinstance(slotOrTeamOrTeams, dict):
+            teams_in = slotOrTeamOrTeams
+            teams_out = {"blue": [], "red": []}
+            for side in ("blue", "red"):
+                if convertTo == "SO":
+                    teams_out[side] = [teams_in[side][slotSOMap[side].index(slotSO)]
+                                       for slotSO in range(len(teams_in[side]))]
+                else:
+                    teams_out[side] = [teams_in[side][slotSOMap[side][slotIGO]]
+                                       for slotIGO in range(len(teams_in[side]))]
+            return teams_out
+        elif isinstance(slotOrTeamOrTeams, list):
+            team_in = slotOrTeamOrTeams
+            assert side, "Side must be specified when value is a list"
+            if convertTo == "SO":
+                return [team_in[slotSOMap[side].index(slotSO)]
+                        for slotSO in range(len(team_in))]
+            else:
+                return [team_in[slotSOMap[side][slotIGO]]
+                        for slotIGO in range(len(team_in))]
+        elif isinstance(slotOrTeamOrTeams, int):
+            slot = slotOrTeamOrTeams
+            assert side, "Side must be specified when value is an int"
+            if convertTo == "SO":
+                return slotSOMap[side][slot]
+            else:
+                return slotSOMap[side].index(slot)
+        else:
+            raise ValueError("value must be of type int, list, or dict")
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
@@ -75,14 +101,14 @@ class Match(object):
         arena trap, etc.
         '''
         return [
-            slot for slot, is_fainted in enumerate(self.areFainted[side]) if
             not is_fainted and
             not slot == 0 and                  # already in battle
             not (slot == 1 and self._fDoubles) # already in battle
+            for slot, is_fainted in enumerate(self.areFainted[side])
         ]
 
     def fainted(self, side, pkmn_name):
-        slot = self.getSlotByName(side, pkmn_name)
+        slot = self.getSlotFromIngamename(side, pkmn_name)
         if slot is None:
             logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
             return
@@ -104,7 +130,7 @@ class Match(object):
             # 11s delay = enough time for swampert (>7s death animation) to die
             self._check_greenlet = self._timer.spawn_later(660, self.checkWinner)
 
-    def getSlotByName(self, side, pkmn_name):
+    def getSlotFromIngamename(self, side, pkmn_name):
         # Returns the slot of the pokemon with this name.
         for i, v in enumerate(self.teams[side]):
             if v["ingamename"] == pkmn_name:
@@ -122,7 +148,7 @@ class Match(object):
         one swap applied. Note: In a double KO, trainers select their new slot 0 and sends
         it out, then do the same for their new slot 1.  So it is still one swap at a time.
         '''
-        slot_inactive = self.getSlotByName(side, pkmn_name)
+        slot_inactive = self.getSlotFromIngamename(side, pkmn_name)
         if slot_inactive == slot_active:
             dlogger.error("Detected switch, but active Pokemon are unchanged.")
             return
