@@ -869,6 +869,18 @@ class PBREngine():
                 if not success:
                     logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
                     self._crash_callback(reason="Incorrect pokemon detected")
+                # self._dolphinIO.write16(pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                #                         pokeset["stats"]["hp"] // 2)
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                #     random.choice([0x40, 0x20, 0x10, 0x8, 0x2]))
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                #     0x80)
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
+                #     0x9)
+
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
