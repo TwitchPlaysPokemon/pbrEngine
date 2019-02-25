@@ -106,6 +106,24 @@ DefaultValues = {
     "BLUR2": 0x47c35000,
 }
 
+GuiPositionGroups = {
+    "PBR_DEFAULT": {  # The game's default values. Currently unused
+        "GUI_POS_X": intToFloatRepr(0xbe830304),  # -0.25
+        "GUI_POS_Y": intToFloatRepr(0x41700000),  # 15
+        "GUI_SIZE" : intToFloatRepr(0x3f880000),  # 1.06
+        "GUI_WIDTH": intToFloatRepr(0x3FAACCCD),  # 1.33
+    },
+    "MAIN": {
+        "GUI_POS_X": intToFloatRepr(0xbec20304),  # -.38
+        "GUI_POS_Y": intToFloatRepr(0xc1e00000),  # -28.0
+        "GUI_SIZE" : intToFloatRepr(0x3f6cd800),  # -0.92
+        "GUI_WIDTH": intToFloatRepr(0x3fa3ccdd),  # 1.28
+    },
+    "OFFSCREEN": {
+        "GUI_POS_Y": 100000.0,
+    }
+}
+
 
 ##########################################
 # cursor positions to click on stuff
@@ -164,18 +182,18 @@ class GuiStateBP(IntEnum):
 
 
 class GuiStateMenu(IntEnum):
-    PRE_MAIN_MENU   = 0x33
-    MAIN_MENU       = 0x2d
-    BATTLE_PASS     = 0x39
-    BATTLE_TYPE     = 0x40
-    BATTLE_PLAYERS  = 0x85
-    BATTLE_REMOTES  = 0x8a
-    BATTLE_RULES    = 0x90 # unfortunately stage selection AND rules
+    PRE_MAIN_MENU   = 0x0133
+    MAIN_MENU       = 0x002d
+    BATTLE_PASS     = 0x0039
+    BATTLE_TYPE     = 0x0040
+    BATTLE_PLAYERS  = 0x0085
+    BATTLE_REMOTES  = 0x008a
+    BATTLE_RULES    = 0x0090 # unfortunately stage selection AND rules
                            # use GuiStateRules for better distinction
-    SAVE            = 0x61
-    SAVE_CONFIRM    = 0x69
-    SAVE_CONTINUE   = 0x26c
-    SAVE_TYP2       = 0x26f # thank you press 2
+    SAVE            = 0x0061
+    SAVE_CONFIRM    = 0x0069
+    SAVE_CONTINUE   = 0x026c
+    SAVE_TYP2       = 0x026f # thank you press 2
 
 
 class GuiStateRules(IntEnum):
@@ -275,6 +293,8 @@ class RulesetOffsets(IntEnum):
 
 
 class LoadedBPOffsets(IntEnum):
+    SETTINGS = -0x450
+
     GROUP1 = 0x0         # Only this data determines avatars for the battle.
     GROUP2 = 0x1bb0      # (Only?) this data determines pkmn for the battle.
     GROUP3 = 0x1bb0 * 2  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".

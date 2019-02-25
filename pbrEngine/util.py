@@ -183,7 +183,7 @@ def floatToIntRepr(f):
 def intToFloatRepr(i):
     '''
     Converts an int into a float by its 32-bit representation, NOT by value.
-    For example, 1.0 is 0x3f800000 and -0.5 is 0xbf000000.
+    For example, 0x3f800000 is 1.0 and 0xbf000000 is -0.5.
     '''
     return struct.unpack("f", struct.pack("I", i))[0]
 

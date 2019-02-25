@@ -147,8 +147,12 @@ class Locations(Enum):
     FOV              = Loc(0x6426a0, 4)  # default 0.5
     ANNOUNCER_FLAG   = Loc(0xc076a0, 1)  # TODO
 
-    GUI_POS_X        = Loc(0x642350, 4)  # default be830304
-    GUI_POS_Y        = Loc(0x642354, 4)  # default 41700000
+    # Default values are in GuiPositions in values.py
+    GUI_POS_X        = Loc(0x642350, 4)
+    GUI_POS_Y        = Loc(0x642354, 4)
+    GUI_SIZE         = Loc(0x642358, 4)  # Preserves aspect ratio
+    GUI_WIDTH        = Loc(0x64235c, 4)
+
     BLUR1            = Loc(0x641e8c, 4)
     BLUR2            = Loc(0x641e90, 4)
     HP_BLUE          = Loc(0x478552, 2)
@@ -156,10 +160,10 @@ class Locations(Enum):
 
     FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
 
-    POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
+    # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
-    PRE_BATTLE_BLUE = Loc(0x922b8bc0, 4)
-    PRE_BATTLE_RED = Loc(0x922b8bc0, 4)
+    # PRE_BATTLE_BLUE = Loc(0x922b8bc0, 4)
+    # PRE_BATTLE_RED = Loc(0x922b8bc0, 4)
 
 class NestedLocations(Enum):
     # Pointer to the first of three groups of battle passes.
@@ -168,6 +172,9 @@ class NestedLocations(Enum):
     # after P1 and P2 select their battle passes for the match (i.e., just before
     # reaching the "Start Battle" menu).
     LOADED_BPASSES_GROUPS   = NestedLoc(0x918F4FFC, 4, [0x58dcc])
+
+    BATTLE_SETTINGS         = NestedLoc(0x9194f6ec, 28, [0])
+
     RULESET                 = NestedLoc(0x918F4FFC, 4, [0x58a06])
 
     # Locations change between but not during matches.
@@ -191,6 +198,12 @@ class NestedLocations(Enum):
     # and before the first mons get sent out.  A4 bytes per pkmn.
     PRE_BATTLE_BLUE    = NestedLoc(0x6405f4, 0xA4, [0x4, 0x4, 0x0])
     PRE_BATTLE_RED     = NestedLoc(0x6405f4, 0xA4, [0x4, 0x8, 0x0])
+
+
+class BattleSettingsOffsets(Enum):
+    RULESET         = Loc(0x04, 1)
+    BATTLE_STYLE    = Loc(0x0B, 1)
+    COLOSSEUM       = Loc(0x12, 2)
 
 
 class NonvolatilePkmnOffsets(Enum):

@@ -20,8 +20,8 @@ from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
-from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, LoadedBPOffsets, FieldEffects
+from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, LoadedBPOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
@@ -431,7 +431,6 @@ class PBREngine():
             return
 
         self.reset()
-
         self.colosseum = colosseum
         self._fDoubles = fDoubles
         self._posBlues = list(range(0, 1))
@@ -613,12 +612,16 @@ class PBREngine():
         self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr,
                               floatToIntRepr(val))
 
-    def setGuiPosY(self, val=DefaultValues["GUI_POS_Y"]):
+    def setGuiPositionGroup(self, position_group="MAIN"):
         '''
-        Sets the Gui's y-coordinate.
-        :param val=DefaultValues["GUI_POS_Y"]: integer, y-coordinate of gui
+        Sets the Gui's x-coordinate, y-coordinate, size, and width to values specified
+        in a position group.
+        :param position_group: name of the desired group 
         '''
-        self._dolphin.write32(Locations.GUI_POS_Y.value.addr, floatToIntRepr(val))
+        for pos_name, pos_val in GuiPositionGroups[position_group].items():
+            self._dolphin.write32(getattr(Locations, pos_name).value.addr,
+                                  floatToIntRepr(pos_val))
+        
 
     #######################################################
     #             Below are helper functions.             #
@@ -806,7 +809,7 @@ class PBREngine():
         #     logger.warning("Done reading, sleeping for a bit")
         #     gevent.sleep(5)
 
-    def _injectRules(self):
+    def _injectSettings(self):
         rulesetLoc = self._dolphinIO.readNestedAddr(NestedLocations.RULESET)
         if not rulesetLoc:
             return
@@ -814,6 +817,27 @@ class PBREngine():
         self._dolphinIO.write8(rulesetLoc + RulesetOffsets.MOVE_TIMER, self._inputTimer)
         logger.info("Setting battle timer to %d", self._battleTimer)
         self._dolphinIO.write8(rulesetLoc + RulesetOffsets.BATTLE_TIMER, self._battleTimer)
+
+        settingsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        if not settingsLoc:
+            return
+        settingsLoc += LoadedBPOffsets["SETTINGS"]
+        logger.warning("Selecting colosseum: {} {}".format(
+            self.colosseum.name, hex(self.colosseum)))
+        # Not sure if these work
+        # offset = BattleSettingsOffsets.RULESET
+        # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+        #                       0x30)
+        # offset = BattleSettingsOffsets.BATTLE_STYLE
+        # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+        #                       2 if self._fDoubles else 1)
+        # This is necessary because otherwise the colosseum might not get injected properly
+        offset = BattleSettingsOffsets.COLOSSEUM
+        self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+                              self.colosseum & 0xFFFF)
+        # self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
+        # logger.warning(hex(self._dolphinIO.read32(Locations.COLOSSEUM.value.addr)))
+
 
     def _injectPokemon(self):
         bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
@@ -1106,9 +1130,9 @@ class PBREngine():
 
         # shift gui back to normal position
         if self.hide_gui:
-            self.setGuiPosY(100000.0)
+            self.setGuiPositionGroup("OFFSCREEN")
         else:
-            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+            self.setGuiPositionGroup("MAIN")
 
         # The action callback might sleep.  Spawn a worker so self._distinguishGui()
         # doesn't get delayed as well.
@@ -1454,7 +1478,7 @@ class PBREngine():
         if self.state != PbrStates.MATCH_RUNNING:
             return
         # move gui back into place. Don't hide this even with hide_gui set
-        self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+        self.setGuiPositionGroup("MAIN")
         text = bytesToString(data)
         # skip text invalidations
         if text.startswith("##"):
@@ -1517,8 +1541,7 @@ class PBREngine():
         if string.startswith("##"):
             return
 
-        # shift gui up a bit to fully see this
-        self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
+        self.setGuiPositionGroup("MAIN")
 
         # log the whole thing
         self.on_infobox(text=string)
@@ -1608,12 +1631,12 @@ class PBREngine():
         elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
             self._select(2)  # Select 2 Players
         elif gui == PbrGuis.MENU_BATTLE_REMOTES:
-                self._select(1)  # Select One Wiimote
+            self._select(1)  # Select One Wiimote
 
         # RULES MENU (stage, settings etc, but not battle pass selection)
         elif gui == PbrGuis.RULES_STAGE:  # Select Colosseum
             self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
-            self._select(CursorOffsets.STAGE)
+            self._pressTwo()
             self._setState(PbrStates.PREPARING_START)
         elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
@@ -1655,7 +1678,7 @@ class PBREngine():
             # twice, just to be sure as I have seen it fail once
             self._injectPokemon()
             self._injectPokemon()
-            self._injectRules()
+            self._injectSettings()
             self._pressTwo()
             # Start a greenlet that spams 2, to skip the followup match intro.
             # This takes us to PbrGuis.ORDER_SELECT.
@@ -1665,7 +1688,7 @@ class PBREngine():
         elif (gui == PbrGuis.ORDER_SELECT and
                 self.state in (PbrStates.PREPARING_START, PbrStates.SELECTING_ORDER)):
             self._setState(PbrStates.SELECTING_ORDER)
-            gevent.spawn(self._selectValidOrder())
+            gevent.spawn(self._selectValidOrder)
         # Inject the true match order, then click confirm.
         elif gui == PbrGuis.ORDER_CONFIRM and self.state == PbrStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
@@ -1720,17 +1743,17 @@ class PBREngine():
                 return
             # try early: shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPosY(100000.0)
+                self.setGuiPositionGroup("OFFSCREEN")
             else:
-                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+                self.setGuiPositionGroup("MAIN")
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # we can safely assume we are in match state now
             self._setState(PbrStates.MATCH_RUNNING)
             # shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPosY(100000.0)
+                self.setGuiPositionGroup("OFFSCREEN")
             else:
-                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+                self.setGuiPositionGroup("MAIN")
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get
