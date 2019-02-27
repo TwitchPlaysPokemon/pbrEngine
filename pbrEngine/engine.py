@@ -669,8 +669,9 @@ class PBREngine():
         '''
         while True:
             self.timer.sleep(20)
-            if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW):
-                continue  # No stuckpresser during match & match end
+            if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW,
+                              PbrStates.WAITING_FOR_START):
+                continue
             if self.state == PbrStates.INIT:
                 limit = 45  # Spam A to get us through a bunch of menus
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
@@ -822,8 +823,6 @@ class PBREngine():
         if not settingsLoc:
             return
         settingsLoc += LoadedBPOffsets["SETTINGS"]
-        logger.warning("Selecting colosseum: {} {}".format(
-            self.colosseum.name, hex(self.colosseum)))
         # Not sure if these work
         # offset = BattleSettingsOffsets.RULESET
         # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
@@ -835,8 +834,6 @@ class PBREngine():
         offset = BattleSettingsOffsets.COLOSSEUM
         self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
                               self.colosseum & 0xFFFF)
-        # self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
-        # logger.warning(hex(self._dolphinIO.read32(Locations.COLOSSEUM.value.addr)))
 
 
     def _injectPokemon(self):
@@ -938,15 +935,14 @@ class PBREngine():
             return
         offset = 0
         for slot in (0, 1):
+            if slot == 1 and not self._fDoubles:
+                continue
             for side in ("blue", "red"):
                 callback = partial(self.temp_callback, "active", side, slot)
-                if slot == 1 and not self._fDoubles:
-                    active = None
-                else:
-                    # PBR forces doubles battles to start with >=2 mons per side.
-                    logger.info("Creating ActivePkmn, side %s, slot %d", side, slot)
-                    active = ActivePkmn(side, slot, activeLoc + offset, self._dolphin,
-                                        callback, self.match.teams[side][slot])
+                # PBR forces doubles battles to start with >=2 mons per side.
+                logger.info("Creating ActivePkmn, side %s, slot %d", side, slot)
+                active = ActivePkmn(side, slot, activeLoc + offset, self._dolphin,
+                                    callback, self.match.teams[side][slot])
                 offset += NestedLocations.ACTIVE_PKMN.value.length
                 self.active[side].append(active)
 
