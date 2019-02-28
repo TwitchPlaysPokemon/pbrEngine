@@ -20,7 +20,7 @@ class ActivePkmn:
         self.addr = addr
         self.callback = callback
         self.fields = {}
-        self._fields_last_zero_write = {}
+        self._fields_last_zero_read = {}
 
         # Set initial values. An ActivePkmn object is only initialized when the
         # battle state is ready to be read from, which is currently when we see the first
@@ -29,7 +29,8 @@ class ActivePkmn:
         # Unfortunately, it takes some time for dolphin to respond with the current
         # values- hence we need initial values in place for the 1st move selection of
         # the match.
-        self.fields["MAX_HP"] = self.fields["CURR_HP"] = starting_pokeset["stats"]["hp"]
+        self.fields["MAX_HP"] = starting_pokeset["stats"]["hp"]
+        self.fields["CURR_HP"] = starting_pokeset["stats"]["hp"]
         for i in range(1, 5):
             try:
                 self.fields["MOVE%d" % i] = starting_pokeset["moves"][i-1]["id"]
@@ -40,13 +41,15 @@ class ActivePkmn:
 
         for offset in ActivePkmnOffsets:
             def dolphin_callback(name, val):
-                if val != 0 and name in self._fields_last_zero_write:
-                    delta_ms = 1000 * (time() - self._fields_last_zero_write.pop(name))
+                if val != 0 and name in self._fields_last_zero_read:
+                    delta_ms = 1000 * (time() - self._fields_last_zero_read.pop(name))
                     delta_text = ("Field {} was 0 for {:.2f}ms ({}, {})"
                                   .format(name, delta_ms, side, slot))
                     # Anything lingering over 2 seconds
-                    if delta_ms < 500:
+                    if delta_ms < 500:  # Last zero read was almost certainly a misread
                         if delta_ms > 150:
+                            # Log so we can see how often it takes this long to finally
+                            # read the correct value
                             logger.error(delta_text)
                         else:
                             logger.debug(delta_text)
@@ -54,10 +57,10 @@ class ActivePkmn:
                     logger.error("Unrecognized active pkmn field: %s" % name)
                     return
                 if val == 0:
-                    self._fields_last_zero_write[name] = time()
+                    self._fields_last_zero_read[name] = time()
                     return  # Possible bad memory read :/
                 if val == self.fields[name]:
-                    return  # Here because we ignored a possible bad mem read
+                    return  # Here because we previously ignored a possible bad mem read
                 self.fields[name] = val
                 callback(name, val)
             dolphin_callback = partial(dolphin_callback, offset.name)
@@ -81,10 +84,10 @@ class ActivePkmn:
     def state(self):
         # If a field was zero for longer than 200ms, assume it's actually zero
         now = time()
-        for name, last_zero_write in list(self._fields_last_zero_write.items()):
+        for name, last_zero_write in list(self._fields_last_zero_read.items()):
             delta_ms = 1000 * (now - last_zero_write)
             if delta_ms > 200:
-                del self._fields_last_zero_write[name]
+                del self._fields_last_zero_read[name]
                 self.fields[name] = 0
                 self.callback(name, 0)
 
