@@ -1,24 +1,20 @@
 import logging
 from time import time
 from functools import partial
-from collections import namedtuple
+import pokecat
 
 from .memorymap.addresses import ActivePkmnOffsets
 
 logger = logging.getLogger("pbrEngine")
 
-ActivePkmnData = namedtuple("ActivePkmn",
-                            ["currHP", "move1", "move2", "move3", "move4"])
-moveData = namedtuple("ActiveMove", ["id", "pp"])
-
 
 class ActivePkmn:
-    def __init__(self, side, slot, addr, dolphin, callback, starting_pokeset):
+    def __init__(self, side, slot, addr, startingPokeset, dolphin, debugCallback):
         self._dolphin = dolphin
         self.side = side
         self.slot = slot
         self.addr = addr
-        self.callback = callback
+        self.debugCallback = debugCallback
         self.fields = {}
         self._fields_last_zero_read = {}
 
@@ -29,12 +25,24 @@ class ActivePkmn:
         # Unfortunately, it takes some time for dolphin to respond with the current
         # values- hence we need initial values in place for the 1st move selection of
         # the match.
-        self.fields["MAX_HP"] = starting_pokeset["stats"]["hp"]
-        self.fields["CURR_HP"] = starting_pokeset["stats"]["hp"]
-        for i in range(1, 5):
+        self.fields["MAX_HP"] = startingPokeset["stats"]["hp"]
+        self.fields["CURR_HP"] = startingPokeset["stats"]["hp"]
+        self.fields["TYPE0"] = pokecat.gen4data.TYPES.index(
+            startingPokeset["species"]["types"][0])
+        if len(startingPokeset["species"]["types"]) > 1:
+            self.fields["TYPE1"] = pokecat.gen4data.TYPES.index(
+                startingPokeset["species"]["types"][1])
+        else:
+            self.fields["TYPE1"] = self.fields["TYPE0"]
+        self.fields["ABILITY"] = startingPokeset["ability"]["id"]
+        self.fields["ITEM"] = startingPokeset["item"]["id"]
+        self.fields["STATUS"] = 0
+        self.fields["TOXIC_COUNTUP"] = 0
+
+        for i in range(0, 4):
             try:
-                self.fields["MOVE%d" % i] = starting_pokeset["moves"][i-1]["id"]
-                self.fields["PP%d" % i] = starting_pokeset["moves"][i-1]["pp"]
+                self.fields["MOVE%d" % i] = startingPokeset["moves"][i]["id"]
+                self.fields["PP%d" % i] = startingPokeset["moves"][i]["pp"]
             except IndexError:
                 self.fields["MOVE%d" % i] = 0
                 self.fields["PP%d" % i] = 0
@@ -62,7 +70,7 @@ class ActivePkmn:
                 if val == self.fields[name]:
                     return  # Here because we previously ignored a possible bad mem read
                 self.fields[name] = val
-                callback(name, val)
+                debugCallback(name, val)
             dolphin_callback = partial(dolphin_callback, offset.name)
 
             offset_addr = addr + offset.value.addr
@@ -80,26 +88,81 @@ class ActivePkmn:
             offset_addr = self.addr + offset.value.addr
             self._dolphin._unSubscribe(offset_addr)
 
-    @property
-    def state(self):
-        # If a field was zero for longer than 200ms, assume it's actually zero
+    def write_zero_reads(self):
+        # If a field was zero for longer than 400ms, assume it's actually zero
         now = time()
-        for name, last_zero_write in list(self._fields_last_zero_read.items()):
-            delta_ms = 1000 * (now - last_zero_write)
-            if delta_ms > 200:
+        for name, last_zero_read in list(self._fields_last_zero_read.items()):
+            delta_ms = 1000 * (now - last_zero_read)
+            if delta_ms > 400:
                 del self._fields_last_zero_read[name]
                 self.fields[name] = 0
-                self.callback(name, 0)
+                self.debugCallback(name, 0)
 
-        return ActivePkmnData(
-            currHP=self.fields["CURR_HP"],
-            # maxHP=self.fields["MAXHP"],
-            move1=moveData(id=self.fields["MOVE1"],
-                           pp=self.fields["PP1"]),
-            move2=moveData(id=self.fields["MOVE2"],
-                           pp=self.fields["PP2"]),
-            move3=moveData(id=self.fields["MOVE3"],
-                           pp=self.fields["PP3"]),
-            move4=moveData(id=self.fields["MOVE4"],
-                           pp=self.fields["PP4"]),
-        )
+    def updatePokeset(self, pokeset, ppOnly):
+        self.write_zero_reads()
+
+        if ppOnly:
+            for moveslot in range(0, 4):
+                if moveslot < len(pokeset["moves"]):
+                    pokeset["moves"][moveslot]["pp"] = self.fields["PP%d" % moveslot]
+            return
+
+        for moveslot in range(0, 4):
+            moveid = self.fields["MOVE%d" % moveslot]
+            if moveid:
+                # update moves
+                if len(pokeset["moves"]) == moveslot:
+                    # try to append the new move
+                    newmove = pokecat.gen4data.get_move(moveid)
+                    if not newmove:  # doesn't happen afaik
+                        logger.error("Pokemon {}-{} has invalid move id of {}"
+                                     .format(self.side, self.slot, moveid))
+                        break
+                    pokeset["moves"].append(newmove)
+                else:
+                    # try to overwrite the old move, if needed
+                    if pokeset["moves"][moveslot]["id"] != moveid:
+                        newmove = pokecat.gen4data.get_move(moveid)
+                        if not newmove:  # doesn't happen afaik
+                            logger.error("Pokemon {}-{} has invalid move id of {}"
+                                         .format(self.side, self.slot, moveid))
+                            break
+                        pokeset["moves"][moveslot] = newmove
+                # update move pp
+                pokeset["moves"][moveslot]["pp"] = self.fields["PP%d" % moveslot]
+        if "CURR_HP" in self.fields:
+            pokeset["curr_hp"] = self.fields["CURR_HP"]
+
+        if "ABILITY" in self.fields:
+            abilityid = self.fields["ABILITY"]
+            # try to overwite the old ability, if needed
+            if pokeset["ability"]["id"] != abilityid:
+                newability = pokecat.gen4data.get_ability(self.fields["ABILITY"])
+                if not newability:  # doesn't happen afaik
+                    logger.error("Pokemon {}-{} has invalid ability id of {}"
+                                 .format(self.side, self.slot, abilityid))
+                else:
+                    pokeset["ability"] = newability
+
+        if "ITEM" in self.fields:
+            itemid = self.fields["ITEM"]
+            # try to overwite the old item, if needed
+            if pokeset["item"]["id"] != itemid:
+                newitem = pokecat.gen4data.get_item(self.fields["ITEM"])
+                if not newitem:  # doesn't happen afaik
+                    logger.error("Pokemon {}-{} has invalid item id of {}"
+                                 .format(self.side, self.slot, itemid))
+                else:
+                    pokeset["item"] = newitem
+
+        if "TYPE0" in self.fields:
+            type0id = self.fields["TYPE0"]
+            type1id = self.fields["TYPE1"]
+            try:
+                types = [pokecat.gen4data.TYPES[type0id]]
+                if type0id != type1id:
+                    types.append(pokecat.gen4data.TYPES[type1id])
+                pokeset["species"]["types"] = types
+            except LookupError:  # doesn't happen afaik
+                logger.error("Pokemon {}-{} has an invalid type id in: {}, {}"
+                             .format(self.side, self.slot, type0id, type1id))

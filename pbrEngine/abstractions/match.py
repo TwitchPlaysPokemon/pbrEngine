@@ -36,8 +36,9 @@ class Match(object):
         # starting team order. The ingame order is what actually determines which button
         # maps to which Pokemon.
 
-        # These two fields keep teams in their ingame order.
+        # These fields keep teams in their ingame order.
         self.teams = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
+        self.teamsLive = deepcopy(self.teams)
         self.areFainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
 
         # This maps a pkmn's ingame order slot to its starting order slot. Both are
@@ -62,6 +63,8 @@ class Match(object):
         slotSOMap = slotSOMap or self.slotSOMap
         assert convertTo in ("SO", "IGO"), "conversion must be SO or IGO"
         if isinstance(slotOrTeamOrTeams, dict):
+            if side:
+                raise ValueError("Side may not be specified when value is a dict")
             teams_in = slotOrTeamOrTeams
             teams_out = {"blue": [], "red": []}
             for side in ("blue", "red"):
@@ -157,10 +160,11 @@ class Match(object):
                              " into battle. slotSOMap: {}"
                              .format(side, pkmn_name, slot_active, self.slotSOMap))
         swap(self.teams[side], slot_inactive, slot_active)
+        swap(self.teamsLive[side], slot_inactive, slot_active)
         swap(self.slotSOMap[side], slot_inactive, slot_active)
         swap(self.areFainted[side], slot_inactive, slot_active)
         # Otherwise both pkmn are fainted, and the fainted list is correct as-is
-        self.on_switch(side=side, slot_active=slot_inactive, slot_inactive=slot_active)
+        self.on_switch(side=side, slot_active=slot_active, slot_inactive=slot_inactive)
 
     def draggedOut(self, side, pkmn_name):
         pass

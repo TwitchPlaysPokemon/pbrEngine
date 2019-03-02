@@ -12,6 +12,7 @@ import logging.handlers
 import os
 import socket
 import dolphinWatch
+import pokecat
 from dolphinWatch import DisconnectReason
 from functools import partial
 from enum import Enum
@@ -92,6 +93,7 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
+        self.match.on_faint += self._match_faint
         # event callbacks
         '''
         Event of the winner being determined.
@@ -131,13 +133,6 @@ class PBREngine():
         '''
         self.on_faint = EventHook(side=str, slot=int, fainted=list, teams=dict,
                                   slotConvert=callable)
-        self.match.on_faint += lambda side, slot: self.on_faint(
-            side=side,
-            slot=slot,
-            fainted=deepcopy(self.match.areFainted),
-            teams=self.match.teamsCopy(),
-            slotConvert=self.match.getFrozenSlotConverter(),
-        )
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
@@ -168,6 +163,7 @@ class PBREngine():
             if status is "slp", the field "rounds" (remaining slp) will be included too
         '''
         self.on_stat_update = EventHook(type=str, data=dict)
+        self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
@@ -354,6 +350,7 @@ class PBREngine():
         self._turn = 0  # Match turns, see self._distinguishTurn.
         self._side = "blue"  # team of the Pokemon currently active.
         self._slot = 0  # team index of the Pokemon currently active.
+        self._lastTeamsUpdateTurn = -1
         self._guiStateMatch = 0
         self._fLastGuiWasSwitchPopup = False
         self._fNeedPkmnInput = False
@@ -657,9 +654,23 @@ class PBREngine():
                        slot_inactive=slot_inactive,
                        pokeset_sentout=self.match.teams[side][slot_active],
                        pokeset_recalled=self.match.teams[side][slot_inactive],
-                       obj=self._actionCallbackObjStore[side][slot_inactive],
+                       obj=self._actionCallbackObjStore[side][slot_active],
                        )
-        self._actionCallbackObjStore[side][slot_inactive] = None
+        self._actionCallbackObjStore[side][slot_active] = None
+
+    def _match_faint(self, side, slot):
+        self.match.teamsLive[side][slot]["curr_hp"] = 0
+        self.on_teams_update(
+            teams=self.match.teamsLive,
+            slotConvert=self.match.getFrozenSlotConverter(),
+        )
+        self.on_faint(
+            side=side,
+            slot=slot,
+            fainted=deepcopy(self.match.areFainted),
+            teams=self.match.teamsCopy(),
+            slotConvert=self.match.getFrozenSlotConverter(),
+        )
 
     def _stuckPresser(self):
         '''
@@ -745,10 +756,10 @@ class PBREngine():
         self._setupActivePkmn()
         self._setupNonvolatilePkmn()
 
-
-    def temp_callback(self, type, side, slot, name, val):
+    def _tempCallback(self, type, side, slot, name, val):
         if self.state != PbrStates.MATCH_RUNNING:
             return
+        assert type in ("active", "nonvolatile"), "Invalid type: %s" % type
         logger.info("[{}] {} {}: {} is now {:0X}".format(type, side, slot, name, val))
 
     def checkNestedLocs(self):  # TODO move elsewhere, this is just debugging code
@@ -938,11 +949,12 @@ class PBREngine():
             if slot == 1 and not self._fDoubles:
                 continue
             for side in ("blue", "red"):
-                callback = partial(self.temp_callback, "active", side, slot)
+                debugCallback = partial(self._tempCallback, "active", side, slot)
                 # PBR forces doubles battles to start with >=2 mons per side.
                 logger.info("Creating ActivePkmn, side %s, slot %d", side, slot)
-                active = ActivePkmn(side, slot, activeLoc + offset, self._dolphin,
-                                    callback, self.match.teams[side][slot])
+                active = ActivePkmn(side, slot, activeLoc + offset,
+                                    self.match.teams[side][slot], self._dolphin,
+                                    debugCallback)
                 offset += NestedLocations.ACTIVE_PKMN.value.length
                 self.active[side].append(active)
 
@@ -952,30 +964,76 @@ class PBREngine():
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_RED))):
             if not nonvolatileLoc:
+                logger.error("nonvolatileLoc not found")
                 return
             for slotSO, pokeset in enumerate(self.match.teams[side]):
                 logger.info("Creating NonvolatilePkmn, side %s, slot %d", side, slotSO)
-                callback = partial(self.temp_callback, "nonvolatile", side, slotSO)
+                debugCallback = partial(self._tempCallback, "nonvolatile", side, slotSO)
                 nonvolatile = NonvolatilePkmn(
                     side, slotSO, nonvolatileLoc +
                                   slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length,
-                    self._dolphin, callback, self.nonvolatileMoveOffsetsSO[side][slotSO],
-                    self.match.teams[side][slotSO])
+                    self.nonvolatileMoveOffsetsSO[side][slotSO],
+                    self.match.teams[side][slotSO],
+                    self._dolphin, debugCallback)
                 self.nonvolatileSO[side].append(nonvolatile)
 
-    def getActiveTeamsCopy(self):
-        active = {"blue": [], "red": []}
-        for side in ("blue", "red"):
-            for activePkmn in self.active[side]:
-                active[side].append(activePkmn.state)
-        return active
+    def _updateLiveTeams(self, ppOnly=False, readActiveSlots=False,
+                         pokesetOnly=None):
+        logger.warning("Updating live teams. ppOnly: %s readActiveSlots: %s pokesetOnly: %s" %
+                       (ppOnly, readActiveSlots, pokesetOnly))
+        teams = self.match.teamsLive
+        slotConvert = self.match.getFrozenSlotConverter()
 
-    def getNonvolatileTeamsCopy(self):
-        nonvolatileSO = {"blue": [], "red": []}
-        for side in ("blue", "red"):
-            for nonvolatilePkmn in self.nonvolatileSO[side]:
-                nonvolatileSO[side].append(nonvolatilePkmn.state)
-        return self.match.slotConvert("IGO", nonvolatileSO)
+        # I don't know if this is necessary
+        if readActiveSlots:
+            loc = self._dolphinIO.readNestedAddr(NestedLocations.ACTIVE_PKMN_SLOTS)
+            activeSlotsMem = self._dolphinIO.readMulti([(8, loc + i) for i in range(0,4)])
+            if self._fDoubles:
+                activeSlotsSO = {"blue": [activeSlotsMem[0], activeSlotsMem[2]],
+                                 "red": [activeSlotsMem[1], activeSlotsMem[3]]}
+            else:
+                activeSlotsSO = {"blue": [activeSlotsMem[0]], "red": [activeSlotsMem[1]]}
+            activeSlots = deepcopy(activeSlotsSO)
+            for side, slots in activeSlotsSO.items():
+                for i, slot in enumerate(slots):
+                    if slot < 6:
+                        # 6 means fainted. Just leave it at 6 so this slot gets updated
+                        # with the nonvolatile data- that should be just fine
+                        activeSlots[side][i] = slotConvert("IGO", slot, side)
+            logger.info("active slots SO: %s" % activeSlotsSO)
+        else:
+            if self._fDoubles:
+                activeSlots = {"blue": [0, 1], "red": [0, 1]}
+            else:
+                activeSlots = {"blue": [0], "red": [0]}
+        logger.info("active slots: %s" % activeSlots)
+        for side, team in teams.items():
+            for slot, pokeset in enumerate(team):
+                slotSO = slotConvert("SO", slot, side)
+                if pokesetOnly:
+                    if pokesetOnly[0] != side or pokesetOnly[1] != slot:
+                        continue
+                if slot in activeSlots[side]:
+                    self.active[side][slot].updatePokeset(pokeset, ppOnly)
+                    logger.debug("Updating active pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
+                else:
+                    self.nonvolatileSO[side][slotSO].updatePokeset(pokeset, ppOnly)
+                    logger.debug("Updating nonvolatile pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
+                pokecat.fix_moves(pokeset)
+                # logger.info("Pokeset %s after update %s" % (pokeset["ingamename"], pokeset))
+
+        # for side, team in teams.items():
+        #     for slot, pokeset in enumerate(team):
+        #         slotSO = slotConvert("SO", slot, side)
+        #         logger.info("Post-all-updates. slots:%d, %d: %s" % (
+        #         slot, slotSO, pokeset))
+
+        logger.warning("Sending live teams to the callback")
+        # Push update to upper layer
+        self.on_teams_update(
+            teams=teams,
+            slotConvert=slotConvert,
+        )
 
     def pkmnSlotToButton(self, slot):
         # TODO fix sideways remote
@@ -1119,6 +1177,11 @@ class PBREngine():
             recorded_state, next_pkmn, is_switch = self._move_select_followup
             self._move_select_followup = None  # reset
         else:   # Here from faint / baton pass / etc.
+            logger.info("Updating teams (after faint / baton pass / etc)")
+            # this doesn't work- if two mons faint and need switch selections,
+            # active data is not in a valid state in between
+            # (it waits until all switches are selected before updating state)
+            self._updateLiveTeams()
             from_move_select = False
             recorded_state = self._getInputState()
             next_pkmn = None
@@ -1219,9 +1282,7 @@ class PBREngine():
             fails=self._numMoveSelections,
             switchesAvailable = self.match.switchesAvailable(side),
             fainted=deepcopy(self.match.areFainted),
-            teams=self.match.teams,
-            activeTeams=self.getActiveTeamsCopy(),
-            nonvolatileTeams=self.getNonvolatileTeamsCopy(),
+            teams=self.match.teamsLive,
             slotConvert=self.match.getFrozenSlotConverter(),
         )
 
@@ -1292,10 +1353,17 @@ class PBREngine():
         gevent.spawn(self._nextMoveWorker, recorded_state)
 
     def _nextMoveWorker(self, recorded_state):
-        # Make modifications to in-battle state. Runs once per match.
+        # Initialize in-battle state. Runs once per match.
         if not self._fBattleStateReady:
             self._fBattleStateReady = True
             self._initBattleState()
+
+        # Update teams on the first move selection of each turn
+        if self._lastTeamsUpdateTurn != self._turn:
+            logger.info("Updating teams on 1st move selection of this turn")
+            self._updateLiveTeams()
+            self._lastTeamsUpdateTurn = self._turn
+
         # prevent "Connection with wiimote lost bla bla"
         self._pressButton(WiimoteButton.NONE)  # no button press
 
@@ -1387,12 +1455,11 @@ class PBREngine():
         # See Locations.CURRENT_TURN
         if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
-        if val != self._turn + 1:
-            raise ValueError("Detected val {}, expected {} (last val + 1)"
-                             .format(val, self._turn + 1))
+        assert val == self._turn + 1, ("Detected val {}, expected {} (last val + 1)"
+                                       .format(val, self._turn + 1))
         self._turn += 1
         self._selecting_moves = False
-        logger.debug("New turn detected: %d" % self._turn)
+        logger.info("New turn detected: %d" % self._turn)
         self._cleanupAfterTurn()
 
     def _distinguishSide(self, val):
@@ -1521,6 +1588,11 @@ class PBREngine():
                            teams=self.match.teamsCopy(),
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None
+
+            logger.info("Updating pokeset pp after a move was used (in 1 second)")
+            gevent.spawn_later(1, self._updateLiveTeams, ppOnly=True,
+                               readActiveSlots=True, pokesetOnly=(side, slot))
+
 
     def _distinguishInfo(self, data):
         # Gets called each time the text in the infobox (xyz fainted, abc hurt
@@ -1733,7 +1805,6 @@ class PBREngine():
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
-            # TODO IS THIS SAFE?
             if self.state != PbrStates.MATCH_RUNNING:
                 self._crash_callback("Detected early start")
                 return
