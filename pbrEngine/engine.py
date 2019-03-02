@@ -1020,7 +1020,7 @@ class PBREngine():
                     self.nonvolatileSO[side][slotSO].updatePokeset(pokeset, ppOnly)
                     logger.debug("Updating nonvolatile pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
                 pokecat.fix_moves(pokeset)
-                # logger.info("Pokeset %s after update %s" % (pokeset["ingamename"], pokeset))
+                logger.debug("Pokeset %s after update %s" % (pokeset["ingamename"], pokeset))
 
         # for side, team in teams.items():
         #     for slot, pokeset in enumerate(team):

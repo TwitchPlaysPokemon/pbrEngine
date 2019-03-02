@@ -166,3 +166,30 @@ class ActivePkmn:
             except LookupError:  # doesn't happen afaik
                 logger.error("Pokemon {}-{} has an invalid type id in: {}, {}"
                              .format(self.side, self.slot, type0id, type1id))
+
+        if "STATUS" in self.fields:
+            stByte = self.fields["STATUS"]
+            nonvolatile = pokeset["status"]["nonvolatile"]
+            nonvolatile["slp"] = stByte & 0x07
+            nonvolatile["psn"] = bool(stByte & 0x08)
+            nonvolatile["brn"] = bool(stByte & 0x10)
+            nonvolatile["frz"] = bool(stByte & 0x20)
+            nonvolatile["par"] = bool(stByte & 0x40)
+            nonvolatile["tox"] = (1 + self.fields["TOXIC_COUNTUP"]
+                                  if bool(stByte & 0x80) else 0)
+
+
+        # pokeset["status"] = {
+        #     "slp": 0,
+        #     "psn": False,
+        #     "brn": False,
+        #     "frz": False,
+        #     "par": False,
+        #     "tox": 0,
+        #     "cnf": 0,
+        #     "cur": False,  # curse
+        #     "inf": False,  # infatuation
+        #     "foc": False,  # focus energy
+        #     "tau": False,  # taunt
+        #     "tor": False,  # torment
+        # }
