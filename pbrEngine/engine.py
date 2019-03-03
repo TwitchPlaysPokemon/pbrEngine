@@ -21,8 +21,8 @@ from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
-from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, AvatarOffsets
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, LoadedBPOffsets, FieldEffects, GuiPositionGroups
+from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
@@ -822,7 +822,7 @@ class PBREngine():
         settingsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
         if not settingsLoc:
             return
-        settingsLoc += LoadedBPOffsets["SETTINGS"]
+        settingsLoc += LoadedBPOffsets["SETTINGS"].value.addr
         # Not sure if these work
         # offset = BattleSettingsOffsets.RULESET
         # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
@@ -841,9 +841,11 @@ class PBREngine():
         if not bpGroupsLoc:
             return
         writes = []
-        for side_offset, data in ((LoadedBPOffsets.BP_BLUE, self.match.teams["blue"]),
-                                  (LoadedBPOffsets.BP_RED, self.match.teams["red"])):
-            pkmnLoc = bpGroupsLoc + LoadedBPOffsets.GROUP2 + side_offset + LoadedBPOffsets.PKMN
+        for side_offset, data in (
+                (LoadedBPOffsets.BP_BLUE.value.addr, self.match.teams["blue"]),
+                (LoadedBPOffsets.BP_RED.value.addr, self.match.teams["red"])):
+            pkmnLoc = (bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
+                       side_offset + LoadedBPOffsets.PKMN.value.addr)
             for poke_i, pkmn_dict in enumerate(data):
                 pokemon = get_pokemon_from_data(pkmn_dict)
                 pokebytes = pokemon.to_bytes()
@@ -861,12 +863,13 @@ class PBREngine():
         if not bpGroupsLoc:
             return
         writes = []
-        for side_offset, avatar in ((LoadedBPOffsets.BP_BLUE, self.avatars["blue"]),
-                                    (LoadedBPOffsets.BP_RED, self.avatars["red"])):
-            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1 + side_offset
+        for side_offset, avatar in (
+                (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
+                (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
+            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
             logger.debug("avatar loc: {:0X}".format(avatarLoc))
             for optionName, optionVal in avatar.items():
-                optionLoc = AvatarOffsets[optionName].value
+                optionLoc = LoadedBPOffsets[optionName].value
                 logger.debug("Writing option {}: {:0X} <- {}"
                              .format(optionName, avatarLoc + optionLoc.addr, optionVal))
                 writes.append((8*optionLoc.length, avatarLoc + optionLoc.addr, optionVal))

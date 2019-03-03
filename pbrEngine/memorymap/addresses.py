@@ -257,16 +257,60 @@ class ActivePkmnOffsets(Enum):
     # POKEBALL        = Loc(0x7f, 1)
 
 
-class AvatarOffsets(Enum):
-    TEAM_NAME       = Loc(0x0, 10)
-    CHARACTER_STYLE = Loc(0x1d, 1)
-    HEAD            = Loc(0x1e, 1)
-    HAIR            = Loc(0x1f, 1)
-    FACE            = Loc(0x20, 1)
-    TOP             = Loc(0x21, 1)
-    BOTTOM          = Loc(0x22, 1)
-    SHOES           = Loc(0x23, 1)
-    HANDS           = Loc(0x24, 1)
-    BAG             = Loc(0x25, 1)
-    GLASSES         = Loc(0x26, 1)
-    BADGES          = Loc(0x27, 1)
+class LoadedBPOffsets(Enum):
+    ########
+    # Below: offsets from the start of NestedLocations.LOADED_BPASSES_GROUPS
+    ########
+    SETTINGS            = Loc(-0x450, 4)
+    GROUP1              = Loc(0x0, 4)         # Only this data determines avatars for the battle.
+    GROUP2              = Loc(0x1bb0, 4)      # Only this data determines pkmn for the battle.
+    GROUP3              = Loc(0x1bb0 * 2, 4)  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".
+
+    ########
+    # Below: offsets within a battle pass group
+    ########
+    BP_BLUE             = Loc(0x0, 4)
+    BP_RED              = Loc(0xdd8, 4)
+    
+    ########
+    # Below: offsets within a single battle pass
+    ########
+    TEAM_NAME           = Loc(0x00, 10)
+    
+    # Single byte.  Contains a bit flag for each catchphrase.
+    #   0: Use the preset catchphrase.
+    #   1: Use custom catchphrase.
+    # Greeting flag mask: b0000 0010
+    # ...
+    # Lose flag mask	: b0100 0000
+    CUSTOM_PHRASE_FLAGS = Loc(0x1a, 1)
+    
+    CHARACTER_STYLE     = Loc(0x1d, 1)
+    HEAD                = Loc(0x1e, 1)
+    HAIR                = Loc(0x1f, 1)
+    FACE                = Loc(0x20, 1)
+    TOP                 = Loc(0x21, 1)
+    BOTTOM              = Loc(0x22, 1)
+    SHOES               = Loc(0x23, 1)
+    HANDS               = Loc(0x24, 1)
+    BAG                 = Loc(0x25, 1)
+    GLASSES             = Loc(0x26, 1)
+    BADGES              = Loc(0x27, 1)
+    
+    # The custom catchphrases.
+    # POKEMON_SHIFT* may contain the Pkmn name.  The name requires 10 chars of space, but
+    # is represented as FFFF 0015.
+    GREETING            = Loc(0X28, 48)  # 24 chars
+    # 0000 FFFF  <- bytes in between GREETING and POKEMON_SENT_OUT
+    POKEMON_SENT_OUT    = Loc(0x5c, 52)  # 12 chars, newline, 12 chars (a newline is FFFF FFFE)
+    # 0000 0000  <- similarly 
+    POKEMON_SHIFT1      = Loc(0x94, 48)  # 24 chars
+    # 0000 0000
+    POKEMON_SHIFT2      = Loc(0xc8, 48)  # 24 chars
+    # 0000 FFFF
+    WIN                 = Loc(0xfc, 52)  # 24 chars, newline, 24 chars
+    # 0000 0000
+    LOSE                = Loc(0x164, 52)  # 24 chars, newline, 24 chars
+    # 0000 0000
+
+    PKMN                = Loc(0x1f8, 1)
