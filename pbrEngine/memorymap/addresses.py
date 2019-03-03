@@ -255,3 +255,18 @@ class ActivePkmnOffsets(Enum):
     STATUS          = Loc(0x6F, 1)
     ITEM            = Loc(0x78, 2)
     # POKEBALL        = Loc(0x7f, 1)
+
+
+class AvatarOffsets(Enum):
+    TEAM_NAME       = Loc(0x0, 10)
+    CHARACTER_STYLE = Loc(0x1d, 1)
+    HEAD            = Loc(0x1e, 1)
+    HAIR            = Loc(0x1f, 1)
+    FACE            = Loc(0x20, 1)
+    TOP             = Loc(0x21, 1)
+    BOTTOM          = Loc(0x22, 1)
+    SHOES           = Loc(0x23, 1)
+    HANDS           = Loc(0x24, 1)
+    BAG             = Loc(0x25, 1)
+    GLASSES         = Loc(0x26, 1)
+    BADGES          = Loc(0x27, 1)

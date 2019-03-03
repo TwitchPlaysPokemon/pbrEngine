@@ -305,27 +305,13 @@ class LoadedBPOffsets(IntEnum):
 
     # Below: offsets within a single battle pass.
 
-    TEAM_NAME       = 0X00  # 10 chars
-
     # Single byte.  Contains a bit flag for each catchphrase.
     #   0: Use the preset catchphrase.
     #   1: Use custom catchphrase.
     # Greeting flag mask: b0000 0010
     # ...
     # Lose flag mask	: b0100 0000
-    CUSTOM_PHRASE_FLAGS = 0x16
-
-    AVATAR          = 0x19
-    HEAD            = 0x1a
-    HAIR            = 0x1b
-    FACE            = 0x1c
-    TOP             = 0x1d
-    BOTTOM          = 0x1e
-    SHOES           = 0x1f
-    HANDS           = 0x20
-    BAG             = 0x21
-    GLASSES         = 0x22
-    BADGES          = 0x23
+    CUSTOM_PHRASE_FLAGS = 0x1A
 
     # 0D0D 0000 AT 0X24
 

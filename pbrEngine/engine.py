@@ -21,14 +21,14 @@ from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
-from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets
+from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, AvatarOffsets
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, LoadedBPOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, PbrStates
 from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
-from .avatars import AvatarsBlue, AvatarsRed
+from .avatars import generateDefaultAvatars
 from .activePkmn import ActivePkmn
 from .nonvolatilePkmn import NonvolatilePkmn
 
@@ -176,10 +176,8 @@ class PBREngine():
 
         self.state = PbrStates.INIT
         self.colosseum = 0
-        self.avatar_blue = AvatarsBlue.BLUE
-        self.avatar_red = AvatarsRed.RED
-        self._prev_avatar_blue = AvatarsBlue.BLUE
-        self._prev_avatar_red = AvatarsRed.RED
+        avatars = generateDefaultAvatars()
+        self.avatars = {"blue": avatars[0], "red": avatars[1]}
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._startingWeather = None
@@ -393,7 +391,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, avatars=None, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -405,8 +403,6 @@ class PBREngine():
         :param pkmn_blue: array with dictionaries of team blue's pokemon
         :param pkmn_red: array with dictionaries of team red's pokemon
         CAUTION: Currently only max. 3 pokemon per team supported.
-        :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
-        :param avatar_red=AvatarsRed.RED: enum for team red's avatar
         '''
         logger.debug("Received call to new(). _fWaitForStart: {}, state: {}"
                      .format(self._fWaitForStart, self.state))
@@ -430,10 +426,6 @@ class PBREngine():
         self._posBlues = list(range(0, 1))
         self._posReds = list(range(1, 3))
         self.match.new(teams, fDoubles)
-        if not avatars:
-            avatars = [AvatarsBlue.BLUE,AvatarsRed.RED]
-        self.avatar_blue = avatars[0]
-        self.avatar_red = avatars[1]
         self._startingWeather = startingWeather
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
@@ -864,6 +856,22 @@ class PBREngine():
         self._dolphin.resume()
         self.timer.sleep(20)
 
+    def _injectAvatars(self):
+        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        if not bpGroupsLoc:
+            return
+        writes = []
+        for side_offset, avatar in ((LoadedBPOffsets.BP_BLUE, self.avatars["blue"]),
+                                    (LoadedBPOffsets.BP_RED, self.avatars["red"])):
+            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1 + side_offset
+            logger.debug("avatar loc: {:0X}".format(avatarLoc))
+            for optionName, optionVal in avatar.items():
+                optionLoc = AvatarOffsets[optionName].value
+                logger.debug("Writing option {}: {:0X} <- {}"
+                             .format(optionName, avatarLoc + optionLoc.addr, optionVal))
+                writes.append((8*optionLoc.length, avatarLoc + optionLoc.addr, optionVal))
+        self._dolphinIO.writeMulti(writes)
+
     def _setupPreBattlePkmn(self):
         logger.info("Setting up pre-battle pkmn")
         for side, preBattleLoc in (
@@ -1101,6 +1109,7 @@ class PBREngine():
         '''
         logger.info("Starting PBR match")
         # gevent.sleep(0) # TODO Wait a bit for better TPP timing, ie with overlay & music fade outs
+        self._injectAvatars()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         self.timer.spawn_later(330, self._matchStartDelayed)
