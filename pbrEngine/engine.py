@@ -43,10 +43,9 @@ class ActionCause(Enum):
 
 
 class PBREngine():
-    def __init__(self, action_callback, crash_callback, host="localhost", port=6000,
-                 debug_allow_early_start=False):
+    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000):
         '''
-        :param action_callback:
+        :param actionCallback:
             Will be called when a player action needs to be determined.
             Gets called with these keyword arguments:
                 <turn> Current turn.  Starts at 1.
@@ -78,12 +77,11 @@ class PBREngine():
         :param port: port of the dolphin instance to connect to
         '''
         logger.info("Initializing PBREngine")
-        self._action_callback = action_callback
-        self._crash_callback = crash_callback
-        self._debug_allow_early_start = debug_allow_early_start
+        self._actionCallback = actionCallback
+        self._crashCallback = crashCallback
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
-        self._dolphinIO = DolphinIO(self._dolphin, self._crash_callback)
+        self._dolphinIO = DolphinIO(self._dolphin, self._crashCallback)
         self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
         self._dolphin.onDisconnect(self._onDisconnect)
@@ -209,11 +207,11 @@ class PBREngine():
 
     def _stuckcrasher_start(self):
         if self.state < PbrStates.WAITING_FOR_NEW:
-            self._crash_callback(reason="Stuck in start menus")
+            self._crashCallback(reason="Stuck in start menus")
 
     def _stuckcrasher_prepare(self):
         if self.state < PbrStates.WAITING_FOR_START:
-            self._crash_callback(reason="Stuck in preparation menus")
+            self._crashCallback(reason="Stuck in preparation menus")
 
     def _onDisconnect(self, watcher, reason):
         '''
@@ -390,7 +388,6 @@ class PBREngine():
         self._fBpPage2 = False
         self._fBattleStateReady = False
 
-
     ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
@@ -424,7 +421,7 @@ class PBREngine():
         if self.state > PbrStates.WAITING_FOR_NEW:
             logger.warning("Invalid match preparation state: {}. Crashing"
                            .format(self.state))
-            self._crash_callback("Early preparation start")
+            self._crashCallback("Early preparation start")
             return
 
         self.reset()
@@ -471,9 +468,9 @@ class PBREngine():
         logger.debug("Received call to start(). _fWaitForStart: {}, state: {}"
                      .format(self._fWaitForStart, self.state))
         if self.state > PbrStates.WAITING_FOR_START:
-            self._crash_callback("Early match start")
+            self._crashCallback("Early match start")
             return
-        if self.state == PbrStates.WAITING_FOR_START or self._debug_allow_early_start:
+        if self.state == PbrStates.WAITING_FOR_START:
             # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
             self._matchStart()
@@ -900,7 +897,7 @@ class PBREngine():
                     success = False
                 if not success:
                     logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
-                    self._crash_callback(reason="Incorrect pokemon detected")
+                    self._crashCallback(reason="Incorrect pokemon detected")
                 # self._dolphinIO.write16(pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
                 #                         pokeset["stats"]["hp"] // 2)
                 # self._dolphinIO.write8(
@@ -1274,7 +1271,7 @@ class PBREngine():
         self._expectedActionCause[side][slot] = ActionCause.OTHER
 
         # Retrieve actions from the upper layer.
-        primary, target, obj = self._action_callback(
+        primary, target, obj = self._actionCallback(
             turn=turn,
             side=side,
             slot=slot,
@@ -1806,7 +1803,7 @@ class PBREngine():
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
             if self.state != PbrStates.MATCH_RUNNING:
-                self._crash_callback("Detected early start")
+                self._crashCallback("Detected early start")
                 return
             # try early: shift gui back to normal position
             if self.hide_gui:
