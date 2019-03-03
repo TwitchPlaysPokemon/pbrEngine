@@ -1379,6 +1379,7 @@ class PBREngine():
         if self._fMatchCancelled:  # quit the match if it was cancelled
             self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
                                   GuiMatchInputExecute.INSTA_GIVE_IN)
+            gevent.sleep(7)  # Adjust timing for consistency with the delay of match.checkWinner
             self._matchOver("draw")
             return
         self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
