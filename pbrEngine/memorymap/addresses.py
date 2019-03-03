@@ -313,4 +313,6 @@ class LoadedBPOffsets(Enum):
     LOSE                = Loc(0x164, 52)  # 24 chars, newline, 24 chars
     # 0000 0000
 
+    SKIN                = Loc(0x1ea, 1)
+
     PKMN                = Loc(0x1f8, 1)
