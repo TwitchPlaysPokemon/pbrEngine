@@ -63,7 +63,7 @@ class DolphinIO:
     def write(self, mode, addr, val, **kwargs):
         self.writeMulti([(mode, addr, val)], **kwargs)
 
-    def writeMulti(self, writeTuplesList, maxAttempts=3, writesPerAttempt=5,
+    def writeMulti(self, writeTuplesList, maxAttempts=5, writesPerAttempt=5,
                    readsPerAttempt=2):
         '''Write multiple values to memory, given a list of (mode, addr, val) tuples
     
@@ -108,7 +108,7 @@ class DolphinIO:
                     # self._crash_callback("Memory write failure")
                     return  # All values to write were successfully verified
             if i < maxAttempts - 1:
-                gevent.sleep(0.01)  # Sleep a bit between attempts
+                gevent.sleep(0.01 * (i + 1))  # Sleep a bit between attempts
         if readsPerAttempt > 0 and writes_needed:
             self._crash("Memory write failure")
 
@@ -130,12 +130,11 @@ class DolphinIO:
                 val = self.read32(loc, numAttempts=readsPerAttempt)
                 if isValidLoc(val):
                     break
-                else:
-                    faultyPath = LocPath(path)
-                    faultyPath.append(val + offset)
-                    logger.error("Location detection for {} failed attempt {}/{}. Path: {}"
-                                 .format(nestedLocation.name, i, maxAttempts, faultyPath))
-                gevent.sleep(0.2)  # Sleep a bit, this helps a lot with bad reads
+                faultyPath = LocPath(path)
+                faultyPath.append(val + offset)
+                logger.error("Location detection for {} failed attempt {}/{}. Path: {}"
+                             .format(nestedLocation.name, i, maxAttempts, faultyPath))
+                gevent.sleep(0.1 * (i + 1))  # Sleep a bit, this helps a lot with bad reads
             loc = val + offset
             path.append(loc)
             if not isValidLoc(loc):
