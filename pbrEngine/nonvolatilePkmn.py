@@ -57,9 +57,8 @@ class NonvolatilePkmn:
                     delta_ms = 1000 * (time() - self._fields_last_zero_read.pop(name))
                     delta_text = ("Field {} was 0 for {:.2f}ms ({}, {})"
                                   .format(name, delta_ms, side, slotSO))
-                    # Anything lingering over 2 seconds
                     if delta_ms < 500:
-                        if delta_ms > 150:
+                        if delta_ms > 350:
                             logger.error(delta_text)
                         else:
                             logger.debug(delta_text)

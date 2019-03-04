@@ -8,9 +8,9 @@ logger = logging.getLogger("pbrEngine")
 
 
 class DolphinIO:
-    def __init__(self, dolphin, crash_callback):
+    def __init__(self, dolphin, crash):
         self._dolphin = dolphin
-        self._crash_callback = crash_callback
+        self._crash = crash
 
     def read8(self, addr, **kwargs):
         return self.read(8, addr, **kwargs)
@@ -64,7 +64,7 @@ class DolphinIO:
         self.writeMulti([(mode, addr, val)], **kwargs)
 
     def writeMulti(self, writeTuplesList, maxAttempts=3, writesPerAttempt=5,
-                   readsPerAttempt=2, crashOnFail=True):
+                   readsPerAttempt=2):
         '''Write multiple values to memory, given a list of (mode, addr, val) tuples
     
         On each attempt, memory is batch written <writesPerAttempt> times, with a 10ms
@@ -97,17 +97,22 @@ class DolphinIO:
                 # Filter out writes for which the read value matched the written value
                 writes_needed = [(m, a, v) for i, (m, a, v) in enumerate(writes_needed)
                                  if read_values[i] != v]
-                if not writes_needed:
+                if writes_needed:
+                    logger.error("%d/%d writes failed. %d/%d attempts remaining",
+                                 len(writes_needed), len(writeTuplesList),
+                                 maxAttempts - i - 1, maxAttempts)
+                    logger.debug("All writes: %s\nThis iteration's reads: %s\n"
+                                 "Writes that failed: %s", writeTuplesList, read_values,
+                                 writes_needed)
+                else:
+                    # self._crash_callback("Memory write failure")
                     return  # All values to write were successfully verified
             if i < maxAttempts - 1:
                 gevent.sleep(0.01)  # Sleep a bit between attempts
-        if readsPerAttempt > 0 and writes_needed and crashOnFail:
-            logger.error("The following memory writes failed: {}"
-                         .format(writes_needed))
-            self._crash_callback("Memory write failure")
+        if readsPerAttempt > 0 and writes_needed:
+            self._crash("Memory write failure")
 
-    def readNestedAddr(self, nestedLocation, maxAttempts=5, readsPerAttempt=3,
-                      crashOnFail=True):
+    def readNestedAddr(self, nestedLocation, maxAttempts=5, readsPerAttempt=3):
         '''Get final address of a nested pointer
     
         Performs up to <max_attempts> of <reads_per_attempt> to reduce
@@ -136,7 +141,5 @@ class DolphinIO:
             if not isValidLoc(loc):
                 logger.error("Invalid pointer location for {}. Path: {}"
                              .format(nestedLocation.name, path))
-                if crashOnFail:
-                    self._crash_callback(reason="Failed to read pointer")
-                return None
+                self._crash(reason="Failed to read pointer")
         return loc

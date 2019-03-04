@@ -53,9 +53,8 @@ class ActivePkmn:
                     delta_ms = 1000 * (time() - self._fields_last_zero_read.pop(name))
                     delta_text = ("Field {} was 0 for {:.2f}ms ({}, {})"
                                   .format(name, delta_ms, side, slot))
-                    # Anything lingering over 2 seconds
                     if delta_ms < 500:  # Last zero read was almost certainly a misread
-                        if delta_ms > 150:
+                        if delta_ms > 350:
                             # Log so we can see how often it takes this long to finally
                             # read the correct value
                             logger.error(delta_text)
