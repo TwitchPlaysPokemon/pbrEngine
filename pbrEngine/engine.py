@@ -14,7 +14,7 @@ import traceback
 import socket
 import dolphinWatch
 import pokecat
-from dolphinWatch import DisconnectReason
+from dolphinWatch import DisconnectReason, DolphinNotConnected
 from functools import partial
 from enum import Enum
 from contextlib import suppress
@@ -491,7 +491,7 @@ class PBREngine():
     def matchVolume(self, v):
         self._matchVolume = v
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self.setVolume(v)
 
     def setVolume(self, v):
@@ -510,7 +510,7 @@ class PBREngine():
     def matchAnnouncer(self, announcerOn):
         self._fMatchAnnouncer = announcerOn
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self._setAnnouncer(announcerOn)
 
     def _setAnnouncer(self, announcerOn):
@@ -530,7 +530,7 @@ class PBREngine():
     def matchEmuSpeed(self, speed):
         self._matchEmuSpeed = speed
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self._setEmuSpeed(speed)
 
     def _setEmuSpeed(self, speed):
@@ -548,7 +548,7 @@ class PBREngine():
     def matchAnimSpeed(self, speed):
         self._matchAnimSpeed = speed
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self._setAnimSpeed(speed)
 
     def _setAnimSpeed(self, speed):
@@ -574,7 +574,7 @@ class PBREngine():
     def matchFov(self, val=0.5):
         self._matchFov = val
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self._setFov(val)
 
     def _setFov(self, val=0.5):
@@ -592,7 +592,7 @@ class PBREngine():
     def matchFieldEffectStrength(self, val=1.0):
         self._matchFieldEffectStrength = val
         if self.state == EngineStates.MATCH_RUNNING:
-            with suppress(socket.error):
+            with suppress(DolphinNotConnected):
                 self._setFieldEffectStrength(val)
 
     def _setFieldEffectStrength(self, val=1.0):
