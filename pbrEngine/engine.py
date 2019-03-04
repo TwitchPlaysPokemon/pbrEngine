@@ -684,10 +684,8 @@ class PBREngine():
             else:
                 limit = 300  # 5 seconds
             if (self.timer.frame - self._lastInputFrame) > limit:
-                try:
+                with suppress(DolphinNotConnected):
                     self._pressButton(self._lastInput, "stuck presser")
-                except Exception:
-                    logger.exception("Stuckpresser failed to press")
 
     def _selectLater(self, frames, index):
         self._setLastInputFrame(frames)
@@ -1656,8 +1654,8 @@ class PBREngine():
         try:
             if gui == backup:
                 # Expected with some guis, such as RULES_SETTINGS.
-                logger.info("[Duplicate Gui] %s  (%s)",
-                            PbrGuis(gui).name, EngineStates(self.state).name)
+                logger.debug("[Duplicate Gui] %s  (%s)",
+                             PbrGuis(gui).name, EngineStates(self.state).name)
             else:
                 logger.debug("[Gui] %s  (%s)", PbrGuis(gui).name, EngineStates(self.state).name)
         except:  # unrecognized gui, ignore
