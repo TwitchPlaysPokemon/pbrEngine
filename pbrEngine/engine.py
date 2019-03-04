@@ -25,7 +25,7 @@ from .eps import get_pokemon_from_data
 from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
-from .states import PbrGuis, PbrStates
+from .states import PbrGuis, EngineStates
 from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
@@ -108,9 +108,9 @@ class PBREngine():
         '''
         Event for state changes.
         Propably only useful for the debug monitor, not for production.
-        arg0: <state> see states.PbrStates
+        arg0: <state> see states.EngineStates
         '''
-        self.on_state = EventHook(state=PbrStates)
+        self.on_state = EventHook(state=EngineStates)
         '''
         Event of a gui changing.
         Propably only useful for the debug monitor, not for production.
@@ -180,7 +180,7 @@ class PBREngine():
         self._matchAnimSpeed = 1.0
         self._matchFieldEffectStrength = 1.0
 
-        self.state = PbrStates.INIT
+        self.state = EngineStates.INIT
         self.colosseum = 0
         avatars = generateDefaultAvatars()
         self.avatars = {"blue": avatars[0], "red": avatars[1]}
@@ -210,11 +210,11 @@ class PBREngine():
             40, self._stuckcrasher_start)
 
     def _stuckcrasher_start(self):
-        if self.state < PbrStates.WAITING_FOR_NEW:
+        if self.state < EngineStates.WAITING_FOR_NEW:
             self._crash(reason="Stuck in start menus")
 
     def _stuckcrasher_prepare(self):
-        if self.state < PbrStates.WAITING_FOR_START:
+        if self.state < EngineStates.WAITING_FOR_START:
             self._crash(reason="Stuck in preparation menus")
 
     def _onDisconnect(self, watcher, reason):
@@ -256,7 +256,7 @@ class PBREngine():
         gui_type = data >> 16 & 0xff
         pkmn_input_type = data & 0xff
 
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             # True if in the pkmn select menu, and a pkmn input needs to be made
             # (i.e., there are no popups, and a pkmn input has not successfully gone
             # through yet).
@@ -332,7 +332,7 @@ class PBREngine():
         # ##
 
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
-        self._setState(PbrStates.INIT)
+        self._setState(EngineStates.INIT)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
     def _subscribe(self, loc, callback):
@@ -415,12 +415,12 @@ class PBREngine():
 
         # Give PBR some time to quit the previous match, if needed.
         for _ in range(25):
-            if self.state != PbrStates.MATCH_ENDED:
+            if self.state != EngineStates.MATCH_ENDED:
                 break
             logger.warning("PBR is not yet ready for a new match")
             gevent.sleep(1)
 
-        if self.state > PbrStates.WAITING_FOR_NEW:
+        if self.state > EngineStates.WAITING_FOR_NEW:
             logger.warning("Invalid match preparation state: {}. Crashing"
                            .format(self.state))
             self._crash("Early preparation start")
@@ -436,23 +436,23 @@ class PBREngine():
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
 
-        if self.state == PbrStates.WAITING_FOR_NEW:
+        if self.state == EngineStates.WAITING_FOR_NEW:
             self._selectFreeBattle()
         else:
-            assert self.state < PbrStates.WAITING_FOR_NEW
+            assert self.state < EngineStates.WAITING_FOR_NEW
             self._fWaitForNew = False
 
     def _selectFreeBattle(self):
         '''
         Select Free Battle to kick off match preparation from the MENU_BATTLE_TYPE gui.
-        This is the first step following PbrStates.WAITING_FOR_NEW.
+        This is the first step following EngineStates.WAITING_FOR_NEW.
         '''
         self._fWaitForNew = True  # Need to wait again after this match ends
         self._stuckcrasher_prepare_greenlet = gevent.spawn_later(
             40, self._stuckcrasher_prepare)
         self._dolphin.resume()  # We might be paused if we were at WAITING_FOR_NEW
         gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
-        self._setState(PbrStates.PREPARING_STAGE)
+        self._setState(EngineStates.PREPARING_STAGE)
         self._select(2)  # Select Free Battle
 
     def matchStart(self):
@@ -465,10 +465,10 @@ class PBREngine():
         '''
         logger.debug("Received call to start(). _fWaitForStart: {}, state: {}"
                      .format(self._fWaitForStart, self.state))
-        if self.state > PbrStates.WAITING_FOR_START:
+        if self.state > EngineStates.WAITING_FOR_START:
             self._crash("Early match start")
             return
-        if self.state == PbrStates.WAITING_FOR_START:
+        if self.state == EngineStates.WAITING_FOR_START:
             # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
             self._matchStart()
@@ -491,7 +491,7 @@ class PBREngine():
     @matchVolume.setter
     def matchVolume(self, v):
         self._matchVolume = v
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self.setVolume(v)
 
@@ -510,7 +510,7 @@ class PBREngine():
     @matchAnnouncer.setter
     def matchAnnouncer(self, announcerOn):
         self._fMatchAnnouncer = announcerOn
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self._setAnnouncer(announcerOn)
 
@@ -530,7 +530,7 @@ class PBREngine():
     @matchEmuSpeed.setter
     def matchEmuSpeed(self, speed):
         self._matchEmuSpeed = speed
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self._setEmuSpeed(speed)
 
@@ -548,7 +548,7 @@ class PBREngine():
     @matchAnimSpeed.setter
     def matchAnimSpeed(self, speed):
         self._matchAnimSpeed = speed
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self._setAnimSpeed(speed)
 
@@ -574,7 +574,7 @@ class PBREngine():
     @matchFov.setter
     def matchFov(self, val=0.5):
         self._matchFov = val
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self._setFov(val)
 
@@ -592,7 +592,7 @@ class PBREngine():
     @matchFieldEffectStrength.setter
     def matchFieldEffectStrength(self, val=1.0):
         self._matchFieldEffectStrength = val
-        if self.state == PbrStates.MATCH_RUNNING:
+        if self.state == EngineStates.MATCH_RUNNING:
             with suppress(socket.error):
                 self._setFieldEffectStrength(val)
 
@@ -675,10 +675,10 @@ class PBREngine():
         '''
         while True:
             self.timer.sleep(20)
-            if self.state in (PbrStates.MATCH_RUNNING, PbrStates.WAITING_FOR_NEW,
-                              PbrStates.WAITING_FOR_START):
+            if self.state in (EngineStates.MATCH_RUNNING, EngineStates.WAITING_FOR_NEW,
+                              EngineStates.WAITING_FOR_START):
                 continue
-            if self.state == PbrStates.INIT:
+            if self.state == EngineStates.INIT:
                 limit = 45  # Spam A to get us through a bunch of menus
             elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
                 limit = 600  # 10 seconds- don't interrupt the injection
@@ -733,7 +733,7 @@ class PBREngine():
         if self.state == state:
             return
         self.state = state
-        logger.info("[New State] " + PbrStates(state).name)
+        logger.info("[New State] " + EngineStates(state).name)
         self.on_state(state=state)
 
     def _newRng(self):
@@ -750,7 +750,7 @@ class PBREngine():
         self._setupNonvolatilePkmn()
 
     def _tempCallback(self, type, side, slot, name, val):
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
         assert type in ("active", "nonvolatile"), "Invalid type: %s" % type
         logger.debug("[{}] {} {}: {} is now {:0X}".format(type, side, slot, name, val))
@@ -1067,7 +1067,7 @@ class PBREngine():
             validLoc = Locations.ORDER_VALID_RED.value.addr
 
         # Select 1st slot. Confirm selection, retrying if needed
-        while self.state == PbrStates.SELECTING_ORDER:
+        while self.state == EngineStates.SELECTING_ORDER:
             self._pressButton(WiimoteButton.RIGHT)
             self.timer.sleep(40)
             if self._dolphinIO.read8(slot0Loc) != 0:
@@ -1076,7 +1076,7 @@ class PBREngine():
 
         if self._fDoubles:
             # Select 2nd slot. Confirm selection, retrying if needed
-            while self.state == PbrStates.SELECTING_ORDER:
+            while self.state == EngineStates.SELECTING_ORDER:
                 self._pressButton(WiimoteButton.UP)
                 self.timer.sleep(40)
                 if self._dolphinIO.read8(slot1Loc) != 0:
@@ -1084,7 +1084,7 @@ class PBREngine():
                 logger.warning("Reselecting 2nd pkmn")
 
         # Bring up the PbrGuis.ORDER_CONFIRM prompt
-        while self.state == PbrStates.SELECTING_ORDER:
+        while self.state == EngineStates.SELECTING_ORDER:
             self._pressOne()
             self.timer.sleep(40)
             if self._dolphinIO.read8(validLoc) != 1:  # This means order was confirmed
@@ -1103,7 +1103,7 @@ class PBREngine():
         self.timer.spawn_later(450, self._disableBlur)
         self.timer.spawn_later(450, self._setupPreBattlePkmn)
         # match is running now
-        self._setState(PbrStates.MATCH_RUNNING)
+        self._setState(EngineStates.MATCH_RUNNING)
 
     def _matchStartDelayed(self):
         # just after the "whoosh" sound, and right before the colosseum becomes visible
@@ -1121,12 +1121,12 @@ class PBREngine():
         options appear.
         Calls the on_win-callback and triggers a matchlog-message.
         '''
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
         # reset flags
         self._fMatchCancelled = False
         self._fWaitForNew = self._fWaitForStart = True
-        self._setState(PbrStates.MATCH_ENDED)
+        self._setState(EngineStates.MATCH_ENDED)
         killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
         killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
         self.cursor.addEvent(1, self._quitMatch)
@@ -1447,7 +1447,7 @@ class PBREngine():
 
     def _distinguishTurn(self, val):
         # See Locations.CURRENT_TURN
-        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         assert val == self._turn + 1, ("Detected val {}, expected {} (last val + 1)"
                                        .format(val, self._turn + 1))
@@ -1458,7 +1458,7 @@ class PBREngine():
 
     def _distinguishSide(self, val):
         # See Locations.CURRENT_SIDE
-        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         if not val in (0, 1):
             raise ValueError("Invalid side detected: %d" % val)
@@ -1468,7 +1468,7 @@ class PBREngine():
 
     def _distinguishSlot(self, val):
         # See Locations.CURRENT_SLOT
-        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         if not val in (0, 1):
             raise ValueError("Invalid side detected: %d" % val)
@@ -1497,7 +1497,7 @@ class PBREngine():
         self._numMoveSelections = 0  # reset fails counter
 
     def _distinguishName(self, data, side, slot):
-        if self.state != PbrStates.MATCH_RUNNING or not self._fBattleStateReady:
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
         assert 0 <= slot and slot <= 1
         if not self._fDoubles and slot == 1:
@@ -1507,7 +1507,7 @@ class PBREngine():
 
     def _distinguishHp(self, val, side):
         return
-        # if val == 0 or self.state != PbrStates.MATCH_RUNNING:
+        # if val == 0 or self.state != EngineStates.MATCH_RUNNING:
         #     return
         # self.on_stat_update(type="hp", data={"hp": val, "side": side,
         #                                      "slot": ???})
@@ -1532,7 +1532,7 @@ class PBREngine():
 
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
         # move gui back into place. Don't hide this even with hide_gui set
         self.setGuiPositionGroup("MAIN")
@@ -1551,7 +1551,7 @@ class PBREngine():
         # (Team XYZ's pkmn used move) changes
 
         # Ignore these data changes when not in a match
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
 
         # 2nd line starts 0x40 bytes later and contains the move name only
@@ -1594,7 +1594,7 @@ class PBREngine():
         # interest.
 
         # Ignore these data changes when not in a match
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
 
         string = bytesToString(data)
@@ -1655,9 +1655,9 @@ class PBREngine():
             if gui == backup:
                 # Expected with some guis, such as RULES_SETTINGS.
                 logger.info("[Duplicate Gui] %s  (%s)",
-                            PbrGuis(gui).name, PbrStates(self.state).name)
+                            PbrGuis(gui).name, EngineStates(self.state).name)
             else:
-                logger.debug("[Gui] %s  (%s)", PbrGuis(gui).name, PbrStates(self.state).name)
+                logger.debug("[Gui] %s  (%s)", PbrGuis(gui).name, EngineStates(self.state).name)
         except:  # unrecognized gui, ignore
             logger.error("Unrecognized gui or state: %s / %s", gui, self.state)
 
@@ -1675,7 +1675,7 @@ class PBREngine():
             # menu will pop up- no need to press anything.
             # Change state to stop stuckpresser's 2 spam, or it might take us into the DS
             # storage menu.
-            self._setState(PbrStates.ENTERING_BATTLE_MENU)
+            self._setState(EngineStates.ENTERING_BATTLE_MENU)
 
         # MAIN MENU
         elif gui == PbrGuis.MENU_MAIN:
@@ -1686,7 +1686,7 @@ class PBREngine():
             # Decide whether to wait for a call to new(), or proceed if it the match
             # has already been received.
             if self._fWaitForNew:
-                self._setState(PbrStates.WAITING_FOR_NEW)
+                self._setState(EngineStates.WAITING_FOR_NEW)
                 self._dolphin.pause()
             else:
                 self._selectFreeBattle()
@@ -1699,7 +1699,7 @@ class PBREngine():
         elif gui == PbrGuis.RULES_STAGE:  # Select Colosseum
             self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
             self._pressTwo()
-            self._setState(PbrStates.PREPARING_START)
+            self._setState(EngineStates.PREPARING_START)
         elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
                 self.cursor.addEvent(CursorOffsets.RULESETS, self._select,
@@ -1727,16 +1727,16 @@ class PBREngine():
 
         # P1/P2 BATTLE PASS SELECTION
         # Verify state is past PREPARING_START, since some of these gui values are also seen under other irrelevant circumstances
-        elif gui == PbrGuis.BPSELECT_SELECT and self.state == PbrStates.PREPARING_START:
+        elif gui == PbrGuis.BPSELECT_SELECT and self.state == EngineStates.PREPARING_START:
             self._fBpPage2 = False
             if not self._fBlueSelectedBP:  # Pick blue battle pass
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 0)
                 self._fBlueSelectedBP = True
             else:  # Pick red battle pass
                 self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 1)
-        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state == PbrStates.PREPARING_START:
+        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state == EngineStates.PREPARING_START:
             self._pressTwo()  # Confirm battle pass selection
-        elif gui == PbrGuis.RULES_BPS_CONFIRM and self.state == PbrStates.PREPARING_START:
+        elif gui == PbrGuis.RULES_BPS_CONFIRM and self.state == EngineStates.PREPARING_START:
             self._injectPokemon()
             self._injectSettings()
             self._pressTwo()
@@ -1746,11 +1746,11 @@ class PBREngine():
 
         # PKMN ORDER SELECTION
         elif (gui == PbrGuis.ORDER_SELECT and
-                self.state in (PbrStates.PREPARING_START, PbrStates.SELECTING_ORDER)):
-            self._setState(PbrStates.SELECTING_ORDER)
+                self.state in (EngineStates.PREPARING_START, EngineStates.SELECTING_ORDER)):
+            self._setState(EngineStates.SELECTING_ORDER)
             gevent.spawn(self._selectValidOrder)
         # Inject the true match order, then click confirm.
-        elif gui == PbrGuis.ORDER_CONFIRM and self.state == PbrStates.SELECTING_ORDER:
+        elif gui == PbrGuis.ORDER_CONFIRM and self.state == EngineStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
             def orderToInts(order):
                 vals = [0x07]*6
@@ -1771,7 +1771,7 @@ class PBREngine():
                 self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
 
                 if self._fWaitForStart:  # Wait for a call to start()
-                    self._setState(PbrStates.WAITING_FOR_START)
+                    self._setState(EngineStates.WAITING_FOR_START)
                     self._dolphin.pause()
                 else:  # Start the match!
                     self._matchStart()
@@ -1797,7 +1797,7 @@ class PBREngine():
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
-            if self.state != PbrStates.MATCH_RUNNING:
+            if self.state != EngineStates.MATCH_RUNNING:
                 self._crash("Detected early start")
                 return
             # try early: shift gui back to normal position
@@ -1807,7 +1807,7 @@ class PBREngine():
                 self.setGuiPositionGroup("MAIN")
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # we can safely assume we are in match state now
-            self._setState(PbrStates.MATCH_RUNNING)
+            self._setState(EngineStates.MATCH_RUNNING)
             # shift gui back to normal position
             if self.hide_gui:
                 self.setGuiPositionGroup("OFFSCREEN")
@@ -1836,7 +1836,7 @@ class PBREngine():
                 self._nextPkmn()
         elif gui == PbrGuis.MATCH_IDLE:
             pass  # Accept this gui for possible on_gui event logging.
-        elif gui == PbrGuis.MATCH_POPUP and self.state == PbrStates.MATCH_RUNNING:
+        elif gui == PbrGuis.MATCH_POPUP and self.state == EngineStates.MATCH_RUNNING:
             # This gui only fires on invalid move selection popups.
             self._pressTwo()
 
@@ -1844,7 +1844,7 @@ class PBREngine():
             self.gui = backup  # Reject the gui change.
             try:
                 logger.debug("[Gui Rejected] %s  (%s)",
-                             PbrGuis(gui).name, PbrStates(self.state).name)
+                             PbrGuis(gui).name, EngineStates(self.state).name)
             except:
                 logger.error("Unrecognized gui or state: %s / %s", gui, self.state)
             return  # Don't trigger the on_gui event.

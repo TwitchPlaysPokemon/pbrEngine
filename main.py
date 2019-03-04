@@ -19,7 +19,7 @@ import crashchecker
 import monitor
 
 from pbrEngine import PBREngine
-from pbrEngine.states import PbrStates
+from pbrEngine.states import EngineStates
 from pbrEngine import Colosseums
 from pbrEngine import AvatarsBlue, AvatarsRed
 
@@ -82,7 +82,7 @@ def new():
 
 
 def onState(state):
-    if state == PbrStates.WAITING_FOR_NEW:
+    if state == EngineStates.WAITING_FOR_NEW:
         new()
 
 

@@ -9,7 +9,7 @@ from enum import IntEnum, unique
 
 # must be gapless
 @unique
-class PbrStates(IntEnum):
+class EngineStates(IntEnum):
     INIT                 = 0
     ENTERING_BATTLE_MENU = 1
     WAITING_FOR_NEW      = 2

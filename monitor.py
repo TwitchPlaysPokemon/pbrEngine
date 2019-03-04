@@ -5,7 +5,7 @@ Created on 26.09.2015
 '''
 
 import os
-from pbrEngine.states import PbrStates, PbrGuis
+from pbrEngine.states import EngineStates, PbrGuis
 from pbrEngine import Colosseums
 import gevent
 
@@ -38,7 +38,7 @@ class Monitor(object):
         print(" +-------------------------------------------------+")
         if self.pbr.colosseum:
             print(" | Colosseum: %36s |" % Colosseums(self.pbr.colosseum).name)
-        print(" |     State: %36s |" % PbrStates(self.pbr.state).name)
+        print(" |     State: %36s |" % EngineStates(self.pbr.state).name)
         print(" |       Gui: %36s |" % PbrGuis(self.pbr.gui).name)
         print(" +------------------------+------------------------+")
         lenBlue = len(self.pbr.match.pkmn_blue)
