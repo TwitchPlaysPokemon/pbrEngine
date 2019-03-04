@@ -80,10 +80,9 @@ class PBREngine():
         logger.info("Initializing PBREngine")
         self._actionCallback = actionCallback
         def _crash(reason=None):
-            logger.debug("pbrEngine crashing. Stack: %s",
-                         "\n\t".join(traceback.format_stack()))
+            logger.debug("pbrEngine crashing", stack_info=True)
             gevent.spawn(crashCallback, reason=reason)
-            raise RuntimeError(reason)
+            raise EngineCrash(reason)
         self._crash = _crash
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
@@ -192,7 +191,7 @@ class PBREngine():
 
         self.reset()
 
-        gevent.spawn(self._stuckPresser)
+        gevent.spawn(self._stuckPresser).link_exception(_logOnException)
         self._stuckcrasher_start_greenlet = None
         self._stuckcrasher_prepare_greenlet = None
 
@@ -685,15 +684,18 @@ class PBREngine():
             else:
                 limit = 300  # 5 seconds
             if (self.timer.frame - self._lastInputFrame) > limit:
-                self._pressButton(self._lastInput, "stuck presser")
+                try:
+                    self._pressButton(self._lastInput, "stuck presser")
+                except Exception:
+                    logger.exception("Stuckpresser failed to press")
 
     def _selectLater(self, frames, index):
         self._setLastInputFrame(frames)
-        self.timer.spawn_later(frames, self._select, index)
+        self.timer.spawn_later(frames, self._select, index).link_exception(_logOnException)
 
     def _pressLater(self, frames, button):
         self._setLastInputFrame(frames)
-        self.timer.spawn_later(frames, self._pressButton, button)
+        self.timer.spawn_later(frames, self._pressButton, button).link_exception(_logOnException)
 
     def _setLastInputFrame(self, framesFromNow):
         '''Manually account for a button press that
@@ -1054,7 +1056,7 @@ class PBREngine():
         Done once for blue, then once for red.
         '''
         self._dolphin.resume()
-        gevent.spawn(self._selectValidOrder)
+        greenlet = gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
 
     def _selectValidOrder(self):
         if not self._fBlueChoseOrder:
@@ -1099,9 +1101,9 @@ class PBREngine():
         self._injectAvatars()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
-        self.timer.spawn_later(330, self._matchStartDelayed)
-        self.timer.spawn_later(450, self._disableBlur)
-        self.timer.spawn_later(450, self._setupPreBattlePkmn)
+        self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
+        self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
+        self.timer.spawn_later(450, self._setupPreBattlePkmn).link_exception(_logOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
 
@@ -1189,7 +1191,7 @@ class PBREngine():
         # The action callback might sleep.  Spawn a worker so self._distinguishGui()
         # doesn't get delayed as well.
         gevent.spawn(self._nextPkmnWorker, from_move_select, recorded_state,
-                     next_pkmn, is_switch)
+                     next_pkmn, is_switch).link_exception(_logOnException)
 
     def _nextPkmnWorker(self, from_move_select, recorded_state,
                         next_pkmn, is_switch):
@@ -1343,7 +1345,7 @@ class PBREngine():
         logger.debug("Entered nextMove. State: %s", recorded_state)
         # The action callback might sleep.  Spawn a worker so self._distinguishGui()
         # doesn't get delayed as well.
-        gevent.spawn(self._nextMoveWorker, recorded_state)
+        gevent.spawn(self._nextMoveWorker, recorded_state).link_exception(_logOnException)
 
     def _nextMoveWorker(self, recorded_state):
         # Initialize in-battle state. Runs once per match.
@@ -1544,7 +1546,7 @@ class PBREngine():
         # this text gets instantly changed, so change it after it's gone.
         # this number of frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
-        self.timer.spawn_later(240, self._invalidateEffTexts)
+        self.timer.spawn_later(240, self._invalidateEffTexts).link_exception(_logOnException)
 
     def _distinguishAttack(self, data):
         # Gets called each time the attack-text
@@ -1585,7 +1587,7 @@ class PBREngine():
 
             logger.debug("Updating pokeset pp after a move was used (in 1 second)")
             gevent.spawn_later(1, self._updateLiveTeams, ppOnly=True,
-                               readActiveSlots=True, pokesetOnly=(side, slot))
+                               readActiveSlots=True, pokesetOnly=(side, slot)).link_exception(_logOnException)
 
 
     def _distinguishInfo(self, data):
@@ -1748,7 +1750,7 @@ class PBREngine():
         elif (gui == PbrGuis.ORDER_SELECT and
                 self.state in (EngineStates.PREPARING_START, EngineStates.SELECTING_ORDER)):
             self._setState(EngineStates.SELECTING_ORDER)
-            gevent.spawn(self._selectValidOrder)
+            gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
         # Inject the true match order, then click confirm.
         elif gui == PbrGuis.ORDER_CONFIRM and self.state == EngineStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
@@ -1852,3 +1854,16 @@ class PBREngine():
         # Trigger the on_gui event now.
         # The gui is considered valid if we reach here.
         self.on_gui(gui=gui)
+
+
+class EngineCrash(Exception):
+    pass
+
+
+def _logOnException(greenlet):
+    try:
+        greenlet.get()
+    except EngineCrash:
+        return
+    except Exception:
+        logger.exception("Engine greenlet crashed")
