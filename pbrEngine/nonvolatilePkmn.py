@@ -57,11 +57,7 @@ class NonvolatilePkmn:
                     delta_ms = 1000 * (time() - self._fields_last_zero_read.pop(name))
                     delta_text = ("Field {} was 0 for {:.2f}ms ({}, {})"
                                   .format(name, delta_ms, side, slotSO))
-                    if delta_ms < 500:
-                        if delta_ms > 350:
-                            logger.error(delta_text)
-                        else:
-                            logger.debug(delta_text)
+                    logger.debug(delta_text)
                 if name not in self.fields:
                     logger.error("Unrecognized nonvolatile pkmn field: %s" % name)
                     return
@@ -89,11 +85,11 @@ class NonvolatilePkmn:
             self._dolphin._unSubscribe(offset_addr)
 
     def write_zero_reads(self):
-        # If a field was zero for longer than 400ms, assume it's actually zero
+        # If a field was zero for longer than 800ms, assume it's actually zero
         now = time()
         for name, last_zero_read in list(self._fields_last_zero_read.items()):
             delta_ms = 1000 * (now - last_zero_read)
-            if delta_ms > 400:
+            if delta_ms > 800:
                 del self._fields_last_zero_read[name]
                 self.fields[name] = 0
                 self.debugCallback(name, 0)

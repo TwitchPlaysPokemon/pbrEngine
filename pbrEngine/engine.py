@@ -1584,7 +1584,7 @@ class PBREngine():
             self._actionCallbackObjStore[side][slot] = None
 
             logger.debug("Updating pokeset pp after a move was used (in 1 second)")
-            gevent.spawn_later(1, self._updateLiveTeams, ppOnly=True,
+            gevent.spawn_later(1.4, self._updateLiveTeams, ppOnly=True,
                                readActiveSlots=True, pokesetOnly=(side, slot)).link_exception(_logOnException)
 
 
