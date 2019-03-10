@@ -207,8 +207,8 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Blue Eyes",
-                            "description": "Vivid blue eyes.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
@@ -981,8 +981,8 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Blue Eyes",
-                            "description": "Deep blue eyes.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
@@ -1640,8 +1640,8 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Chestnut Eyes",
-                            "description": "Gentle, chestnut eyes.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
@@ -2409,8 +2409,8 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Blue Eyes",
-                            "description": "Vivid blue eyes.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
@@ -3183,8 +3183,8 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Blue Eyes",
-                            "description": "Calming blue eyes with blue eye shadow.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
@@ -3937,13 +3937,13 @@ def get_appearance_data():
                     "FACE": [
                         {
                             "id": 0x0,
-                            "name": "Blue Eyes A",
-                            "description": "Vivid blue eyes.",
+                            "name": "Dynamic Eyes",
+                            "description": "Eyes which take on a lovely hue to match your skin tone.",
                         },
                         {
                             "id": 0x1,
-                            "name": "Blue Eyes B",
-                            "description": "Another pair of vivid blue eyes, in case you lost the first.",
+                            "name": "Blue Eyes",
+                            "description": "Vivid blue eyes.",
                         },
                         {
                             "id": 0x2,
