@@ -1863,5 +1863,7 @@ def _logOnException(greenlet):
         greenlet.get()
     except EngineCrash:
         return
+    except DolphinNotConnected:
+        logger.debug("Greenlet crashed because dolphin was not connected", exc_info=True)
     except Exception:
         logger.exception("Engine greenlet crashed")
