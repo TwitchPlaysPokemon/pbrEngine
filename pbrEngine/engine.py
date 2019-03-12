@@ -201,8 +201,7 @@ class PBREngine():
 
         self.state = EngineStates.INIT
         self.colosseum = 0
-        avatars = generateDefaultAvatars()
-        self.avatars = {"blue": avatars[0], "red": avatars[1]}
+        self.avatars = {"blue": None, "red": None}
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._startingWeather = None
@@ -877,6 +876,8 @@ class PBREngine():
         self.timer.sleep(20)
 
     def _injectAvatars(self):
+        avatars = generateDefaultAvatars()
+        self.avatars = {"blue": avatars[0], "red": avatars[1]}
         bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
         writes = []
         for side_offset, avatar in (
