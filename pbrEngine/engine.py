@@ -52,28 +52,48 @@ class PBREngine():
                 <turn> Current turn.  Starts at 1.
                 <side> "blue" or "red".
                 <slot> Int slot of the Pokemon related to this action. Either:
-                    0: If Singles, or team's first pokemon slot (upper HP bar).
-                    1: Team's second pokemon slot (lower HP bar, Doubles only).
+                    0: If Singles, or team's first pokemon slot (left mon/upper HP bar).
+                    1: Team's second pokemon slot (right mon/lower HP bar, Doubles only).
                 <cause> ActionCause for this player action.
                 <fails> Number of how many times the current selection failed.
                     (happens for no pp/disabled move/invalid switch for example)
+                <switchesAvailable> List of booleans indicating which mons may be switched
+                    to. Ingame order.
+                <fainted> List of booleans indicating which mons are fainted. Ingame order.
+                <teams> Dict of `side: team` for both blue and red sides, where each
+                    team is a list of that team's pokesets in ingame order.
+                <slotConvert> Function to convert from starting order to ingame order,
+                    and vice versa.
+                    Args:
+                        <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
+                        <slotOrTeamOrTeams> This arg is not modified. It is either:
+                            slot: An integer team index.
+                            team: A list of pokesets in a team.
+                            teams: A dict containing a `blue` team and a `red` team.
+                        <side> `blue` or `red`, indicating the side of the slot or team
+                            that was passed as <slotOrTeamOrTeams>.  Not applicable if
+                            the `teams` dict was passed.
+                    Returns:
+                        If a slot was passed: An integer team index.
+                        If a team was passed: A shallow copy of the re-ordered team.
+                        If a teams dict was passed: A new dict with shallow copies of
+                            both re-ordered teams.
 
-            The upper layer may also invoke methods of PBREngine's match
-            object for further information on available move/switch options.
-
-            Must return a tuple (primary, target, obj), where:
-            <primary> Primary action. Permits 1-char string or int. One of:
-                Valid moves: a, b, c, or d.
-                Valid switches: 0, 1, 2, 3, 4, or 5.
-            <target> Secondary target action associated with the primary action.
-                Permits 1-char string or int. Valid targets are one of:
-                1: other team's first pokemon (upper HP bar)
-                2: other team's second pokemon (lower HP bar)
-                0: self
-                -1: ally
-                None: target must be None in Singles battles, or when switching.
-            <obj> is any object. <obj> will be submitted as an argument to
-            either the on_switch or on_attack callback if this command succeeds.
+            Returns: A tuple (action, target, obj) where:
+                <action> Action. Permits 1-char string or int. One of:
+                    Valid moves: a, b, c, or d.
+                    Valid switches: 0, 1, 2, 3, 4, or 5.
+                <target> Target associated with the action.
+                    Permits 1-char string or int. Valid targets are one of:
+                    1: other team's first pokemon (upper HP bar)
+                    2: other team's second pokemon (lower HP bar)
+                    0: self
+                    -1: ally
+                    None: target not applicable (Singles battles, or when switching)
+                <obj> is any object (such as the name of the bettor whose move was selected).
+                    <obj> will be submitted as an argument to either the on_switch or
+                    on_attack callback resulting from this action, if this action is accepted
+                    by PBR.
         :param host: ip of the dolphin instance to connect to
         :param port: port of the dolphin instance to connect to
         '''
@@ -121,18 +141,18 @@ class PBREngine():
         arg0: <side> "blue" "red"
         arg1: <slot> team index of the pokemon attacking.
         arg2: <moveindex> 0-3, index of move used.
-              CAUTION: <mon> might not have a move with that index (e.g. Ditto)
+              CAUTION: broken- needs fixing or removal
         arg3: <movename> name of the move used.
-              CAUTION: <mon> might not have this attack (e.g. Ditto, Metronome)
-        arg4: <obj> object originally returned by the action-callback that lead
-              to this event. None if the callback wasn't called (e.g. Rollout)
+              CAUTION: The attacking pkmn might not have this attack (e.g. Metronome)
+        arg4: <obj> object originally returned by the action-callback that led
+              to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
         self.on_attack = EventHook(side=str, slot=int, moveindex=int,
                                   movename=str, teams=dict, obj=object)
         '''
         Event of a pokemon fainting.
         arg0: <side> "blue" "red"
-        arg2: <slot> team index of the fainted pokemon
+        arg1: <slot> team index of the fainted pokemon
         '''
         self.on_faint = EventHook(side=str, slot=int, fainted=list, teams=dict,
                                   slotConvert=callable)
