@@ -101,7 +101,7 @@ class PBREngine():
         self._actionCallback = actionCallback
         def _crash(reason=None):
             logger.debug("pbrEngine crashing", stack_info=True)
-            gevent.spawn(crashCallback, reason=reason)
+            gevent.spawn(crashCallback, reason=reason).link_exception(_logOnException)
             raise EngineCrash(reason)
         self._crash = _crash
         self._distinguisher = Distinguisher(self._distinguishGui)
@@ -227,6 +227,7 @@ class PBREngine():
         self._dolphin.connect()
         self._stuckcrasher_start_greenlet = gevent.spawn_later(
             40, self._stuckcrasher_start)
+        self._stuckcrasher_start_greenlet.link_exception(_logOnException)  # in a different statement, because link_exception returns nothing
 
     def _stuckcrasher_start(self):
         if self.state < EngineStates.WAITING_FOR_NEW:
@@ -469,6 +470,7 @@ class PBREngine():
         self._fWaitForNew = True  # Need to wait again after this match ends
         self._stuckcrasher_prepare_greenlet = gevent.spawn_later(
             40, self._stuckcrasher_prepare)
+        self._stuckcrasher_prepare_greenlet.link_exception(_logOnException)
         self._dolphin.resume()  # We might be paused if we were at WAITING_FOR_NEW
         gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
         self._setState(EngineStates.PREPARING_STAGE)
@@ -1074,7 +1076,7 @@ class PBREngine():
         Done once for blue, then once for red.
         '''
         self._dolphin.resume()
-        greenlet = gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
+        gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
 
     def _selectValidOrder(self):
         if not self._fBlueChoseOrder:
@@ -1762,7 +1764,7 @@ class PBREngine():
             self._pressTwo()
             # Start a greenlet that spams 2, to skip the followup match intro.
             # This takes us to PbrGuis.ORDER_SELECT.
-            gevent.spawn_later(1, self._skipIntro)
+            gevent.spawn_later(1, self._skipIntro).link_exception(_logOnException)
 
         # PKMN ORDER SELECTION
         elif (gui == PbrGuis.ORDER_SELECT and
@@ -1812,8 +1814,9 @@ class PBREngine():
         elif gui == PbrGuis.MENU_SAVE_TYP2:
             # We're going back to the main menu, press 2 and reset speed
             self._pressLater(60, WiimoteButton.TWO)
-            self.timer.spawn_later(120, self._resetAnimSpeed)  # to not get stuck in the demo
-            self.timer.spawn_later(600, self._resetAnimSpeed)  # to not get stuck in the demo
+            # to not get stuck in the demo
+            self.timer.spawn_later(120, self._resetAnimSpeed).link_exception(_logOnException)
+            self.timer.spawn_later(600, self._resetAnimSpeed).link_exception(_logOnException)
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
@@ -1882,7 +1885,8 @@ def _logOnException(greenlet):
     try:
         greenlet.get()
     except EngineCrash:
-        return
+        logger.info("Greenlet crashed deliberately to exit after calling the crash "
+                     "callback", exc_info=True)
     except DolphinNotConnected:
         logger.debug("Greenlet crashed because dolphin was not connected", exc_info=True)
     except Exception:
