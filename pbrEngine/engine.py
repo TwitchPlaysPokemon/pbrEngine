@@ -1690,8 +1690,9 @@ class PBREngine():
             self._setAnimSpeed(self._increasedSpeed)
         elif gui == PbrGuis.START_OPTIONS:
             self._pressLater(10, WiimoteButton.ONE)  # Backtrack
-        elif gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
-                     PbrGuis.START_MODE, PbrGuis.START_SAVEFILE):
+        elif (self.state < EngineStates.MATCH_RUNNING and
+                gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
+                        PbrGuis.START_MODE, PbrGuis.START_SAVEFILE)):
             self._pressLater(10, WiimoteButton.TWO)  # Click through all these
         elif gui == PbrGuis.PRE_MENU_MAIN:
             # Receptionist bows her head. When she's done bowing the main
