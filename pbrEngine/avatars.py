@@ -12,11 +12,11 @@ def generateDefaultAvatars():
     default_avatars = []
     for char_style in random.sample(range(1, 7), 2):
         avatar = {
-            "CHARACTER_STYLE"    : char_style,
-            "SKIN"      : random.randrange(2),
+            "CHARACTER_STYLE": char_style,
+            "SKIN"      : random.randrange(3),
             # Muscle man has an extra head option, spiky hair
-            "HEAD"      : random.randint(0, 4) if char_style == 2 else random.randrange(5),
-            "HAIR"      : 0,
+            "HEAD"      : random.randint(1, 4) if char_style == 2 else random.randrange(5),
+            "HAIR"      : random.randrange(3),
             "FACE"      : 0,
             "TOP"       : random.randrange(5),
             # Little girl breaks if bottom isn't 0 or 1
