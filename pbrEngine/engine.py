@@ -8,78 +8,115 @@ import gevent
 import random
 import re
 import logging
-import dolphinWatch
+import logging.handlers
 import os
+import traceback
+import socket
+import dolphinWatch
+import pokecat
+from dolphinWatch import DisconnectReason, DolphinNotConnected
 from functools import partial
 from enum import Enum
-from collections import Counter
+from contextlib import suppress
+from copy import deepcopy
 
 from .eps import get_pokemon_from_data
 
-from gevent.event import AsyncResult
-from .memorymap.addresses import Locations, NestedLocations, InvalidLocation
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu,\
-    CursorPosBP, GuiStateMatch, GuiTarget, DefaultValues, BPStructOffsets, FieldEffects
+from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
-from .states import PbrGuis, PbrStates
-from .util import bytesToString, floatToIntRepr, EventHook
+from .states import PbrGuis, EngineStates
+from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
-from .avatars import AvatarsBlue, AvatarsRed
+from .abstractions.dolphinIO import DolphinIO
+from .avatars import generateDefaultAvatars
+from .activePkmn import ActivePkmn
+from .nonvolatilePkmn import NonvolatilePkmn
 
 logger = logging.getLogger("pbrEngine")
 
 
 class ActionCause(Enum):
-    REGULAR = "regular"  # regular move selection
-    FAINT = "faint"  # pokemon selection after faint
-    OTHER = "other"  # other causes, like forced switch by baton pass or u-turn
-
-
-class ActionError(Exception):
-    pass
+    """Reasons for why PBREngine called the action_callback."""
+    REGULAR = "regular"  # Regular selection- choose a move or switch.
+    FAINT = "faint"  # Switch selection only, because a Pokemon fainted.
+    OTHER = "other"  # Switch selection only, due to some other cause- like baton pass or u-turn.
 
 
 class PBREngine():
-    def __init__(self, action_callback, host="localhost", port=6000,
-                 savefile_dir="pbr_savefiles",
-                 savefile_with_announcer_name="saveWithAnnouncer.state",
-                 savefile_without_announcer_name="saveWithoutAnnouncer.state"):
+    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000):
         '''
-        :param action_callback:
-            will be called when a player action needs to be determined.
+        :param actionCallback:
+            Will be called when a player action needs to be determined.
             Gets called with these keyword arguments:
+                <turn> Current turn.  Starts at 1.
                 <side> "blue" or "red".
-                <fails> number of how many times the current selection failed.
-                    happens for no pp/disabled move/invalid switch for example
-                <moves> True/False, if a move selection is possible
-                <switch> True/False, if a pokemon switch is possible
-            Must return a tuple (action, obj), where <action> is one of the following:
-                a, b, c, d: move to be selected.
-                1, 2, 3, 4, 5, 6: pokemon index to switch to
-            and <obj> is any object. <obj> will be submitted as an argument to
-            either the on_switch or on_attack callback if this command succeeds.
+                <slot> Int slot of the Pokemon related to this action. Either:
+                    0: If Singles, or team's first pokemon slot (left mon/upper HP bar).
+                    1: Team's second pokemon slot (right mon/lower HP bar, Doubles only).
+                <cause> ActionCause for this player action.
+                <fails> Number of how many times the current selection failed.
+                    (happens for no pp/disabled move/invalid switch for example)
+                <switchesAvailable> List of booleans indicating which mons may be switched
+                    to. Ingame order.
+                <fainted> List of booleans indicating which mons are fainted. Ingame order.
+                <teams> Dict of `side: team` for both blue and red sides, where each
+                    team is a list of that team's pokesets in ingame order.
+                <slotConvert> Function to convert from starting order to ingame order,
+                    and vice versa.
+                    Args:
+                        <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
+                        <slotOrTeamOrTeams> This arg is not modified. It is either:
+                            slot: An integer team index.
+                            team: A list of pokesets in a team.
+                            teams: A dict containing a `blue` team and a `red` team.
+                        <side> `blue` or `red`, indicating the side of the slot or team
+                            that was passed as <slotOrTeamOrTeams>.  Not applicable if
+                            the `teams` dict was passed.
+                    Returns:
+                        If a slot was passed: An integer team index.
+                        If a team was passed: A shallow copy of the re-ordered team.
+                        If a teams dict was passed: A new dict with shallow copies of
+                            both re-ordered teams.
+
+            Returns: A tuple (action, target, obj) where:
+                <action> Action. Permits 1-char string or int. One of:
+                    Valid moves: a, b, c, or d.
+                    Valid switches: 0, 1, 2, 3, 4, or 5.
+                <target> Target associated with the action.
+                    Permits 1-char string or int. Valid targets are one of:
+                    1: other team's first pokemon (upper HP bar)
+                    2: other team's second pokemon (lower HP bar)
+                    0: self
+                    -1: ally
+                    None: target not applicable (Singles battles, or when switching)
+                <obj> is any object (such as the name of the bettor whose move was selected).
+                    <obj> will be submitted as an argument to either the on_switch or
+                    on_attack callback resulting from this action, if this action is accepted
+                    by PBR.
         :param host: ip of the dolphin instance to connect to
         :param port: port of the dolphin instance to connect to
-        :param savefile_dir: directory location of savestates
-        :param savefile_with_announcer_name: filename of savefile with the announcer turned on
-        :param savefile_without_announcer_name: filename of savefile with the announcer turned off
         '''
-        self._action_callback = action_callback
+        logger.info("Initializing PBREngine")
+        self._actionCallback = actionCallback
+        def _crash(reason=None):
+            logger.debug("pbrEngine crashing", stack_info=True)
+            gevent.spawn(crashCallback, reason=reason).link_exception(_logOnException)
+            raise EngineCrash(reason)
+        self._crash = _crash
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
-        self._dolphin.onDisconnect(self._reconnect)
+        self._dolphinIO = DolphinIO(self._dolphin, self._crash)
+        self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
-
-        os.makedirs(os.path.abspath(savefile_dir), exist_ok=True)
-        self._savefile1 = os.path.abspath(os.path.join(savefile_dir, savefile_with_announcer_name))
-        self._savefile2 = os.path.abspath(os.path.join(savefile_dir, savefile_without_announcer_name))
+        self._dolphin.onDisconnect(self._onDisconnect)
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
         self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
-        self.match_speed = 1.0  # animation speed during match
+        self.match.on_faint += self._match_faint
         # event callbacks
         '''
         Event of the winner being determined.
@@ -90,9 +127,9 @@ class PBREngine():
         '''
         Event for state changes.
         Propably only useful for the debug monitor, not for production.
-        arg0: <state> see states.PbrStates
+        arg0: <state> see states.EngineStates
         '''
-        self.on_state = EventHook(state=PbrStates)
+        self.on_state = EventHook(state=EngineStates)
         '''
         Event of a gui changing.
         Propably only useful for the debug monitor, not for production.
@@ -102,31 +139,34 @@ class PBREngine():
         '''
         Event of a pokemon attacking.
         arg0: <side> "blue" "red"
-        arg1: <monindex> index of the pokemon attacking (e.g. 0 for first pokemon)
+        arg1: <slot> team index of the pokemon attacking.
         arg2: <moveindex> 0-3, index of move used.
-              CAUTION: <mon> might not have a move with that index (e.g. Ditto)
+              CAUTION: broken- needs fixing or removal
         arg3: <movename> name of the move used.
-              CAUTION: <mon> might not have this attack (e.g. Ditto, Metronome)
-        arg4: <obj> object originally returned by the action-callback that lead
-              to this event. None if the callback wasn't called (e.g. Rollout)
+              CAUTION: The attacking pkmn might not have this attack (e.g. Metronome)
+        arg4: <obj> object originally returned by the action-callback that led
+              to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
-        self.on_attack = EventHook(side=str, monindex=int, moveindex=int,
-                                  movename=str, obj=object)
+        self.on_attack = EventHook(side=str, slot=int, moveindex=int,
+                                  movename=str, teams=dict, obj=object)
         '''
-        Event of a pokemon dying.
+        Event of a pokemon fainting.
         arg0: <side> "blue" "red"
-        arg2: <monindex> 0-2, index of the dead pokemon
+        arg1: <slot> team index of the fainted pokemon
         '''
-        self.on_death = EventHook(side=str, monindex=int)
-        self.match.on_death += lambda side, monindex: self.on_death(side=side, monindex=monindex)
+        self.on_faint = EventHook(side=str, slot=int, fainted=list, teams=dict,
+                                  slotConvert=callable)
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
-        arg2: <monindex> 0-2, index of the pokemon now fighting.
+        arg1: <old_slot> team index of the pokemon called back.
+        arg2: <new_slot> team index of the pokemon now fighting.
         arg3: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
         '''
-        self.on_switch = EventHook(side=str, monindex=int, obj=object)
+        self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
+                                   pokeset_sentout=dict, pokeset_recalled=dict,
+                                   obj=object)
         '''
         Event of information text appearing in one of those black boxes.
         Also includes fly-by texts (It's super/not very effective!, A critical hit!)
@@ -139,80 +179,179 @@ class PBREngine():
         arg0: <type> what stat type got updated (e.g. "hp")
         arg1: <data> dictionary containing information on the new stat
         Examples:
-        hp: {"hp": 123, "side": "blue", "monindex": 0}
-        pp: {"pp": 13, "side": "red", "monindex": 1}  # pp currently not supported :(
-        status: {"status": "brn/par/frz/slp/psn/tox", "side": "blue", "monindex": "2"}
+        hp: {"hp": 123, "side": "blue", "slot": 0}
+        pp: {"pp": 13, "side": "red", "slot": 1}  # pp currently not supported :(
+        status: {"status": "brn/par/frz/slp/psn/tox", "side": "blue", "slot": 
+        "2"}
             if status is "slp", the field "rounds" (remaining slp) will be included too
         '''
         self.on_stat_update = EventHook(type=str, data=dict)
+        self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
         self._lastInput = 0
-        self.volume = 0
-        self.speed = 1.0
-        self.state = PbrStates.INIT
+
+        self._matchVolume = 100
+        self._fMatchAnnouncer = True
+        self._matchFov = 0.5
+        self._matchEmuSpeed = 1.0
+        self._matchAnimSpeed = 1.0
+        self._matchFieldEffectStrength = 1.0
+
+        self.state = EngineStates.INIT
         self.colosseum = 0
-        self.avatar_blue = AvatarsBlue.BLUE
-        self.avatar_red = AvatarsRed.RED
-        self._prev_avatar_blue = AvatarsBlue.BLUE
-        self._prev_avatar_red = AvatarsRed.RED
-        self.announcer = True
+        self.avatars = {"blue": None, "red": None}
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
+        self._startingWeather = None
+        self._inputTimer = 0  # no limit
+        self._battleTimer = 0  # no limit
+
         self.reset()
 
-        # stuck checker
-        gevent.spawn(self._stuckChecker)
+        gevent.spawn(self._stuckPresser).link_exception(_logOnException)
+        self._stuckcrasher_start_greenlet = None
+        self._stuckcrasher_prepare_greenlet = None
 
-    def connect(self):
+    def start(self):
         '''
-        Connects do Dolphin with dolphinWatch. Should be called when the
+        Connects to Dolphin with dolphinWatch. Should be called when the
         initialization (setting listeners etc.) is done.
+        Any existing connection is disconnected first.
+        If can't connect, this keeps retrying every 3 seconds until either:
+        - it successfully connects (see self._reconnect())
+        - self.disconnect() is called
         '''
         self._dolphin.connect()
+        self._stuckcrasher_start_greenlet = gevent.spawn_later(
+            40, self._stuckcrasher_start)
+        self._stuckcrasher_start_greenlet.link_exception(_logOnException)  # in a different statement, because link_exception returns nothing
 
-    def disconnect(self):
+    def _stuckcrasher_start(self):
+        if self.state < EngineStates.WAITING_FOR_NEW:
+            self._crash(reason="Stuck in start menus")
+
+    def _stuckcrasher_prepare(self):
+        if self.state < EngineStates.WAITING_FOR_START:
+            self._crash(reason="Stuck in preparation menus")
+
+    def _onDisconnect(self, watcher, reason):
+        '''
+        Called whenever the DolphinConnection finds itself disconnected from Dolphin.
+        :param watcher: The DolphinConnection instance, which is also self._dolphin
+        :param reason: Enum member of dolphinWatch.DisconnectReason
+        '''
+        if reason == DisconnectReason.CONNECTION_NOT_ESTABLISHED:
+            if self._reconnectAttempts <= 3:
+                self._reconnectAttempts += 1
+                logger.warning("Dolphin connection not established yet. Reconnecting in 3s...")
+                gevent.sleep(3)
+                self._dolphin.connect()  # recursion
+            else:
+                self._reconnectAttempts = 0
+                raise RuntimeError("Dolphin connection not established after 5 attempts, giving up")
+        else:
+            self._reconnectAttempts = 0
+
+    def stop(self):
         '''
         Disconnects from Dolphin.
         connect() needs to be called to make this instance work again.
         '''
+        self._reconnectAttempts = 0
         self._dolphin.disconnect()
+        killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
+        killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
+
+    def _watcher2(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
+    def _watcher3(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_PKMN.name, data))
+
+    def _distinguishMatch(self, data):
+        logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
+        prevGuiStateMatch = self._guiStateMatch
+        gui_type = data >> 16 & 0xff
+        pkmn_input_type = data & 0xff
+
+        if self.state == EngineStates.MATCH_RUNNING:
+            # True if in the pkmn select menu, and a pkmn input needs to be made
+            # (i.e., there are no popups, and a pkmn input has not successfully gone
+            # through yet).
+            self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
+
+            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
+                                            GuiStateMatch.SWITCH_POPUP)
+
+            # True when the pkmn menu pops up, and remains true until it is gone.
+            # Remains true through any "can't switch" popups.
+            self._fGuiPkmnUp = pkmn_input_type in (GuiStateMatch.TARGET,
+                                                   GuiStateMatch.SWITCH)
+        else:
+            self._fNeedPkmnInput = False
+            self._fLastGuiWasSwitchPopup = False
+            self._fGuiPkmnUp = False
+
+        self._guiStateMatch = data
+
+        if prevGuiStateMatch >> 16 & 0xff != gui_type:
+            # If not a duplicate, run self._distinguishGui() with the gui.
+            self._distinguisher.distinguishMatch(gui_type)
 
     def _initDolphinWatch(self, watcher):
-        self._dolphin.volume(0)
-
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
-        self._subscribe(Locations.WHICH_PLAYER.value,               self._distinguishPlayer)
-        self._subscribe(Locations.GUI_STATE_MATCH_PKMN_MENU.value,  self._distinguishPkmnMenu)
-        self._subscribe(Locations.ORDER_LOCK_BLUE.value,            self._distinguishOrderLock)
-        self._subscribe(Locations.ORDER_LOCK_RED.value,             self._distinguishOrderLock)
-        self._subscribeMulti(Locations.ATTACK_TEXT.value,           self._distinguishAttack)
-        self._subscribeMulti(Locations.INFO_TEXT.value,             self._distinguishInfo)
-        self._subscribe(Locations.HP_BLUE.value,                    partial(self._distinguishHp, side="blue"))
-        self._subscribe(Locations.HP_RED.value,                     partial(self._distinguishHp, side="red"))
-        self._subscribe(Locations.STATUS_BLUE.value,                partial(self._distinguishStatus, side="blue"))
-        self._subscribe(Locations.STATUS_RED.value,                 partial(self._distinguishStatus, side="red"))
-        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value, self._distinguishEffective)
+        self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
+        self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
+        self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
+        self._subscribeMulti(Locations.ATTACK_TEXT.value, self._distinguishAttack)
+        self._subscribeMulti(Locations.INFO_TEXT.value, self._distinguishInfo)
+        self._subscribe(Locations.HP_BLUE.value,
+                        partial(self._distinguishHp, side="blue"))
+        self._subscribe(Locations.HP_RED.value,
+                        partial(self._distinguishHp, side="red"))
+        self._subscribe(Locations.STATUS_BLUE.value,
+                        partial(self._distinguishStatus, side="blue"))
+        self._subscribe(Locations.STATUS_RED.value,
+                        partial(self._distinguishStatus, side="red"))
+        self._subscribeMulti(Locations.PNAME_BLUE.value,
+                             partial(self._distinguishName, side="blue", slot=0))
+        self._subscribeMulti(Locations.PNAME_BLUE2.value,
+                             partial(self._distinguishName, side="blue", slot=1))
+        self._subscribeMulti(Locations.PNAME_RED.value,
+                             partial(self._distinguishName, side="red", slot=0))
+        self._subscribeMulti(Locations.PNAME_RED2.value,
+                             partial(self._distinguishName, side="red", slot=1))
+        self._subscribeMultiList(9, Locations.EFFECTIVE_TEXT.value,
+                                 self._distinguishEffective)
+        self._subscribe(Locations.GUI_STATE_MATCH.value, self._distinguishMatch)
         # de-multiplexing all these into single PbrGuis-enum using distinguisher
-        self._subscribe(Locations.GUI_STATE_MATCH.value,        self._distinguisher.distinguishMatch)
-        self._subscribe(Locations.GUI_STATE_BP.value,           self._distinguisher.distinguishBp)
-        self._subscribe(Locations.GUI_STATE_MENU.value,         self._distinguisher.distinguishMenu)
-        self._subscribe(Locations.GUI_STATE_RULES.value,        self._distinguisher.distinguishRules)
-        self._subscribe(Locations.GUI_STATE_ORDER.value,        self._distinguisher.distinguishOrder)
-        self._subscribe(Locations.GUI_STATE_BP_SELECTION.value, self._distinguisher.distinguishBpSelect)
-        self._subscribeMulti(Locations.GUI_TEMPTEXT.value,      self._distinguisher.distinguishStart)
-        self._subscribe(Locations.POPUP_BOX.value,              self._distinguisher.distinguishPopup)
+        self._subscribe(Locations.GUI_STATE_BP.value,
+                        self._distinguisher.distinguishBp)
+        self._subscribe(Locations.GUI_STATE_MENU.value,
+                        self._distinguisher.distinguishMenu)
+        self._subscribe(Locations.GUI_STATE_RULES.value,
+                        self._distinguisher.distinguishRules)
+        self._subscribe(Locations.GUI_STATE_ORDER.value,
+                        self._distinguisher.distinguishOrder)
+        self._subscribe(Locations.GUI_STATE_BP_SELECTION.value,
+                        self._distinguisher.distinguishBpSelect)
+        self._subscribeMulti(Locations.GUI_TEMPTEXT.value,
+                             self._distinguisher.distinguishStart)
+        self._subscribe(Locations.POPUP_BOX.value,
+                        self._distinguisher.distinguishPopup)
+
+        self._subscribe(Locations.WHICH_MOVE.value, self._watcher2)
+        self._subscribe(Locations.WHICH_PKMN.value, self._watcher3)
+
         # stuff processed by abstractions
         self._subscribe(Locations.CURSOR_POS.value, self.cursor.updateCursorPos)
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
         # ##
 
-        gevent.sleep(1.0) # the pause below is failing, so try waiting a bit
-        # initially paused, because in state WAITING_FOR_NEW
-        self._dolphin.pause()
-        self._setState(PbrStates.WAITING_FOR_NEW)
+        self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
+        self._setState(EngineStates.INIT)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
     def _subscribe(self, loc, callback):
@@ -227,77 +366,57 @@ class PBREngine():
             self._dolphin._subscribeMulti(loc.length, loc.addr+loc.length*i,
                                           callback)
 
-    def _reconnect(self, watcher, reason):
-        if (reason == dolphinWatch.DisconnectReason.CONNECTION_CLOSED_BY_HOST):
-            # don't reconnect if we closed the connection on purpose
-            return
-        logger.warning("DolphinConnection connection closed, reconnecting...")
-        if (reason == dolphinWatch.DisconnectReason.CONNECTION_FAILED):
-            # just tried to establish a connection, give it a break
-            gevent.sleep(3)
-        self.connect()
-
     def reset(self):
-        self.blues_turn = True
-        self.startsignal = False
+        # Used during matches.
+        self._turn = 0  # Match turns, see self._distinguishTurn.
+        self._side = "blue"  # team of the Pokemon currently active.
+        self._slot = 0  # team index of the Pokemon currently active.
+        self._lastTeamsUpdateTurn = -1
+        self._guiStateMatch = 0
+        self._fLastGuiWasSwitchPopup = False
+        self._fNeedPkmnInput = False
+        self._fGuiPkmnUp = False
 
-        # working data
-        self._moveBlueUsed = 0
-        self._moveRedUsed = 0
+        self._selecting_moves = True
+        self._next_pkmn = -1
+        self._move_select_state = None
+        self._numMoveSelections = 0
+        self._fMatchCancelled = False
+        self._fDoubles = False
+        self._move_select_followup = None
+
+        self.active = {"blue": [], "red": []}
+        self.nonvolatileSO = {"blue": [], "red": []}
+        self.nonvolatileMoveOffsetsSO = {"blue": [], "red": []}
+
+        # Move selection: expect REGULAR, set next to OTHER
+        # Fainted: set next to FAINTED.
+        self._expectedActionCause = {"blue": [ActionCause.OTHER] * 2,
+                                     "red": [ActionCause.OTHER] * 2}
+        self._actionCallbackObjStore = {"blue": [None] * 2, "red": [None] * 2}
+
+        # Used during match setup.
+        self._moveBlueUsed = 0  # FIXME: never changed
+        self._moveRedUsed = 0   # FIXME: never changed
         self._bp_offset = 0
-        self._failsMoveSelection = 0
-        self._movesBlocked = [False, False, False, False]
-        self._posBlues = []
+        self._posBlues = []  # Used during BP selection
         self._posReds = []
-        self._actionCallbackObjStore = {"blue": None, "red": None}
         self._fSelectedSingleBattle = False
         self._fSelectedTppRules = False
         self._fBlueSelectedBP = False
         self._fBlueChoseOrder = False
-        self._fEnteredBp = False
-        self._fClearedBp = False
         self._fGuiPkmnUp = False
-        self._fTryingToSwitch = False
-        self._fInvalidating = False
-        self._fMatchCancelled = False
-        self._fSetAnnouncer = False
-        self._fSkipWaitForNew = False
+        self._fWaitForNew = True
+        self._fWaitForStart = True
         self._fBpPage2 = False
-        self._fSetStartingWeather = False
-        self._blueExpectedActionCause = ActionCause.OTHER
-        self._redExpectedActionCause = ActionCause.OTHER
+        self._fBattleStateReady = False
 
-    ####################################################
+    ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
     ####################################################
 
-    def start(self, order_blue=None, order_red=None):
-        '''
-        Starts a prepared match.
-        If the selection is not finished for some reason
-        (state != WAITING_FOR_START), it will continue to prepare normally and
-        start the match once it's ready.
-        Otherwise calling start() will start the match by resuming the game.
-        :param order_blue: pokemon order of blue team as list, e.g. [1, 2, 3]
-        :param order_red: pokemon order of red team as list, e.g. [2, 1]
-        CAUTION: The list order of match.pkmn_blue and match.pkmn_red will be
-                 altered
-        '''
-        logger.debug("Starting a prepared match. startsignal: {}, state: {}"
-                    .format(self.startsignal, self.state))
-        if not order_blue:
-            order_blue = list(range(1, 1+len(self.match.pkmn_blue)))
-        if not order_red:
-            order_red = list(range(1, 1+len(self.match.pkmn_red)))
-        self.match.order_blue = order_blue
-        self.match.order_red = order_red
-        self.startsignal = True
-        if self.state == PbrStates.WAITING_FOR_START:
-            self._initOrderSelection()
-
-    def new(self, colosseum, pkmn_blue, pkmn_red, avatar_blue=AvatarsBlue.BLUE,
-            avatar_red=AvatarsRed.RED, announcer=True, starting_weather=None):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -309,101 +428,212 @@ class PBREngine():
         :param pkmn_blue: array with dictionaries of team blue's pokemon
         :param pkmn_red: array with dictionaries of team red's pokemon
         CAUTION: Currently only max. 3 pokemon per team supported.
-        :param avatar_blue=AvatarsBlue.BLUE: enum for team blue's avatar
-        :param avatar_red=AvatarsRed.RED: enum for team red's avatar
-        :param announcer=True: boolean if announcer's voice is enabled
         '''
-        logger.debug("Preparing a new match. startsignal: {}, state: {}"
-                    .format(self.startsignal, self.state))
-        self.reset()
-        if self.state >= PbrStates.PREPARING_START and \
-           self.state <= PbrStates.MATCH_RUNNING:
-            # TODO this doesn't work after startup!
-            logger.warning("Detected invalid match state: {}.  Cancelling match"
-                           .format(self.state))
-            self.cancel()
-            self._fSkipWaitForNew = True
+        logger.debug("Received call to new(). _fWaitForStart: {}, state: {}"
+                     .format(self._fWaitForStart, self.state))
+
+        # Give PBR some time to quit the previous match, if needed.
         for _ in range(25):
-            if self.state != PbrStates.MATCH_ENDED:
+            if self.state != EngineStates.MATCH_ENDED:
                 break
             logger.warning("PBR is not yet ready for a new match")
-            gevent.sleep(1) # Wait until self._waitForNew completes.  At that time,
-                            # PBR has finished all actions from the previous match
+            gevent.sleep(1)
+
+        if self.state > EngineStates.WAITING_FOR_NEW:
+            logger.warning("Invalid match preparation state: {}. Crashing"
+                           .format(self.state))
+            self._crash("Early preparation start")
+            return
+
+        self.reset()
         self.colosseum = colosseum
-        # just use whatever positions, not needed anymore
-        #self._posBlues = [int(p["position"]) for p in pkmn_blue]
-        #self._posReds = [int(p["position"]) for p in pkmn_red]
-        self._posBlues = list(range(len(pkmn_blue)))
-        self._posReds = list(range(len(pkmn_blue), len(pkmn_blue)+len(pkmn_red)))
-        self.match.new(pkmn_blue, pkmn_red)
-        self.avatar_blue = avatar_blue
-        self.avatar_red = avatar_red
-        self.announcer = announcer
-        self.starting_weather = starting_weather
-        self._fSetStartingWeather = bool(starting_weather)
+        self._fDoubles = fDoubles
+        self._posBlues = list(range(0, 1))
+        self._posReds = list(range(1, 3))
+        self.match.new(teams, fDoubles)
+        self._startingWeather = startingWeather
+        self._inputTimer = inputTimer
+        self._battleTimer = battleTimer
 
-        # try to load savestate
-        # if that succeeds, skip a few steps
-        self._setState(PbrStates.EMPTYING_BP2)
-        self._dolphin.resume()
-        loaded_success = self._dolphin.load(self._savefile1 if announcer
-                                            else self._savefile2)
-        # wait until loaded, just to be sure
-        self.timer.sleep(80)
-        if not loaded_success:
-            self._setState(PbrStates.CREATING_SAVE1)
+        if self.state == EngineStates.WAITING_FOR_NEW:
+            self._selectFreeBattle()
         else:
-            self._setAnimSpeed(self._increasedSpeed)
+            assert self.state < EngineStates.WAITING_FOR_NEW
+            self._fWaitForNew = False
 
-        self._newRng()  # avoid patterns
-        self._dolphin.volume(0)
+    def _selectFreeBattle(self):
+        '''
+        Select Free Battle to kick off match preparation from the MENU_BATTLE_TYPE gui.
+        This is the first step following EngineStates.WAITING_FOR_NEW.
+        '''
+        self._fWaitForNew = True  # Need to wait again after this match ends
+        self._stuckcrasher_prepare_greenlet = gevent.spawn_later(
+            40, self._stuckcrasher_prepare)
+        self._stuckcrasher_prepare_greenlet.link_exception(_logOnException)
+        self._dolphin.resume()  # We might be paused if we were at WAITING_FOR_NEW
+        gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
+        self._setState(EngineStates.PREPARING_STAGE)
+        self._select(2)  # Select Free Battle
+
+    def matchStart(self):
+        '''
+        Starts a prepared match.
+        If the selection is not finished for some reason
+        (state != WAITING_FOR_START), it will continue to prepare normally and
+        start the match once it's ready.
+        Otherwise calling start() will start the match by resuming the game.
+        '''
+        logger.debug("Received call to start(). _fWaitForStart: {}, state: {}"
+                     .format(self._fWaitForStart, self.state))
+        if self.state > EngineStates.WAITING_FOR_START:
+            self._crash("Early match start")
+            return
+        if self.state == EngineStates.WAITING_FOR_START:
+            # We're paused and waiting for this call. Resume and start the match now.
+            self._dolphin.resume()
+            self._matchStart()
+        else:  # Start the match as soon as it's ready.
+            self._fWaitForStart = False
 
     def cancel(self):
         '''
-        Cancels the current/upcoming match.
+        Cancels the current/upcoming match at the next move selection menu.
         Does nothing if the match is already over.
         CAUTION: A match will be ended by giving up at the next possibility,
         but the result will be reported as "draw"!
         '''
         self._fMatchCancelled = True
 
+    @property
+    def matchVolume(self):
+        return self._matchVolume
+
+    @matchVolume.setter
+    def matchVolume(self, v):
+        self._matchVolume = v
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self.setVolume(v)
+
     def setVolume(self, v):
         '''
-        Sets the game's volume during matches.
-        Will always be 0 during selection, regardless of this setting.
+        Sets the game's _matchVolume during matches.
+        Resets to 0 at the end of each match.
         :param v: integer between 0 and 100.
         '''
-        self.volume = v
         self._dolphin.volume(v)
 
-    def setSpeed(self, s):
+    @property
+    def matchAnnouncer(self):
+        return self._fMatchAnnouncer
+
+    @matchAnnouncer.setter
+    def matchAnnouncer(self, announcerOn):
+        self._fMatchAnnouncer = announcerOn
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setAnnouncer(announcerOn)
+
+    def _setAnnouncer(self, announcerOn):
+        '''
+        Enables or disables the game's announcer. Takes immediate effect, even mid-battle.
+        :param announcerOn: bool indicating whether announcer should be on.
+        '''
+        if not isinstance(announcerOn, bool):
+            raise TypeError("announcerOn must be a bool")
+        self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, int(announcerOn))
+
+    @property
+    def matchEmuSpeed(self):
+        return self._matchEmuSpeed
+
+    @matchEmuSpeed.setter
+    def matchEmuSpeed(self, speed):
+        self._matchEmuSpeed = speed
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setEmuSpeed(speed)
+
+    def _setEmuSpeed(self, speed):
         '''
         Sets the game's emulation speed.
-        :param s: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
+        :param speed: emulation speed as a float, with 1.0 being normal speed, 0.5 being half speed, etc.
         '''
-        self.speed = s
-        self._dolphin.speed(s)
+        self._dolphin.speed(speed)
 
-    def setFov(self, val=0.5):
+    @property
+    def matchAnimSpeed(self):
+        return self._matchAnimSpeed
+
+    @matchAnimSpeed.setter
+    def matchAnimSpeed(self, speed):
+        self._matchAnimSpeed = speed
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setAnimSpeed(speed)
+
+    def _setAnimSpeed(self, speed):
+        '''
+        Sets the game's animation speed.
+        Does not influence frame-based "animations" like text box speeds.
+        Does not influence loading times.
+        Is automatically increased during match setup as a speed improvement.
+        Is automatically reset to self.matchStartAnimSpeed when a match begins.
+        :param v: float describing speed
+        '''
+        if speed == 1.0:
+            self._resetAnimSpeed()
+        else:
+            self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
+            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(speed))
+
+    @property
+    def matchFov(self):
+        return self._matchFov
+
+    @matchFov.setter
+    def matchFov(self, val=0.5):
+        self._matchFov = val
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setFov(val)
+
+    def _setFov(self, val=0.5):
         '''
         Sets the game's field of view.
         :param val=0.5: float, apparently in radians, 0.5 is default
         '''
         self._dolphin.write32(Locations.FOV.value.addr, floatToIntRepr(val))
 
-    def setFieldEffectStrength(self, val=1.0):
+    @property
+    def matchFieldEffectStrength(self):
+        return self._matchFieldEffectStrength
+
+    @matchFieldEffectStrength.setter
+    def matchFieldEffectStrength(self, val=1.0):
+        self._matchFieldEffectStrength = val
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setFieldEffectStrength(val)
+
+    def _setFieldEffectStrength(self, val=1.0):
         '''
         Sets the animation strength of the game's field effects (weather, etc).
         :param val: animation strength as a float
         '''
-        self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr, floatToIntRepr(val))
+        self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr,
+                              floatToIntRepr(val))
 
-    def setGuiPosY(self, val=DefaultValues["GUI_POS_Y"]):
+    def setGuiPositionGroup(self, position_group="MAIN"):
         '''
-        Sets the Gui's y-coordinate.
-        :param val=DefaultValues["GUI_POS_Y"]: integer, y-coordinate of gui
+        Sets the Gui's x-coordinate, y-coordinate, size, and width to values specified
+        in a position group.
+        :param position_group: name of the desired group 
         '''
-        self._dolphin.write32(Locations.GUI_POS_Y.value.addr, floatToIntRepr(val))
+        for pos_name, pos_val in GuiPositionGroups[position_group].items():
+            self._dolphin.write32(getattr(Locations, pos_name).value.addr,
+                                  floatToIntRepr(pos_val))
+        
 
     #######################################################
     #             Below are helper functions.             #
@@ -426,20 +656,6 @@ class PBREngine():
         self._dolphin.write32(Locations.BLUR1.value.addr, DefaultValues["BLUR1"])
         self._dolphin.write32(Locations.BLUR2.value.addr, DefaultValues["BLUR2"])
 
-    def _setAnimSpeed(self, val):
-        '''
-        Sets the game's animation speed.
-        Does not influence frame-based "animations" like text box speeds.
-        Does not influence loading times.
-        Is automatically increased during selection as a speed improvement.
-        :param v: float describing speed
-        '''
-        if val == 1.0:
-            self._resetAnimSpeed()
-        else:
-            self._dolphin.write32(Locations.SPEED_1.value.addr, 0)
-            self._dolphin.write32(Locations.SPEED_2.value.addr, floatToIntRepr(val))
-
     def _resetAnimSpeed(self):
         '''
         Sets the game's animation speed back to its default.
@@ -447,12 +663,31 @@ class PBREngine():
         self._dolphin.write32(Locations.SPEED_1.value.addr, DefaultValues["SPEED1"])
         self._dolphin.write32(Locations.SPEED_2.value.addr, DefaultValues["SPEED2"])
 
-    def _switched(self, side, monindex):
-        self.on_switch(side=side, monindex=monindex,
-                      obj=self._actionCallbackObjStore[side])
-        self._actionCallbackObjStore[side] = None
+    def _switched(self, side, slot_active, slot_inactive):
+        self.on_switch(side=side,
+                       slot_active=slot_active,
+                       slot_inactive=slot_inactive,
+                       pokeset_sentout=self.match.teams[side][slot_active],
+                       pokeset_recalled=self.match.teams[side][slot_inactive],
+                       obj=self._actionCallbackObjStore[side][slot_active],
+                       )
+        self._actionCallbackObjStore[side][slot_active] = None
 
-    def _stuckChecker(self):
+    def _match_faint(self, side, slot):
+        self.match.teamsLive[side][slot]["curr_hp"] = 0
+        self.on_teams_update(
+            teams=self.match.teamsLive,
+            slotConvert=self.match.getFrozenSlotConverter(),
+        )
+        self.on_faint(
+            side=side,
+            slot=slot,
+            fainted=deepcopy(self.match.areFainted),
+            teams=self.match.teamsCopy(),
+            slotConvert=self.match.getFrozenSlotConverter(),
+        )
+
+    def _stuckPresser(self):
         '''
         Shall be spawned as a Greenlet.
         Checks if no input was performed within the last 5 ingame seconds.
@@ -460,33 +695,48 @@ class PBREngine():
         '''
         while True:
             self.timer.sleep(20)
-            # stuck limit: 5 seconds. No stuckchecker during match.
-            if self.state == PbrStates.MATCH_RUNNING:
+            if self.state in (EngineStates.MATCH_RUNNING, EngineStates.WAITING_FOR_NEW,
+                              EngineStates.WAITING_FOR_START):
                 continue
-            limit = 300
-            if self.state in (PbrStates.CREATING_SAVE1,
-                              PbrStates.CREATING_SAVE2)\
-                    and self.gui not in (PbrGuis.MENU_MAIN,
-                                         PbrGuis.MENU_BATTLE_PASS,
-                                         PbrGuis.BPS_SELECT):
-                limit = 80
-            if self.gui == PbrGuis.RULES_BPS_CONFIRM:
-                limit = 600  # don't interrupt the injection
+            if self.state == EngineStates.INIT:
+                limit = 45  # Spam A to get us through a bunch of menus
+            elif self.gui == PbrGuis.RULES_BPS_CONFIRM:
+                limit = 600  # 10 seconds- don't interrupt the injection
+            else:
+                limit = 300  # 5 seconds
             if (self.timer.frame - self._lastInputFrame) > limit:
-                self._pressButton(self._lastInput)
+                with suppress(DolphinNotConnected):
+                    self._pressButton(self._lastInput, "stuck presser")
 
-    def _pressButton(self, button):
+    def _selectLater(self, frames, index):
+        self._setLastInputFrame(frames)
+        self.timer.spawn_later(frames, self._select, index).link_exception(_logOnException)
+
+    def _pressLater(self, frames, button):
+        self._setLastInputFrame(frames)
+        self.timer.spawn_later(frames, self._pressButton, button).link_exception(_logOnException)
+
+    def _setLastInputFrame(self, framesFromNow):
+        '''Manually account for a button press that
+        will occur in the future after some number of frames.
+        Helps prevent a trigger happy stuckpresser.'''
+        self._lastInputFrame = self.timer.frame + framesFromNow
+
+    def _pressButton(self, button, source=None):
         '''Propagates the button press to dolphinWatch.
         Often used, therefore bundled'''
         self._lastInputFrame = self.timer.frame
         self._lastInput = button
+        if button != 0:
+            logger.info("> %s%s", WiimoteButton(button).name,
+                        " (%s)" % source if source else "")
         self._dolphin.wiiButton(0, button)
 
     def _select(self, index):
         '''Changes the cursor position and presses Two.
         Often used, therefore bundled.'''
         self.cursor.setPos(index)
-        self._pressButton(WiimoteButton.TWO)
+        self._pressButton(WiimoteButton.TWO, "cursor set to %s" % index)
 
     def _pressTwo(self):
         '''Presses Two. Often used, therefore bundled.'''
@@ -504,73 +754,195 @@ class PBREngine():
         if self.state == state:
             return
         self.state = state
+        logger.info("[New State] " + EngineStates(state).name)
         self.on_state(state=state)
 
     def _newRng(self):
         '''Helper method to replace the RNG-seed with a random 32 bit value.'''
         self._dolphin.write32(Locations.RNG_SEED.value.addr, random.getrandbits(32))
 
-    def read32(self, addr, **kwargs):
-        return self.read(32, addr, **kwargs)
-
-    def read16(self, addr, **kwargs):
-        return self.read(16, addr, **kwargs)
-
-    def read8(self, addr, **kwargs):
-        return self.read(8,addr, **kwargs)
-
-    def read(self, mode, addr, most_common_of=5):
-        '''Read <mode> bytes at the given address
-
-        Returns most commonly read value of <most_common_of> reads to reduce
-        likelihood of faulty reads (usually reading 0 instead of the correct value).
+    def _initBattleState(self):
         '''
-        if mode not in [8, 16, 32]:
-            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
-        values = Counter()
-        for _ in range(most_common_of):
-            val = AsyncResult()
-            self._dolphin.read(mode, addr, val.set)
-            val = val.get()
-            values[val] += 1
-        return values.most_common(1)[0][0]
-
-    def write32(self, addr, val, **kwargs):
-        return self.write(32, addr, val, **kwargs)
-
-    def write16(self, addr, val, **kwargs):
-        return self.write(16, addr, val, **kwargs)
-
-    def write8(self, addr, val, **kwargs):
-        return self.write(8, addr, val, **kwargs)
-
-    def write(self, mode, addr, val, max_attempts=5,
-              writes_per_attempt=5, reads_per_attempt=5):
-        '''Write <mode> bytes of val to the given address
-
-        Perform up to <max_attempts> write-and-verify attempts.
+        Once the in-battle structures are ready, read/write weather and battle pkmn data
         '''
-        if mode not in [8, 16, 32]:
-            raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
-        for i in range(max_attempts):
-            for _ in range(writes_per_attempt):
-                self._dolphin.write(mode, addr, val)
-            newVal = self.read(mode, addr, most_common_of=reads_per_attempt)
-            if newVal == val:
-                break
-            else:
-                logger.warning("Write verification failed attempt {}/{}. Read {}, expected {}"
-                               .format(i, max_attempts, newVal, val))
-        if not newVal == val:
-            logger.error("Write of {} to {:0X} failed".format(val, addr))
-        return newVal == val
+        if self._startingWeather:
+            self._setStartingWeather()
+        self._setupActivePkmn()
+        self._setupNonvolatilePkmn()
+
+    def _tempCallback(self, type, side, slot, name, val):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        assert type in ("active", "nonvolatile"), "Invalid type: %s" % type
+        logger.debug("[{}] {} {}: {} is now {:0X}".format(type, side, slot, name, val))
+
+    def checkNestedLocs(self):  # TODO move elsewhere, this is just debugging code
+        while True:
+            self.timer.sleep(20)
+            fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
+            if fieldEffectsLoc:
+                fieldEffects = self._dolphinIO.read32(fieldEffectsLoc)
+                logger.info("Field effects at {:08X} has value {:08X}"
+                            .format(fieldEffectsLoc, fieldEffects))
+
+            ibBlueLoc = self._dolphinIO.readNestedAddr(NestedLocations.IB_BLUE)
+            if ibBlueLoc:
+                ibBlue = self._dolphinIO.read16(ibBlueLoc)
+                logger.info("Blue species at {:08X} has value {:08X}"
+                            .format(ibBlueLoc, ibBlue))
+
+    def _readTest(self):
+        '''Test many reads of '''
+        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
+        logger.debug("preloc: {:0X}".format(preBattleLoc))
+        expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
+        while True:
+            logger.warning("Reading HP many times")
+            for i in range(20000):
+                hp = self._dolphinIO.read16(preBattleLoc +
+                                            NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                                            numAttempts=2)
+                if hp != expectedHP:
+                    logger.error("HP was %s", hp)
+                if i % 500 == 0:
+                    logger.info("(read %d so far)", i)
+                    # prevent "Connection with wiimote lost bla bla"
+                    self._pressButton(WiimoteButton.NONE)  # no button press
+            logger.warning("Done reading, sleeping for a bit")
+            gevent.sleep(5)
+
+    def _writeTest(self):
+        '''Test many reads of '''
+        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
+        # TODO
+        # if not preBattleLoc:
+        #     return
+        # logger.debug("preloc: {:0X}".format(preBattleLoc))
+        # expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
+        # while True:
+        #     logger.warning("Reading HP many times")
+        #     for i in range(20000):
+        #         hp = self._dolphinIO.read16(preBattleLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
+        #                                     numAttempts=2)
+        #         if hp != expectedHP:
+        #             logger.error("HP was {}".format(hp))
+        #         if i % 500 == 0:
+        #             logger.info("(read %d so far)" % i)
+        #             # prevent "Connection with wiimote lost bla bla"
+        #             self._pressButton(WiimoteButton.NONE)  # no button press
+        #     logger.warning("Done reading, sleeping for a bit")
+        #     gevent.sleep(5)
+
+    def _injectSettings(self):
+        rulesetLoc = self._dolphinIO.readNestedAddr(NestedLocations.RULESET)
+        logger.debug("Setting input timer to %d", self._inputTimer)
+        self._dolphinIO.write8(rulesetLoc + RulesetOffsets.MOVE_TIMER, self._inputTimer)
+        logger.debug("Setting battle timer to %d", self._battleTimer)
+        self._dolphinIO.write8(rulesetLoc + RulesetOffsets.BATTLE_TIMER, self._battleTimer)
+
+        settingsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        settingsLoc += LoadedBPOffsets["SETTINGS"].value.addr
+        # Not sure if these work
+        # offset = BattleSettingsOffsets.RULESET
+        # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+        #                       0x30)
+        # offset = BattleSettingsOffsets.BATTLE_STYLE
+        # self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+        #                       2 if self._fDoubles else 1)
+        # This is necessary because otherwise the colosseum might not get injected properly
+        offset = BattleSettingsOffsets.COLOSSEUM
+        self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
+                              self.colosseum & 0xFFFF)
+
+
+    def _injectPokemon(self):
+        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        writes = []
+        for side_offset, data in (
+                (LoadedBPOffsets.BP_BLUE.value.addr, self.match.teams["blue"]),
+                (LoadedBPOffsets.BP_RED.value.addr, self.match.teams["red"])):
+            pkmnLoc = (bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
+                       side_offset + LoadedBPOffsets.PKMN.value.addr)
+            for poke_i, pkmn_dict in enumerate(data):
+                pokemon = get_pokemon_from_data(pkmn_dict)
+                pokebytes = pokemon.to_bytes()
+                for i, byte in enumerate(pokebytes):
+                    writes.append((8, pkmnLoc + i + poke_i * 0x8c, byte))
+        self._dolphin.pause()
+        gevent.sleep(0.1)
+        self._dolphinIO.writeMulti(writes)
+        gevent.sleep(0.1)
+        self._dolphin.resume()
+        self.timer.sleep(20)
+
+    def _injectAvatars(self):
+        avatars = generateDefaultAvatars()
+        self.avatars = {"blue": avatars[0], "red": avatars[1]}
+        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        writes = []
+        for side_offset, avatar in (
+                (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
+                (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
+            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
+            logger.debug("avatar loc: {:0X}".format(avatarLoc))
+            for optionName, optionVal in avatar.items():
+                optionLoc = LoadedBPOffsets[optionName].value
+                logger.debug("Writing option {}: {:0X} <- {}"
+                             .format(optionName, avatarLoc + optionLoc.addr, optionVal))
+                writes.append((8*optionLoc.length, avatarLoc + optionLoc.addr, optionVal))
+        self._dolphinIO.writeMulti(writes)
+
+    def _setupPreBattlePkmn(self):
+        logger.info("Setting up pre-battle pkmn")
+        for side, preBattleLoc in (
+                ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE)),
+                ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED))):
+            for slotSO, pokeset in enumerate(self.match.teams[side]):
+                logger.info("Setting up pre-battle pkmn: side %s, slot %d", side, slotSO)
+                success = False
+                pkmnLoc = (preBattleLoc +
+                           slotSO * NestedLocations.PRE_BATTLE_BLUE.value.length)
+                expected_moves = [move["id"] for move in pokeset["moves"]]
+                while len(expected_moves) < 4:
+                    expected_moves.append(0)
+                moveReads = []
+                for baseMovesOffset in range(0x00, 0x90, 0x10):
+                    moveReads.extend([(16, pkmnLoc + baseMovesOffset + 2 * moveOffset)
+                                      for moveOffset in range(4)])
+                moveReads = self._dolphinIO.readMulti(moveReads)
+                for row, baseMovesOffset in enumerate(range(0x00, 0x90, 0x10)):
+                    if moveReads[4*row : 4*(row+1)] == expected_moves:
+                        success = True
+                        self.nonvolatileMoveOffsetsSO[side].append(baseMovesOffset)
+                        break
+                if not (pokeset["stats"]["hp"] ==
+                        self._dolphinIO.read16(
+                            pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr) ==
+                        self._dolphinIO.read16(
+                            pkmnLoc + NonvolatilePkmnOffsets.MAX_HP.value.addr)):
+                    success = False
+                if not success:
+                    logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
+                    self._crash(reason="Incorrect pokemon detected")
+                # self._dolphinIO.write16(pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                #                         pokeset["stats"]["hp"] // 2)
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                #     random.choice([0x40, 0x20, 0x10, 0x8, 0x2]))
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                #     0x80)
+                # self._dolphinIO.write8(
+                #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
+                #     0x9)
+
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
 
-        When this sets the starting weather, the animation for the weather that is set
-        will not appear until the end of turn 1, despite being in play at the start of
-        turn 1.
+        When this sets the starting weather, the animation for the weather that
+        is set will not appear until the end of turn 1, despite being in play at
+        the start of turn 1.
 
         Does not set starting weather if weather already exists at move selection time,
         eg. Drought causing sun.
@@ -578,205 +950,322 @@ class PBREngine():
         Non-weather field effects such as Gravity, etc. are not supported by this function
         (and their animations wouldn't work anyway)
         '''
-        self._fSetStartingWeather = False
-        try:
-            fieldEffectsLoc = NestedLocations.FIELD_EFFECTS.value.getAddr(self.read)
-        except InvalidLocation:
-            logger.error("Failed to determine starting weather location")
-            return
-        fieldEffects = self.read32(fieldEffectsLoc, most_common_of=10)
+        fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
+        fieldEffects = self._dolphinIO.read32(fieldEffectsLoc)
         logger.debug("Field effects at {:08X} has value {:08X}"
                      .format(fieldEffectsLoc, fieldEffects))
         weather = fieldEffects & FieldEffects.WEATHER_MASK
-        if weather == 0:
-            # Only overwrite weather related bits
-            newFieldEffects = self.starting_weather | fieldEffects
+        if weather == 0:  # Only overwrite weather related bits
+            newFieldEffects = self._startingWeather | fieldEffects
             logger.debug("Writing field effects: {:08X} to address {:08X}"
                          .format(newFieldEffects, fieldEffectsLoc))
-            if not self.write32(fieldEffectsLoc, newFieldEffects):
-                logger.error("Failed to write starting weather")
+            self._dolphinIO.write32(fieldEffectsLoc, newFieldEffects)
 
-    def _injectPokemon(self):
-        # BPStructOffsets
-        pointer = AsyncResult()
-        self._dolphin.read32(Locations.POINTER_BP_STRUCT.value.addr, pointer.set)
-        pointer = pointer.get()
-        
-        for offset, data in ((BPStructOffsets.PKMN_BLUE, self.match.pkmn_blue), (BPStructOffsets.PKMN_RED, self.match.pkmn_red)):
-            for poke_i, pkmn_dict in enumerate(data):
-                pokemon = get_pokemon_from_data(pkmn_dict)
-                pokebytes = pokemon.to_bytes()
-                self._dolphin.pause()
-                gevent.sleep(0.1)
-                for i, byte in enumerate(pokebytes):
-                    self._dolphin.write8(pointer + offset + i + poke_i*0x8c, byte)
-                gevent.sleep(0.1)
-                self._dolphin.resume()
-                self.timer.sleep(20)
+    def _setupActivePkmn(self):
+        activeLoc = self._dolphinIO.readNestedAddr(NestedLocations.ACTIVE_PKMN)
+        offset = 0
+        for slot in (0, 1):
+            if slot == 1 and not self._fDoubles:
+                continue
+            for side in ("blue", "red"):
+                debugCallback = partial(self._tempCallback, "active", side, slot)
+                # PBR forces doubles battles to start with >=2 mons per side.
+                logger.info("Setting up active pkmn: side %s, slot %d", side, slot)
+                active = ActivePkmn(side, slot, activeLoc + offset,
+                                    self.match.teams[side][slot], self._dolphin,
+                                    debugCallback)
+                offset += NestedLocations.ACTIVE_PKMN.value.length
+                self.active[side].append(active)
 
-    def pkmnIndexToButton(self, index):
+    def _setupNonvolatilePkmn(self):
+        logger.info("Setting up nonvolatile pkmn")
+        for side, nonvolatileLoc in (
+                ("blue", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_BLUE)),
+                ("red", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_RED))):
+            for slotSO, pokeset in enumerate(self.match.teams[side]):
+                logger.info("Setting up nonvolatile pkmn: side %s, slot %d", side, slotSO)
+                debugCallback = partial(self._tempCallback, "nonvolatile", side, slotSO)
+                nonvolatile = NonvolatilePkmn(
+                    side, slotSO, nonvolatileLoc +
+                                  slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length,
+                    self.nonvolatileMoveOffsetsSO[side][slotSO],
+                    self.match.teams[side][slotSO],
+                    self._dolphin, debugCallback)
+                self.nonvolatileSO[side].append(nonvolatile)
+
+    def _updateLiveTeams(self, ppOnly=False, readActiveSlots=False,
+                         pokesetOnly=None):
+        logger.debug("Updating live teams. ppOnly: %s readActiveSlots: %s pokesetOnly: %s" %
+                       (ppOnly, readActiveSlots, pokesetOnly))
+        teams = self.match.teamsLive
+        slotConvert = self.match.getFrozenSlotConverter()
+
+        # I don't know if this is necessary
+        if readActiveSlots:
+            loc = self._dolphinIO.readNestedAddr(NestedLocations.ACTIVE_PKMN_SLOTS)
+            activeSlotsMem = self._dolphinIO.readMulti([(8, loc + i) for i in range(0,4)])
+            if self._fDoubles:
+                activeSlotsSO = {"blue": [activeSlotsMem[0], activeSlotsMem[2]],
+                                 "red": [activeSlotsMem[1], activeSlotsMem[3]]}
+            else:
+                activeSlotsSO = {"blue": [activeSlotsMem[0]], "red": [activeSlotsMem[1]]}
+            activeSlots = deepcopy(activeSlotsSO)
+            for side, slots in activeSlotsSO.items():
+                for i, slot in enumerate(slots):
+                    if slot < 6:
+                        # 6 means fainted. Just leave it at 6 so this slot gets updated
+                        # with the nonvolatile data- that should be just fine
+                        activeSlots[side][i] = slotConvert("IGO", slot, side)
+            logger.debug("active slots SO: %s" % activeSlotsSO)
+        else:
+            if self._fDoubles:
+                activeSlots = {"blue": [0, 1], "red": [0, 1]}
+            else:
+                activeSlots = {"blue": [0], "red": [0]}
+        logger.debug("active slots: %s" % activeSlots)
+        for side, team in teams.items():
+            for slot, pokeset in enumerate(team):
+                slotSO = slotConvert("SO", slot, side)
+                if pokesetOnly:
+                    if pokesetOnly[0] != side or pokesetOnly[1] != slot:
+                        continue
+                if slot in activeSlots[side]:
+                    self.active[side][slot].updatePokeset(pokeset, ppOnly)
+                    logger.debug("Updating active pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
+                else:
+                    self.nonvolatileSO[side][slotSO].updatePokeset(pokeset, ppOnly)
+                    logger.debug("Updating nonvolatile pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
+                pokecat.fix_moves(pokeset)
+                logger.debug("Pokeset %s after update %s" % (pokeset["ingamename"], pokeset))
+
+        # for side, team in teams.items():
+        #     for slot, pokeset in enumerate(team):
+        #         slotSO = slotConvert("SO", slot, side)
+        #         logger.info("Post-all-updates. slots:%d, %d: %s" % (
+        #         slot, slotSO, pokeset))
+
+        logger.debug("Sending live teams to the callback")
+        # Push update to upper layer
+        self.on_teams_update(
+            teams=teams,
+            slotConvert=slotConvert,
+        )
+
+    def pkmnSlotToButton(self, slot):
         # TODO fix sideways remote
         return [
-            WiimoteButton.RIGHT,
-            WiimoteButton.DOWN,
-            WiimoteButton.UP,
-            WiimoteButton.LEFT,
-            WiimoteButton.TWO,
-            WiimoteButton.ONE
-        ][index]
+            WiimoteButton.RIGHT,    # 1st Pokemon, onscreen up
+            WiimoteButton.DOWN,     # 2nd "" right
+            WiimoteButton.UP,       # 3rd "" left
+            WiimoteButton.LEFT,     # 4th "" down
+            WiimoteButton.TWO,      # 5th "" two
+            WiimoteButton.ONE       # 6th "" one
+        ][slot]
+
+    def _getInputState(self):
+        return (self._turn, self._side, self._slot, self._numMoveSelections)
 
     ############################################
     # The below functions are for timed inputs #
     #        or processing "raw events"        #
     ############################################
 
-    def _confirmPkmn(self):
-        '''
-        Clicks on the confirmation button on a pokemon selection screen
-        for battle passes. Shall be called/spawned as a cursorevent after a
-        pokemon has been selected for a battlepass.
-        Must have that delay because the pokemon model has to load.
-        Adds the next cursorevent for getting back to the battle pass slot view
-        '''
-        self._pressTwo()
-        self._bp_offset += 1
-        if self.state == PbrStates.PREPARING_BP1:
-            self._posBlues.pop(0)
-        else:
-            self._posReds.pop(0)
-        cursor = CursorOffsets.BP_SLOTS - 1 + self._bp_offset
-        self.cursor.addEvent(cursor, self._distinguishBpSlots)
-
     def _initOrderSelection(self):
         '''
-        Done once for each team.
-        Simply presses the right wiimote button, which transitions
-        the gui state from PbrGuis.ORDER_SELECT to PbrGuis.ORDER_CONFIRM.
+        Select some Pokemon so we can pass through the order selection menus.
+        The true order will be injected a bit later at PbrGuis.ORDER_CONFIRM.
+        Done once for blue, then once for red.
         '''
         self._dolphin.resume()
-        self._setState(PbrStates.SELECTING_ORDER)
-        self._pressButton(WiimoteButton.RIGHT)
+        gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
 
-    def _initMatch(self):
+    def _selectValidOrder(self):
+        if not self._fBlueChoseOrder:
+            slot0Loc = Locations.ORDER_BLUE.value.addr
+            slot1Loc = Locations.ORDER_BLUE.value.addr + 1
+            validLoc = Locations.ORDER_VALID_BLUE.value.addr
+        else:
+            slot0Loc = Locations.ORDER_RED.value.addr
+            slot1Loc = Locations.ORDER_RED.value.addr + 1
+            validLoc = Locations.ORDER_VALID_RED.value.addr
+
+        # Select 1st slot. Confirm selection, retrying if needed
+        while self.state == EngineStates.SELECTING_ORDER:
+            self._pressButton(WiimoteButton.RIGHT)
+            self.timer.sleep(40)
+            if self._dolphinIO.read8(slot0Loc) != 0:
+                break
+            logger.warning("Reselecting 1st pkmn")
+
+        if self._fDoubles:
+            # Select 2nd slot. Confirm selection, retrying if needed
+            while self.state == EngineStates.SELECTING_ORDER:
+                self._pressButton(WiimoteButton.UP)
+                self.timer.sleep(40)
+                if self._dolphinIO.read8(slot1Loc) != 0:
+                    break
+                logger.warning("Reselecting 2nd pkmn")
+
+        # Bring up the PbrGuis.ORDER_CONFIRM prompt
+        while self.state == EngineStates.SELECTING_ORDER:
+            self._pressOne()
+            self.timer.sleep(40)
+            if self._dolphinIO.read8(validLoc) != 1:  # This means order was confirmed
+                break
+            logger.warning("Reselecting order finished")
+
+    def _matchStart(self):
         '''
         Is called when a match start is initiated.
-        If the startsignal wasn't set yet (start() wasn't called),
-        the game will pause, resting in the state WAITING_FOR_START
         '''
-        self._setAnimSpeed(self.match_speed)
-        # mute the "whoosh" as well
-        self.timer.spawn_later(330, self._dolphin.volume, 100)
-        self.timer.spawn_later(450, self._disableBlur)
+        logger.info("Starting PBR match")
+        self._injectAvatars()
+        self._pressTwo()  # Confirms red's order selection, which starts the match
+        self._setAnimSpeed(1.0)
+        self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
+        self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
+        self.timer.spawn_later(450, self._setupPreBattlePkmn).link_exception(_logOnException)
         # match is running now
-        self._setState(PbrStates.MATCH_RUNNING)
+        self._setState(EngineStates.MATCH_RUNNING)
+
+    def _matchStartDelayed(self):
+        # just after the "whoosh" sound, and right before the colosseum becomes visible
+        self.setVolume(self._matchVolume)
+        self._setFov(self._matchFov)
+        self._setEmuSpeed(self._matchEmuSpeed)
+        self._setAnimSpeed(self._matchAnimSpeed)
+        self._setAnnouncer(self._fMatchAnnouncer)
+        self._setFieldEffectStrength(self._matchFieldEffectStrength)
 
     def _matchOver(self, winner):
         '''
         Is called when the current match ended and a winner is determined.
-        Sets the cursorevent for when the "Continue/Change Rules/Quit"
+        Sets the cursorevent to run self._quitMatch when the "Continue/Change Rules/Quit"
         options appear.
         Calls the on_win-callback and triggers a matchlog-message.
         '''
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
-        self._fMatchCancelled = False  # reset flag here
+        # reset flags
+        self._fMatchCancelled = False
+        self._fWaitForNew = self._fWaitForStart = True
+        self._setState(EngineStates.MATCH_ENDED)
+        killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
+        killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
         self.cursor.addEvent(1, self._quitMatch)
-        self._setState(PbrStates.MATCH_ENDED)
         self.on_win(winner=winner)
-
-    def _waitForNew(self):
-        if not self._fSkipWaitForNew:
-            self._dolphin.pause()
-            self._setState(PbrStates.WAITING_FOR_NEW)
-        else:
-            self._setState(PbrStates.CREATING_SAVE1)
-            self._fSkipWaitForNew = False  # redundant?
 
     def _quitMatch(self):
         '''
         Is called as a cursorevent when the "Continue/Change Rules/Quit"
         options appear.
-        Clicks on "Quit" and resets the PBR engine into the next state.
-        Next state can either be waiting for a new match selection (pause),
-        or directly starting one.
+        Resets some match settings as needed.
+        Clicks on "Quit", which takes us to the Battle Menu (PbrGuis.MENU_BATTLE_TYPE)
         '''
-        self._dolphin.volume(0)
         self._resetBlur()
-        self._select(3)
-        self._setAnimSpeed(self._increasedSpeed)
-        # make sure this input gets processed before a potential savestate-load
-        self.timer.spawn_later(30, self._waitForNew)
+        self.setVolume(0)  # Mute match setup beeping
+        self._setAnnouncer(True)  # Or it might not work for next match
+        self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
+        self._setEmuSpeed(1.0)  # Avoid possible timing issues?
+        # Unsubscribe from memory addresses that change from match to match
+        for side in ("blue", "red"):
+            for active in list(self.active[side]):
+                    active.unsubscribe()
+            for nonvolatile in list(self.nonvolatileSO[side]):
+                    nonvolatile.unsubscribe()
+        self._select(3)  # Select Quit
 
     def _nextPkmn(self):
         '''
-        Is called once the pokemon selection screen pops up.
+        Is called when the pokemon selection menu pops up- a switch
+        selection in singles, and a switch or target selection in doubles.
+
+        Worker exits only upon one of:
+        - a successful selection
+        - a return to the move select menu
+        - detection of a different state (happens when menu times out)
         '''
-        
+        logger.debug("Entered _nextPkmn. State: %s", self._getInputState())
+        # The coming loop sleeps, so use recorded_state to ensure we exit if
+        # the move selection timer hit zero.
+        if self._move_select_followup:   # Here from the move select menu
+            from_move_select = True
+            recorded_state, next_pkmn, is_switch = self._move_select_followup
+            self._move_select_followup = None  # reset
+        else:   # Here from faint / baton pass / etc.
+            logger.debug("Updating teams (after faint / baton pass / etc)")
+            # this doesn't work- if two mons faint and need switch selections,
+            # active data is not in a valid state in between
+            # (it waits until all switches are selected before updating state)
+            self._updateLiveTeams()
+            from_move_select = False
+            recorded_state = self._getInputState()
+            next_pkmn = None
+            is_switch = True  # Can't be a target, so must be a switch.
+
         # shift gui back to normal position
         if self.hide_gui:
-            self.setGuiPosY(100000.0)
+            self.setGuiPositionGroup("OFFSCREEN")
         else:
-            self.setGuiPosY(DefaultValues["GUI_POS_Y"])
-        
-        # Note: This gui isn't input-ready from the beginning.
-        # The fail-counter will naturally rise a bit.
-        fails = 0
+            self.setGuiPositionGroup("MAIN")
 
-        # Should the silent pokemon selection be used?
-        # Don't use it, because it locks up if the selected pokemon is invalid
-        # and I am not 100% sure just filtering out dead pokemon is enough.
-        silent = False
-        
-        # if called back: pokemon already chosen
-        if self.match.next_pkmn >= 0:
-            next_pkmn = self.match.next_pkmn
-            # reset
-            self.match.next_pkmn = -1
-        else:
-            _, next_pkmn = self._getAction(moves=False, switch=True)
+        # The action callback might sleep.  Spawn a worker so self._distinguishGui()
+        # doesn't get delayed as well.
+        gevent.spawn(self._nextPkmnWorker, from_move_select, recorded_state,
+                     next_pkmn, is_switch).link_exception(_logOnException)
 
-        index = (self.match.map_blue if self.blues_turn
-                 else self.match.map_red)[next_pkmn]
+    def _nextPkmnWorker(self, from_move_select, recorded_state,
+                        next_pkmn, is_switch):
+        if not from_move_select:
+            _, next_pkmn = self._getAction(True)
 
-        wasBluesTurn = self.blues_turn
+        # silent = not is_switch  # Only beep when switching.
+        silent = True
 
-        self._fTryingToSwitch = True
-        switched = True  # flag if the switching was cancelled after all
-        # Gui can temporarily become "idle" if an popup
-        # ("Can't be switched out") appears. use custom flag!
-        while self._fGuiPkmnUp and self.blues_turn == wasBluesTurn:
-            if fails >= 4:
-                switched = False
-                # A popup appears. Click it away and cancel move selection.
-                # Aborting the move selection should always be possible if a
-                # popup appears!
-                # NO, ACTUALLY NOT: If a outroar'ed pokemon has the same name
-                # as another, that could fail. Therefore the next pkmn
-                # selection might try to send the wrong pkmn out!
-                # Alternate between pressing "2" and "Minus" to get back to the
-                # move selection
-                if fails % 2:
-                    self._pressTwo()
-                else:
-                    self._pressButton(WiimoteButton.MINUS)
-            else:
-                # TODO fix sideways remote
-                button = self.pkmnIndexToButton(index)
+        iterations = 0
+        while self._fGuiPkmnUp and recorded_state == self._getInputState():
+            logger.debug("nextPkmn iteration %s. State: %s", iterations, recorded_state)
+            if iterations < 4 and self._fNeedPkmnInput:
+                # Press appropriate button.
+                # Both silent and real presses may need a few iterations to work.
                 if silent:
-                    self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
-                                          GuiTarget.CONFIRM_PKMN)
-                    self._dolphin.write8(Locations.INPUT_PKMN.value.addr, index)
+                    if is_switch:
+                        self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
+                                              GuiMatchInputExecute.EXECUTE_SWITCH)
+                        self._dolphin.write8(Locations.INPUT_EXECUTE2.value.addr,
+                                              GuiMatchInputExecute.EXECUTE_SWITCH2)
+                        button_index = next_pkmn  # onscreen up == 0, right == 1, etc.
+                    else:  # Targeting. Must be doubles
+                        self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
+                                              GuiMatchInputExecute.EXECUTE_TARGET)
+                        # Silent values don't correspond to the onscreen button values
+                        if self._side == "blue":
+                            button_index = [1,2,4,8][next_pkmn]
+                        else:
+                            button_index = [2,1,8,4][next_pkmn]
+                    self._dolphin.write8(Locations.WHICH_PKMN.value.addr,
+                                         button_index)
+                    logger.debug("> %s (silent, pokemon select)",
+                                self.pkmnSlotToButton(next_pkmn).name)
                 else:
+                    button = self.pkmnSlotToButton(next_pkmn)
                     self._pressButton(button)
-
-            fails += 1
+            elif iterations >= 4:
+                # Selection is taking too long- assume a popup has appeared and
+                # we cannot switch. Should only be possible if we entered the
+                # switch menu from the move select menu (arena trap, etc).
+                if not from_move_select:
+                    logger.error("Incorrectly assumed popup; now stuck in nextPkmn")
+                # Alternate between pressing "2" and "Minus" to get back to the
+                # move selection.
+                if iterations % 2:  # Click away popup.
+                    self._pressTwo()
+                else:  # Click to go back to move select.
+                    self._pressButton(WiimoteButton.MINUS)
+            iterations += 1
+            logger.debug("nextPkmn loop sleeping...")
             self.timer.sleep(20)
-
-        self._fTryingToSwitch = False
-        if switched:
-            self.match.switched("blue" if wasBluesTurn else "red", next_pkmn)
-            # reset fails counter
-            self._failsMoveSelection = 0
+        logger.debug("Exiting nextPkmn. Current state: %s", self._getInputState())
 
     def _getRandomAction(self, moves=True, switch=True):
         actions = []
@@ -786,105 +1275,163 @@ class PBREngine():
             actions += [1, 2, 3, 4, 5, 6]
         return random.choice(actions)
 
-    def _getAction(self, moves=True, switch=True):
-        side = "blue" if self.blues_turn else "red"
-        if side == "blue":
-            cause, self._blueExpectedActionCause = self._blueExpectedActionCause, ActionCause.OTHER
-        else:
-            cause, self._redExpectedActionCause = self._redExpectedActionCause, ActionCause.OTHER
-        while True:
-            # retrieve action
-            if self._failsMoveSelection > 300:
-                # we are stuck in an early-opt-out loop (stalling?)
-                # start picking actions by random
-                obj = None
-                action = self._getRandomAction(moves, switch)
-                logger.info("stuck in loop. selected random action: %s", action)
-            else:
-                action, obj = self._action_callback(side,
-                                                    fails=self._failsMoveSelection,
-                                                    moves=moves, switch=switch,
-                                                    cause=cause)
-            action = str(action).lower()
-            self._actionCallbackObjStore[side] = obj
-            if moves and action in ("a", "b", "c", "d"):
-                move = ord(action.lower()) - ord('a')
-                if self._movesBlocked[move]:
-                    # early opt-out blocked moves like no-PP
-                    logger.info("selected 0PP move. early opt-out")
-                else:
-                    return ("move", move)
-            elif switch and action in ("1", "2", "3", "4", "5", "6"):
-                selection = int(action) - 1
-                options = self.match.get_switch_options("blue" if self.blues_turn else "red")
-                current = self.match.current_blue if self.blues_turn else self.match.current_red
-                if not options:
-                    logger.critical("no switch options for {}, something horribly broke. current out is {}"
-                                    .format("blue" if self.blues_turn else "red", current))
-                    return ("switch", current)  # best chance of recovery is selecting the one currently out
-                if selection not in options:
-                    # early opt-out not available pokemon
-                    logger.info("selected unavailable pokemon. early opt-out")
-                else:
-                    return ("switch", selection)
-            else:
-                raise ActionError("Invalid player action: %r " +
-                                  "with moves: %s and switch: %s",
-                                  action, moves, switch)
-            self._failsMoveSelection += 1
+    def _getAction(self, switch_only):
+        '''Get action from action callback. Returns either of these tuples:
+        ("move", <next_move>, <next_pkmn>), or ("switch", <next_pkmn>).
+        '''
+        # Transform to conventional turn count, indexed at 1.
+        turn = self._turn + 2 - int(bool(switch_only)) - 1
+        side = self._side
+        slot = self._slot
+        # TODO: disallow selecting Pokemon not present: crash risk
+        # `cause` will get ActionCause.OTHER, unless _nextMove() just set it to
+        # ActionCause.REGULAR, or a detected faint set it to ActionCause.FAINT.
+        cause = self._expectedActionCause[side][slot]
+        self._expectedActionCause[side][slot] = ActionCause.OTHER
+
+        # Retrieve actions from the upper layer.
+        primary, target, obj = self._actionCallback(
+            turn=turn,
+            side=side,
+            slot=slot,
+            cause=cause,
+            fails=self._numMoveSelections,
+            switchesAvailable = self.match.switchesAvailable(side),
+            fainted=deepcopy(self.match.areFainted),
+            teams=self.match.teamsLive,
+            slotConvert=self.match.getFrozenSlotConverter(),
+        )
+
+        # TODO: i don't think we want to write anything in this function, because the action callback could sleep too long and the data from it could be bogus or something
+        self._actionCallbackObjStore[self._side][self._slot] = obj
+
+        # Convert actions to int where possible, and validate them.
+        primary = str(primary).lower()
+        if primary in ("a", "b", "c", "d"):  # Chose a move.
+            isMove = True
+            assert not switch_only, ("Move %s was selected, but only switches are valid."
+                                     % primary)
+        else:  # Chose a switch.
+            isMove = False
+            primary = int(primary)
+            assert 0 <= primary <= 5, ("Switch action must be between 0 and 5"
+                                       " inclusive, got %s" % primary)
+        if target is not None:
+            target = int(target)
+            assert -1 <= target <= 2, ("Target action must be between -1 and 2"
+                                       " inclusive, got %d" % target)
+
+        # Determine target, if needed, and return the actions.
+        if isMove:  # Chose a move
+            next_move = ord(primary.lower()) - ord('a')
+            if self._fDoubles:  # Chose a move in Doubles mode.
+                # determine target side index & target slot
+                if target in (1, 2):  # foe team
+                    target_side_index = int(side == "blue")
+                    target_slot = target - 1
+                    opposing_side = "blue" if side == "red" else "red"
+                    # if self.match.areFainted[opposing_side][target_slot]:
+                    #     # Change target to the non-fainted opposing pkmn.
+                    #     # Some later gens do this automatically I think, but PBR doesn't.
+                    #     target_slot = 1 - target_slot
+                else:  # target is in (0, -1). Self team
+                    target_side_index = int(side == "red")
+                    if target == 0:  # self
+                        target_slot = slot
+                    else:  # ally
+                        target_slot = 1 - slot
+                next_pkmn = target_side_index + 2 * target_slot
+            else:  # Chose a move in Singles mode.
+                assert target is None, "Target must be None in Singles, was %r" % target
+                next_pkmn = -1  # Indicates no next pokemon
+            action = ("move", next_move, next_pkmn)
+            logger.debug("transformed action: %s", action)
+            return action
+        else:  # Chose a switch
+            next_pkmn = primary
+            action = ("switch", next_pkmn)
+            logger.debug("transformed action: %s", action)
+            return action
 
     def _nextMove(self):
         '''
         Is called once the move selection screen pops up.
         Triggers the action-callback that prompts the upper layer to
-        decide for a move.
+        decide for a move/switch.
+
+        Sort of a misnomer as it can also select to enter the switch or draw menus.
         '''
+        self._selecting_moves = True
+        recorded_state = self._getInputState()
+        logger.debug("Entered nextMove. State: %s", recorded_state)
+        # The action callback might sleep.  Spawn a worker so self._distinguishGui()
+        # doesn't get delayed as well.
+        gevent.spawn(self._nextMoveWorker, recorded_state).link_exception(_logOnException)
+
+    def _nextMoveWorker(self, recorded_state):
+        # Initialize in-battle state. Runs once per match.
+        if not self._fBattleStateReady:
+            self._fBattleStateReady = True
+            self._initBattleState()
+
+        # Update teams on the first move selection of each turn
+        if self._lastTeamsUpdateTurn != self._turn:
+            logger.debug("Updating teams on 1st move selection of this turn")
+            self._updateLiveTeams()
+            self._lastTeamsUpdateTurn = self._turn
 
         # prevent "Connection with wiimote lost bla bla"
-        self._pressButton(0)  # no button press
+        self._pressButton(WiimoteButton.NONE)  # no button press
 
-        if self._fSetStartingWeather:
-            self._setStartingWeather()
-
-        if self._fMatchCancelled:
-            # quit the match if it was cancelled
-            self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
-                                  GuiTarget.INSTA_GIVE_IN)
+        if self._fMatchCancelled:  # quit the match if it was cancelled
+            self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
+                                  GuiMatchInputExecute.INSTA_GIVE_IN)
+            gevent.sleep(11)  # Adjust timing for consistency with the delay of match.checkWinner
             self._matchOver("draw")
             return
+        self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
+        action = self._getAction(False)  # May sleep
+        if recorded_state != self._getInputState():
+            logger.warning("Aborting nextMove due to input state expiration. "
+                           "Recorded state: %s Current state: %s",
+                           recorded_state, self._getInputState())
+            return
 
-        # If this is the first try, retrieve PP
-        if self._failsMoveSelection == 0:
-            # res = AsyncResult()
-            # self._dolphin.read32(Locations.PP_BLUE.value.addr if self.blues_turn
-            # else Locations.PP_RED.value.addr, res.set)
-            # val = res.get()
-            val = 0xffffffff
-            # TODO the PP addresses change, find the pattern
-            for i in range(4):
-                x = ((val >> 8*(3-i)) & 0xFF) == 0
-                self._movesBlocked[i] = x
+        # Execute the move or switch.
+        self._numMoveSelections += 1
+        recorded_state = self._getInputState()  # Get incremented numMoveSelections
 
-        if self.blues_turn:
-            self._blueExpectedActionCause = ActionCause.REGULAR
-        else:
-            self._redExpectedActionCause = ActionCause.REGULAR
-        switchPossible = sum(self.match.alive_blue if self.blues_turn
-                             else self.match.alive_red) > 1
-        action, index = self._getAction(moves=True, switch=switchPossible)
-        if action == "move":
-            # this hides and locks the gui until a move was inputted.
-            self._dolphin.write32(Locations.GUI_TARGET_MATCH.value.addr,
-                                  GuiTarget.SELECT_MOVE)
-            self._dolphin.write8(Locations.INPUT_MOVE.value.addr, index)
-        elif action == "switch":
-            self.match.next_pkmn = index
-            self._pressTwo()
-        else:
-            # should only be "move" or "switch"
+        # silent = action[0] == "move"  # Only beep when switching.
+        silent = True
+
+        if action[0] == "move":
+            next_move, next_pkmn = action[1], action[2]
+            if silent:
+                logger.debug("> %s (silent)", self.pkmnSlotToButton(next_move).name)
+                # this hides and locks the gui until a move was inputted.
+                self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
+                                      GuiMatchInputExecute.EXECUTE_MOVE)
+                self._dolphin.write8(Locations.INPUT_EXECUTE2.value.addr,
+                                     GuiMatchInputExecute.EXECUTE_MOVE2)
+                self._dolphin.write8(Locations.WHICH_MOVE.value.addr, next_move)
+            else:
+                button = self.pkmnSlotToButton(next_move)
+                self._pressButton(button)
+            if self._fDoubles:
+                self._move_select_followup = (recorded_state, next_pkmn, False)
+            # In doubles, the Pokemon select menu will popup now.
+        elif action[0] == "switch":
+            next_pkmn = action[1]
+            self._move_select_followup = (recorded_state, next_pkmn, True)
+            if silent:
+                logger.debug("> TWO (silent move selection)")
+                self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
+                                      GuiMatchInputExecute.EXECUTE_SWITCH_MENU)
+            else:
+                self._pressTwo()
+        else:  # should only be "move" or "switch"
             assert False
-
-        self._failsMoveSelection += 1
+        logger.debug("Exiting nextMove. Current state: %s", recorded_state)
 
     def _skipIntro(self):
         '''
@@ -906,11 +1453,11 @@ class PBREngine():
         if not self._fBpPage2 and num >= 4:
             self._select(CursorPosBP.BP_NEXT)
             self._fBpPage2 = True
-            self.timer.spawn_later(60, self._select, index)
+            self._selectLater(60, index)
         elif self._fBpPage2 and num < 4:
             self._select(CursorPosBP.BP_PREV)
             self._fBpPage2 = False
-            self.timer.spawn_later(60, self._select, index)
+            self._selectLater(60, index)
         else:
             self._select(index)
 
@@ -918,40 +1465,100 @@ class PBREngine():
     # Below are callbacks for the subscriptions. #
     #   It's really ugly, I know, don't judge.   #
     #   Their job is to know what to do when a   #
-    #     certain gui is open, and when, etc.    #
+    #          certain value changes.            #
     ##############################################
 
-    def _distinguishHp(self, val, side):
-        if val == 0 or self.state != PbrStates.MATCH_RUNNING:
+    def _distinguishTurn(self, val):
+        # See Locations.CURRENT_TURN
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             return
-        current_index = self.match.current_blue if side == "blue" else self.match.current_red
-        self.on_stat_update(type="hp", data={"hp": val, "side": side,
-                                             "monindex": current_index})
+        assert val == self._turn + 1, ("Detected val {}, expected {} (last val + 1)"
+                                       .format(val, self._turn + 1))
+        self._turn += 1
+        self._selecting_moves = False
+        logger.info("New turn detected: %d" % self._turn)
+        self._cleanupAfterTurn()
+
+    def _distinguishSide(self, val):
+        # See Locations.CURRENT_SIDE
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
+            return
+        if not val in (0, 1):
+            raise ValueError("Invalid side detected: %d" % val)
+        self._side = "blue" if val == 0 else "red"
+        logger.debug("New side detected: %s" % self._side)
+        self._cleanupAfterMove()
+
+    def _distinguishSlot(self, val):
+        # See Locations.CURRENT_SLOT
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
+            return
+        if not val in (0, 1):
+            raise ValueError("Invalid side detected: %d" % val)
+        self._slot = val
+        logger.debug("New slot detected: %d" % self._slot)
+        self._cleanupAfterMove()
+
+    def _cleanupAfterTurn(self):
+        # An entire turn (all move selections and their associated pkmn selections)
+        # has completed.
+
+        # Reset these.  The game's move shot clock may hit zero after _nextMove() and
+        # before _nextPkmn(), in which case these must be reverted to correct
+        # values.
+        logger.debug("Resetting move select followup and expected action causes")
+        self._move_select_followup = None
+        self._expectedActionCause = {"blue": [ActionCause.OTHER] * 2,
+                                     "red": [ActionCause.OTHER] * 2}
+        self._cleanupAfterMove()
+
+    def _cleanupAfterMove(self):
+        # A move selection (and its associated pkmn selection if any) has completed.
+        # Cleanup any leftover state (may be needed if the move timed out due to
+        # PBR's move "shot clock".
+        logger.debug("Resetting fails count")
+        self._numMoveSelections = 0  # reset fails counter
+
+    def _distinguishName(self, data, side, slot):
+        if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
+            return
+        assert 0 <= slot and slot <= 1
+        if not self._fDoubles and slot == 1:
+            return  # No second pokemon in singles.
+        name = bytesToString(data)
+        self.match.switched(side, slot, name)
+
+    def _distinguishHp(self, val, side):
+        return
+        # if val == 0 or self.state != EngineStates.MATCH_RUNNING:
+        #     return
+        # self.on_stat_update(type="hp", data={"hp": val, "side": side,
+        #                                      "slot": ???})
 
     def _distinguishStatus(self, val, side):
-        status = {
-            0x00: None,
-            0x08: "psn",
-            0x10: "brn",
-            0x20: "frz",
-            0x40: "par",
-            0x80: "tox"  # badly poisoned
-        }.get(val, "slp")  # slp can be 0x01-0x07
-        current_index = self.match.current_blue if side == "blue" else self.match.current_red
-        if status == "slp":
-            # include rounds remaining on sleep
-            self.on_stat_update(type="status", data={"status": status, "side": side, "rounds": val,
-                                                     "monindex": current_index})
-        else:
-            self.on_stat_update(type="status", data={"status": status, "side": side,
-                                                     "monindex": current_index})
+        # status = {
+        #     0x00: None,
+        #     0x08: "psn",
+        #     0x10: "brn",
+        #     0x20: "frz",
+        #     0x40: "par",
+        #     0x80: "tox"  # badly poisoned
+        # }.get(val, "slp")  # slp can be 0x01-0x07
+        # if status == "slp":
+        #     # include rounds remaining on sleep
+        #     self.on_stat_update(type="status", data={"status": status, "side": side, "rounds": val,
+        #                                              "slot": current_slot})
+        # else:
+        #     self.on_stat_update(type="status", data={"status": status, "side": side,
+        #                                              "slot": current_slot})
+        return
 
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
         # move gui back into place. Don't hide this even with hide_gui set
-        self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+        self.setGuiPositionGroup("MAIN")
         text = bytesToString(data)
         # skip text invalidations
         if text.startswith("##"):
@@ -960,29 +1567,20 @@ class PBREngine():
         # this text gets instantly changed, so change it after it's gone.
         # this number of frames is a wild guess.
         # Longer than "A critical hit! It's super effective!"
-        self.timer.spawn_later(240, self._invalidateEffTexts)
-
-    def _distinguishPkmnMenu(self, val):
-        self._fGuiPkmnUp = False
-        if self.state != PbrStates.MATCH_RUNNING:
-            return
-        # custom value indicating if the pkmn menu is up.
-        # shall be used in _nextPkmn() as the flag for the loop
-        if val == GuiStateMatch.PKMN_2:
-            self._fGuiPkmnUp = True
+        self.timer.spawn_later(240, self._invalidateEffTexts).link_exception(_logOnException)
 
     def _distinguishAttack(self, data):
         # Gets called each time the attack-text
         # (Team XYZ's pkmn used move) changes
 
         # Ignore these data changes when not in a match
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
 
         # 2nd line starts 0x40 bytes later and contains the move name only
         line = bytesToString(data[:0x40]).strip()
         # convert, then remove "!"
-        move = bytesToString(data[0x40:]).strip()[:-1]
+        moveName = bytesToString(data[0x40:]).strip()[:-1]
 
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
@@ -996,23 +1594,22 @@ class PBREngine():
             self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 1 +
                                  2 * match.start(3), 0x73)
             side = match.group(1).lower()
-            self.match.setLastMove(side, move)
+            slot = self.match.getSlotFromIngamename(side, match.group(2))
+            self.match.setLastMove(side, moveName)
             # reset fails counter
-            self._failsMoveSelection = 0
-            if side == "blue":
-                self.on_attack(side="blue",
-                              monindex=self.match.current_blue,
-                              moveindex=self._moveBlueUsed,
-                              movename=move,
-                              obj=self._actionCallbackObjStore["blue"])
-                self._actionCallbackObjStore["blue"] = None
-            else:
-                self.on_attack(side="red",
-                              monindex=self.match.current_red,
-                              moveindex=self._moveRedUsed,
-                              movename=move,
-                              obj=self._actionCallbackObjStore["red"])
-                self._actionCallbackObjStore["red"] = None
+            self._numMoveSelections = 0
+            self.on_attack(side=side,
+                           slot=slot,
+                           moveindex=0,  # FIXME or remove me
+                           movename=moveName,
+                           teams=self.match.teamsCopy(),
+                           obj=self._actionCallbackObjStore[side][slot])
+            self._actionCallbackObjStore[side][slot] = None
+
+            logger.debug("Updating pokeset pp after a move was used (in 1 second)")
+            gevent.spawn_later(1.4, self._updateLiveTeams, ppOnly=True,
+                               readActiveSlots=True, pokesetOnly=(side, slot)).link_exception(_logOnException)
+
 
     def _distinguishInfo(self, data):
         # Gets called each time the text in the infobox (xyz fainted, abc hurt
@@ -1020,17 +1617,16 @@ class PBREngine():
         # interest.
 
         # Ignore these data changes when not in a match
-        if self.state != PbrStates.MATCH_RUNNING:
+        if self.state != EngineStates.MATCH_RUNNING:
             return
 
         string = bytesToString(data)
-        
+
         # skip text invalidation
         if string.startswith("##"):
             return
 
-        # shift gui up a bit to fully see this
-        self.setGuiPosY(DefaultValues["GUI_POS_Y"] + 20.0)
+        self.setGuiPositionGroup("MAIN")
 
         # log the whole thing
         self.on_infobox(text=string)
@@ -1040,11 +1636,9 @@ class PBREngine():
                           string)
         if match:
             side = match.group(1).lower()
+            self.match.getSlotFromIngamename(side, match.group(2))
             self.match.fainted(side, match.group(2))
-            if side == "blue":
-                self._blueExpectedActionCause = ActionCause.FAINT
-            elif side == "red":
-                self._redExpectedActionCause = ActionCause.FAINT
+            self._expectedActionCause[side][self._slot] = ActionCause.FAINT
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
@@ -1053,301 +1647,134 @@ class PBREngine():
         if match:
             side = match.group(1).lower()
             self.match.draggedOut(side, match.group(2))
+            self.match.getSlotFromIngamename(side, match.group(2))
             return
-        
+
         # update the win detection for each (unprocessed) message.
         # e.g. "xyz was buffeted by the sandstorm" takes extra time for
         # the 2nd pokemon to die and therefore needs a timer reset
         self.match.update_winning_checker()
 
-    def _distinguishOrderLock(self, val):
-        # This value becomes 1 if at least 1 pokemon has been selected for
-        # order. for both sides.
-        # Enables the gui to lock the order in. Bring up that gui by pressing 1
-        if val == 1:
-            self._pressOne()
-
-    def _distinguishPlayer(self, val):
-        # this value is 0 or 1, depending on which player is inputting next
-        self.blues_turn = (val == 0)
-        # reset fails counter
-        self._failsMoveSelection = 0
-
-    def _distinguishBpSlots(self):
-        # Decide what to do if we are looking at a battle pass...
-        # Chronologically: clear #2, clear #1, fill #1, fill #2
-        if self.state <= PbrStates.EMPTYING_BP2:
-            # We are still in the state of clearing the 2nd battle pass
-            if self._fClearedBp:
-                # There are no pokemon on this battle pass left
-                # Go back and start emptying battle pass #1
-                self._pressOne()
-                self._setState(PbrStates.EMPTYING_BP1)
-            else:
-                # There are still pokemon on the battle pass. Grab that.
-                # Triggers gui BPS_PKMN_GRABBED
-                self._select(CursorOffsets.BP_SLOTS)
-        elif self.state == PbrStates.EMPTYING_BP1:
-            # There are still old pokemon on blue's battle pass. Grab that.
-            # Triggers gui BPS_PKMN_GRABBED
-            if self._fClearedBp:
-                self._fClearedBp = False
-                self._setState(self.state + 1)
-                self._pressOne()
-            else:
-                self._select(CursorOffsets.BP_SLOTS)
-        elif self.state <= PbrStates.PREPARING_BP2:
-            # We are in the state of preparing the battlepasses
-            if (self.state == PbrStates.PREPARING_BP1 and not self._posBlues)\
-                    or (self.state == PbrStates.PREPARING_BP2 and not
-                        self._posReds):
-                # if the current battle pass has been filled with all pokemon:
-                # enter next state and go back
-                self._setState(self.state + 1)
-                self._pressOne()
-            else:
-                # The old pokemon have been cleared, click on last slot (#6) to
-                # start filling the slots
-                self._select(CursorOffsets.BP_SLOTS + 5)
-
-    def _distinguishBpsSelect(self):
-        self._bp_offset = 0
-        self._fEnteredBp = False
-        if self.state in (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2)\
-                and self._fSetAnnouncer:
-            self._resetAnimSpeed()
-            # wait for game to stabilize. maybe this causes the load fails.
-            gevent.sleep(0.5)
-            self._dolphin.save(self._savefile1 if self.announcer !=
-                               (self.state == PbrStates.CREATING_SAVE1)
-                               else self._savefile2)
-            gevent.sleep(1.0)  # I don't think this caused the saves to go corrupt, but better be save
-            self._setAnimSpeed(self._increasedSpeed)
-            self._fSetAnnouncer = False
-            self._setState(self.state + 1)
-
-        if self.state == PbrStates.EMPTYING_BP2:
-            self._fClearedBp = False
-            self._select_bp(self._prev_avatar_red)
-        elif self.state == PbrStates.EMPTYING_BP1:
-            self._fClearedBp = False
-            self._select_bp(self._prev_avatar_blue)
-        elif self.state == PbrStates.PREPARING_BP1:
-            self._select_bp(self.avatar_blue)
-        elif self.state == PbrStates.PREPARING_BP2:
-            self._prev_avatar_blue = self.avatar_blue
-            self._prev_avatar_red = self.avatar_red
-            self._select_bp(self.avatar_red)
-        else:
-            # done preparing or starting to prepare savestates
-            self._pressOne()
-
     def _distinguishGui(self, gui):
-        # might be None if the guiStateDistinguisher didn't recognize the value
+        # Might be None if the guiStateDistinguisher didn't recognize the value.
         if not gui:
             return
 
-        # TODO do this better somehow?
-        # The script uses self.gui for some comparisons, but if no if-elif-else
-        # picks this gui up, don't trigger a gui change and return to old state
-        # Question: Why can't any gui be picked up safely?
-        # Answer: Some values trigger random guis while in a completely
-        # different state, and those need filtering
-        backup = self.gui  # maybe the gui is faulty, then restore afterwards
-        self.gui = gui
-
-        # BIG switch incoming :(
+        # BIG switch statement incoming :(
         # what to do on each screen
 
-        # MAIN MENU
-        if gui == PbrGuis.MENU_MAIN:
-            if not self._fSetAnnouncer and self.state in\
-                    (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
-                self._select(CursorPosMenu.SAVE)
-            elif self.state < PbrStates.PREPARING_STAGE:
-                self._select(CursorPosMenu.BP)
-            else:
-                self._select(CursorPosMenu.BATTLE)
-                # hack correct stuff as "default"
-                # seems to not work? Not doing this anymore
-                # self._dolphin.write32(Locations.DEFAULT_BATTLE_STYLE.value.addr,
-                # BattleStyles.SINGLE)
-                # self._fSelectedSingleBattle = True
-                # self._dolphin.write32(Locations.DEFAULT_RULESET.value.addr,
-                # Rulesets.RULE_1)
-                # self._fSelectedTppRules = True
-        elif gui == PbrGuis.MENU_BATTLE_TYPE:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._select(2)
-        elif gui == PbrGuis.MENU_BATTLE_PASS:
-            if self.state >= PbrStates.PREPARING_STAGE or \
-                    (not self._fSetAnnouncer and self.state in
-                     (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2)):
-                self._pressOne()
-            else:
-                self._select(1)
-                self._fBpPage2 = False
-            self._setAnimSpeed(self._increasedSpeed)
+        # Assign gui to self.gui as the switch may use self.gui for some comparisons.
+        # If no if-elif picks this gui up, revert self.gui and return without
+        # triggering the on_gui event.
+        # Question: Why can't any gui be picked up safely?
+        # Answer: Some values trigger random guis while in a completely different
+        # state (such as MATCH_POPUP outside of battle). Those guis need rejecting
+        # to avoid disruptions (like a `while self.gui == <some value>` that
+        # shouldn't be disrupted because self.gui got assigned a garbage value).
+        backup = self.gui
+        self.gui = gui
 
-        elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
+        try:
+            if gui == backup:
+                # Expected with some guis, such as RULES_SETTINGS.
+                logger.debug("[Duplicate Gui] %s  (%s)",
+                             PbrGuis(gui).name, EngineStates(self.state).name)
             else:
-                self._select(2)
-        elif gui == PbrGuis.MENU_BATTLE_REMOTES:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._select(1)
-        elif gui == PbrGuis.MENU_SAVE:
-            self._select(1)
-        elif gui == PbrGuis.MENU_SAVE_CONFIRM:
-            self._select(CursorPosMenu.SAVE_CONFIRM + 1)  # don't save
-        elif gui == PbrGuis.MENU_SAVE_CONTINUE:
-            self._select(2)  # no, quit please
-            # slow down because of intro
-        elif gui == PbrGuis.MENU_SAVE_TYP2:
-            # handled with timed event
-            self.timer.spawn_later(60, self._pressTwo)
-            self.timer.spawn_later(120, self._resetAnimSpeed)  # to not get stuck in the demo
-            self.timer.spawn_later(600, self._resetAnimSpeed)  # to not get stuck in the demo
+                logger.debug("[Gui] %s  (%s)", PbrGuis(gui).name, EngineStates(self.state).name)
+        except:  # unrecognized gui, ignore
+            logger.error("Unrecognized gui or state: %s / %s", gui, self.state)
 
         # START MENU
-        elif gui == PbrGuis.START_MENU:
-            if not self._fSetAnnouncer and self.state in\
-                    (PbrStates.CREATING_SAVE1, PbrStates.CREATING_SAVE2):
-                self.timer.spawn_later(10, self._select, 3)  # options
-            else:
-                self.timer.spawn_later(10, self._select, 1)  # colosseum mode
-        elif gui == PbrGuis.START_OPTIONS:
-            if self.announcer != (self.state == PbrStates.CREATING_SAVE1):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 1)
-            elif self.announcer != (self.state == PbrStates.CREATING_SAVE2):
-                self._dolphin.write8(Locations.ANNOUNCER_FLAG.value.addr, 0)
-            self.timer.spawn_later(10, self._pressOne)
-            self._fSetAnnouncer = True
-        elif gui in (PbrGuis.START_OPTIONS_SAVE, PbrGuis.START_MODE,
-                     PbrGuis.START_SAVEFILE, PbrGuis.START_WIIMOTE_INFO):
-            # START_SAVEFILE is not working,
-            # but I am relying on the unstucker anyway...
+        if gui == PbrGuis.START_MENU:
+            self._selectLater(10, 1)  # Select Colosseum Mode
             self._setAnimSpeed(self._increasedSpeed)
-            self.timer.spawn_later(10, self._pressTwo)
+        elif gui == PbrGuis.START_OPTIONS:
+            self._pressLater(10, WiimoteButton.ONE)  # Backtrack
+        elif (self.state < EngineStates.MATCH_RUNNING and
+                gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
+                        PbrGuis.START_MODE, PbrGuis.START_SAVEFILE)):
+            self._pressLater(10, WiimoteButton.TWO)  # Click through all these
+        elif gui == PbrGuis.PRE_MENU_MAIN:
+            # Receptionist bows her head. When she's done bowing the main
+            # menu will pop up- no need to press anything.
+            # Change state to stop stuckpresser's 2 spam, or it might take us into the DS
+            # storage menu.
+            self._setState(EngineStates.ENTERING_BATTLE_MENU)
 
-        # BATTLE PASS MENU
-        if gui == PbrGuis.BPS_SELECT and\
-                self.state < PbrStates.PREPARING_START:
-            # done via cursorevents
-            self.cursor.addEvent(CursorOffsets.BPS, self._distinguishBpsSelect)
-        elif gui == PbrGuis.BPS_SLOTS and\
-                self.state < PbrStates.PREPARING_START:
-            if self.state < PbrStates.CREATING_SAVE2:
-                # accidentially entered BP
-                self._pressOne()
-            elif not self._fEnteredBp:
-                self._distinguishBpSlots()
-        elif gui == PbrGuis.BPS_PKMN_GRABBED:
-            self._select(CursorPosBP.REMOVE)
-        elif gui == PbrGuis.BPS_BOXES and\
-                self.state < PbrStates.PREPARING_START:
-            self._fEnteredBp = True
-            self._fClearedBp = True
-            #if self.state == PbrStates.EMPTYING_BP1:
-            #    self._setState(PbrStates.PREPARING_BP1)
-                # no need to go back to bp selection first, short-circuit
-            if self.state == PbrStates.PREPARING_BP1:
-                self._select(CursorOffsets.BOX + (self._posBlues[0] // 30))
-            elif self.state == PbrStates.PREPARING_BP2:
-                self._select(CursorOffsets.BOX + (self._posReds[0] // 30))
+        # MAIN MENU
+        elif gui == PbrGuis.MENU_MAIN:
+            self._select(CursorPosMenu.BATTLE)  # Select Battle option in main menu
+
+        # BATTLE MENU
+        elif gui == PbrGuis.MENU_BATTLE_TYPE:
+            # Decide whether to wait for a call to new(), or proceed if it the match
+            # has already been received.
+            if self._fWaitForNew:
+                self._setState(EngineStates.WAITING_FOR_NEW)
+                self._dolphin.pause()
             else:
-                self._pressOne()
-                self.cursor.addEvent(CursorOffsets.BP_SLOTS,
-                                     self._distinguishBpSlots)
-        elif gui == PbrGuis.BPS_PKMN and\
-                self.state < PbrStates.PREPARING_START:
-            if self.state == PbrStates.PREPARING_BP1:
-                self._select(CursorOffsets.PKMN + (self._posBlues[0] % 30))
-            else:
-                self._select(CursorOffsets.PKMN + (self._posReds[0] % 30))
-            self.cursor.addEvent(1, self._confirmPkmn)
-        elif gui == PbrGuis.BPS_PKMN_CONFIRM and\
-                self.state < PbrStates.PREPARING_START:
-            # handled with cursorevent, because the model loading has
-            # a delay and therefore breaks the indicator
-            pass
+                self._selectFreeBattle()
+        elif gui == PbrGuis.MENU_BATTLE_PLAYERS:
+            self._select(2)  # Select 2 Players
+        elif gui == PbrGuis.MENU_BATTLE_REMOTES:
+            self._select(1)  # Select One Wiimote
 
         # RULES MENU (stage, settings etc, but not battle pass selection)
-        elif gui == PbrGuis.RULES_STAGE:
-            if self.state < PbrStates.PREPARING_STAGE:
-                self._pressOne()
-            else:
-                self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
-                self._select(CursorOffsets.STAGE)
-                self._setState(PbrStates.PREPARING_START)
-        elif gui == PbrGuis.RULES_SETTINGS:
+        elif gui == PbrGuis.RULES_STAGE:  # Select Colosseum
+            self._dolphin.write32(Locations.COLOSSEUM.value.addr, self.colosseum)
+            self._pressTwo()
+            self._setState(EngineStates.PREPARING_START)
+        elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
-                # cursorevents
                 self.cursor.addEvent(CursorOffsets.RULESETS, self._select,
-                                     False, CursorOffsets.RULESETS+1)
+                                     False, CursorOffsets.RULESETS+1)  # Select the TPP ruleset
                 self.cursor.addEvent(CursorPosMenu.RULES_CONFIRM,
-                                     self._pressTwo)
-                self._select(1)
+                                     self._pressTwo)  # Confirm selection of the TPP ruleset
+                self._select(1)  # Select "Choose a Rule", which will trigger the two events above, in order
                 self._fSelectedTppRules = True
-            elif not self._fSelectedSingleBattle:
-                self._select(2)
+            elif not self._fDoubles and not self._fSelectedSingleBattle:
+                # Default battle style is Doubles
+                self._select(2)  # Select "Choose a Battle Style"
                 self._fSelectedSingleBattle = True
             else:
-                # this is always the case since the default-hacks
-                self._select(3)
-                self._fSelectedSingleBattle = False
-                self._fSelectedTppRules = False
+                self._select(3)  # Confirm the rules and battle style. This enters battle pass selection
+        elif gui == PbrGuis.RULES_RULESETS:  # The main rules menu
+            # Unused, but picked up for logging purposes. Picking up this gui also
+            # prevents the appearance of a duplicate RULES_SETTINGS gui when we go back
+            # to that menu
+            pass
         elif gui == PbrGuis.RULES_BATTLE_STYLE:
-            self._select(1)
-        elif gui == PbrGuis.RULES_BPS_CONFIRM:
-            # twice, just to be sure as I have seen it fail once
-            self._injectPokemon()
-            self._injectPokemon()
-            self._pressTwo()
-            # skip the followup match intro
-            gevent.spawn_later(1, self._skipIntro)
-
-        # BATTLE PASS SELECTION
-        # (chronologically before PbrGuis.RULES_BPS_CONFIRM)
-        # overlaps with previous battle pass menu. Therefore the state checks
-        # TODO improve that, maybe cluster it together?
-        elif gui == PbrGuis.BPSELECT_SELECT and\
-                self.state >= PbrStates.PREPARING_START:
-            self._fBpPage2 = False
-            if self._fBlueSelectedBP:
-                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatar_red)
-                self._fBlueSelectedBP = False
+            if self._fDoubles:
+                self._select(2)  # Accidentally entered menu? Pick Doubles, the default
             else:
-                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True,
-                                     self.avatar_blue)
+                self._select(1)  # Pick Singles
+
+        # P1/P2 BATTLE PASS SELECTION
+        # Verify state is past PREPARING_START, since some of these gui values are also seen under other irrelevant circumstances
+        elif gui == PbrGuis.BPSELECT_SELECT and self.state == EngineStates.PREPARING_START:
+            self._fBpPage2 = False
+            if not self._fBlueSelectedBP:  # Pick blue battle pass
+                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 0)
                 self._fBlueSelectedBP = True
-        elif gui == PbrGuis.BPSELECT_CONFIRM and\
-                self.state >= PbrStates.PREPARING_START:
+            else:  # Pick red battle pass
+                self.cursor.addEvent(CursorOffsets.BPS, self._select_bp, True, 1)
+        elif gui == PbrGuis.BPSELECT_CONFIRM and self.state == EngineStates.PREPARING_START:
+            self._pressTwo()  # Confirm battle pass selection
+        elif gui == PbrGuis.RULES_BPS_CONFIRM and self.state == EngineStates.PREPARING_START:
+            self._injectPokemon()
+            self._injectSettings()
             self._pressTwo()
+            # Start a greenlet that spams 2, to skip the followup match intro.
+            # This takes us to PbrGuis.ORDER_SELECT.
+            gevent.spawn_later(1, self._skipIntro).link_exception(_logOnException)
 
         # PKMN ORDER SELECTION
-        elif gui == PbrGuis.ORDER_SELECT:
-            logger.debug("ORDER_SELECT. startsignal: {}, state: {}"
-                           .format(self.startsignal, self.state))
-
-            if self.startsignal:
-                # start() was called.  Match needs to start, so
-                # initiate order selection.
-                self._initOrderSelection()
-            else:
-                # Wait for start() to initiate order selection.
-                self._setState(PbrStates.WAITING_FOR_START)
-                self._dolphin.pause()
-
-            # TODO fix sideways remote
-
-        elif gui == PbrGuis.ORDER_CONFIRM:
+        elif (gui == PbrGuis.ORDER_SELECT and
+                self.state in (EngineStates.PREPARING_START, EngineStates.SELECTING_ORDER)):
+            self._setState(EngineStates.SELECTING_ORDER)
+            gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
+        # Inject the true match order, then click confirm.
+        elif gui == PbrGuis.ORDER_CONFIRM and self.state == EngineStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
             def orderToInts(order):
                 vals = [0x07]*6
@@ -1356,36 +1783,61 @@ class PBREngine():
                 # y u no explain, past me?
                 return (vals[0] << 24 | vals[1] << 16 | vals[2] << 8 | vals[3],
                         vals[4] << 8 | vals[5])
-            if self._fBlueChoseOrder:
-                self._fBlueChoseOrder = False
-                x1, x2 = orderToInts(self.match.order_red)
-                self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
-                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
-                self._pressTwo()
-                self._initMatch()
-            else:
-                self.match.apply_order()
+            if not self._fBlueChoseOrder:
                 self._fBlueChoseOrder = True
-                x1, x2 = orderToInts(self.match.order_blue)
+                x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["blue"]))))
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
                 self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
                 self._pressTwo()
+            else:
+                x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["red"]))))
+                self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
+                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
+
+                if self._fWaitForStart:  # Wait for a call to start()
+                    self._setState(EngineStates.WAITING_FOR_START)
+                    self._dolphin.pause()
+                else:  # Start the match!
+                    self._matchStart()
+
+        # BATTLE PASS MENU - not used anymore, just backtrack
+        elif gui == PbrGuis.MENU_BATTLE_PASS:
+            self._pressOne()  # Backtrack
+        elif gui == PbrGuis.BPS_SELECT:
+            self._pressOne()
+
+        # SAVE MENU - not used anymore, just backtrack
+        elif gui == PbrGuis.MENU_SAVE:
+            self._pressOne()
+        elif gui == PbrGuis.MENU_SAVE_CONFIRM:
+            self._select(CursorPosMenu.SAVE_CONFIRM + 1)  # Select No- don't save
+        elif gui == PbrGuis.MENU_SAVE_CONTINUE:
+            self._pressTwo()  # Select Continue playing
+        elif gui == PbrGuis.MENU_SAVE_TYP2:
+            # We're going back to the main menu, press 2 and reset speed
+            self._pressLater(60, WiimoteButton.TWO)
+            # to not get stuck in the demo
+            self.timer.spawn_later(120, self._resetAnimSpeed).link_exception(_logOnException)
+            self.timer.spawn_later(600, self._resetAnimSpeed).link_exception(_logOnException)
 
         # GUIS DURING A MATCH, mostly delegating to safeguarded loops and jobs
         elif gui == PbrGuis.MATCH_FADE_IN:
+            if self.state != EngineStates.MATCH_RUNNING:
+                self._crash("Detected early start")
+                return
             # try early: shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPosY(100000.0)
+                self.setGuiPositionGroup("OFFSCREEN")
             else:
-                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+                self.setGuiPositionGroup("MAIN")
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # we can safely assume we are in match state now
-            self._setState(PbrStates.MATCH_RUNNING)
+            self._setState(EngineStates.MATCH_RUNNING)
             # shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPosY(100000.0)
+                self.setGuiPositionGroup("OFFSCREEN")
             else:
-                self.setGuiPosY(DefaultValues["GUI_POS_Y"])
+                self.setGuiPositionGroup("MAIN")
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get
@@ -1397,24 +1849,47 @@ class PBREngine():
             # of move selection
             self._nextMove()
         elif gui == PbrGuis.MATCH_PKMN_SELECT:
-            # start the job that handles the complicated and dangerous process
-            # of pokemon selection
-            if not self._fTryingToSwitch:
-                gevent.spawn(self._nextPkmn)
+            # In switching, fires redundantly after a "can't switch" popup disappears.
+            # In targeting, there are no popups, so redundant fires do not occur.
+
+            # If there is a move select followup, the call is not redundant, because
+            # _nextPkmn() consumes followups immediately.
+            if self._move_select_followup:  # REGULAR ActionCause
+                self._nextPkmn()
+            # Otherwise fire if not redundant. This fires for FAINT / OTHER ActionCause
+            elif (not self._selecting_moves and not self._fLastGuiWasSwitchPopup):
+                self._nextPkmn()
         elif gui == PbrGuis.MATCH_IDLE:
-            pass
-            # just for accepting the gui
-        elif gui == PbrGuis.MATCH_POPUP and\
-                self.state == PbrStates.MATCH_RUNNING:
+            pass  # Accept this gui for possible on_gui event logging.
+        elif gui == PbrGuis.MATCH_POPUP and self.state == EngineStates.MATCH_RUNNING:
+            # This gui only fires on invalid move selection popups.
             self._pressTwo()
 
         else:
-            # This gui was not accepted. Restore the old gui state.
-            # unknown/uncategorized or filtered by state
-            self.gui = backup
-            # Don't trigger the on_gui event
-            return
+            self.gui = backup  # Reject the gui change.
+            try:
+                logger.debug("[Gui Rejected] %s  (%s)",
+                             PbrGuis(gui).name, EngineStates(self.state).name)
+            except:
+                logger.error("Unrecognized gui or state: %s / %s", gui, self.state)
+            return  # Don't trigger the on_gui event.
 
         # Trigger the on_gui event now.
-        # The gui is consideren valid if we reach here.
+        # The gui is considered valid if we reach here.
         self.on_gui(gui=gui)
+
+
+class EngineCrash(Exception):
+    pass
+
+
+def _logOnException(greenlet):
+    try:
+        greenlet.get()
+    except EngineCrash:
+        logger.info("Greenlet crashed deliberately to exit after calling the crash "
+                     "callback", exc_info=True)
+    except DolphinNotConnected:
+        logger.debug("Greenlet crashed because dolphin was not connected", exc_info=True)
+    except Exception:
+        logger.exception("Engine greenlet crashed")

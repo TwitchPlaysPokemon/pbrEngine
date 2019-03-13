@@ -5,7 +5,7 @@ Created on 14.09.2015
 '''
 
 import gevent
-from pbrEngine.states import PbrStates
+from pbrEngine.states import EngineStates
 from pbrEngine.util import EventHook
 from pbrEngine import PBREngine
 
@@ -28,7 +28,7 @@ class Checker(object):
         while self.fails <= 3:
             now = self.pbr.timer.frame
             if self._lastFrame == now and self.pbr.state not in\
-                    (PbrStates.WAITING_FOR_NEW, PbrStates.WAITING_FOR_START):
+                    (EngineStates.WAITING_FOR_NEW, EngineStates.WAITING_FOR_START):
                 self.fails += 1
             else:
                 self._lastFrame = now

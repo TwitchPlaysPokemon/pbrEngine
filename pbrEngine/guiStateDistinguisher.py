@@ -9,10 +9,8 @@ into uniform abstracted PBR states and events.
 '''
 
 from .states import PbrGuis
-from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules,\
-                              GuiStateBpSelection
-from .memorymap.values import GuiStateOrderSelection, GuiStateMatch,\
-                              StatePopupBox
+from .memorymap.values import GuiStateMenu, GuiStateBP, GuiStateRules, GuiStateBpSelection
+from .memorymap.values import GuiStateOrderSelection, GuiStateMatch, StatePopupBox
 from .util import bytesToString
 
 
@@ -47,6 +45,7 @@ class Distinguisher(object):
 
 # Main Menu
 _map_menu = {
+    GuiStateMenu.PRE_MAIN_MENU : PbrGuis.PRE_MENU_MAIN,
     GuiStateMenu.MAIN_MENU     : PbrGuis.MENU_MAIN,
     GuiStateMenu.BATTLE_PASS   : PbrGuis.MENU_BATTLE_PASS,
     GuiStateMenu.BATTLE_TYPE   : PbrGuis.MENU_BATTLE_TYPE,
@@ -72,6 +71,7 @@ _map_bps = {
 _map_rules = {
     GuiStateRules.STAGE_SELECTION: PbrGuis.RULES_STAGE,
     GuiStateRules.OVERVIEW       : PbrGuis.RULES_SETTINGS,
+    GuiStateRules.RULESET        : PbrGuis.RULES_RULESETS,
     GuiStateRules.BATTLE_STYLE   : PbrGuis.RULES_BATTLE_STYLE,
     GuiStateRules.BP_CONFIRM     : PbrGuis.RULES_BPS_CONFIRM,
 }

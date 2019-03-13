@@ -7,6 +7,9 @@ Created on 04.09.2015
 import struct
 import inspect
 import gevent
+import logging
+
+logger = logging.getLogger("pbrEngine")
 
 
 class EventHook(object):
@@ -83,6 +86,48 @@ class EventHook(object):
         return "EventHook(%s)" % self.__kwargs_str()
 
 
+def sanitizeTeamIngamenames(teams):
+    # ensure ingamenames contain valid chars
+    for team in teams:
+        for pkmn in team:
+            pkmn["ingamename"] = sanitizeName(pkmn["ingamename"])
+    # ensure ingamenames are unique
+    existing = set()
+    for team in teams:
+        for pkmn in team:
+            name = pkmn["ingamename"]
+            counter = 2
+            while name in existing:
+                appendix = "-{:d}".format(counter)
+                name = pkmn["ingamename"][:(10-len(appendix))] + appendix
+                counter += 1
+                # shouldn't be possible
+                assert counter < 999, "Failed to give unique ingamename to %s" % pkmn
+            pkmn["ingamename"] = name
+            existing.add(name)
+
+
+def sanitizeName(name):
+    new_name = ""
+    for char in name:
+        new_name += char if isCharValid(char) else "?"
+    return new_name[0:10]
+
+
+def isNameValid(name):
+    return all(isCharValid(char) for char in name)
+
+
+def isCharValid(char):
+    # This is PBR-specific.
+    if char in "\u2640\u2642":
+        return True  # Permit male & female symbols
+    if char in r"[\]^`|<>_{}":
+        return False  # Prevent PBR oddities
+    oval = ord(char)
+    return 32 <= oval and oval <= 126  # Disallow non-printing chars
+
+
 def bytesToString(data):
     '''
     Helper method to turn a list of bytes stripped from PBR's memory
@@ -99,8 +144,9 @@ def bytesToString(data):
         _replacements = {
             "\uffff": "",
             "\ufffe": " ",
-            "\u3328": "\u2642",
-            "\u3329": "\u2640",
+            "\u3328": "\u2642", # ? -> male sign
+            "\u3329": "\u2640", # ? -> female sign
+            "\u201d": "\"",     # right double quotation mark -> regular quotation mark
         }
         for needle, replacement in _replacements.items():
             character = character.replace(needle, replacement)
@@ -137,7 +183,7 @@ def floatToIntRepr(f):
 def intToFloatRepr(i):
     '''
     Converts an int into a float by its 32-bit representation, NOT by value.
-    For example, 1.0 is 0x3f800000 and -0.5 is 0xbf000000.
+    For example, 0x3f800000 is 1.0 and 0xbf000000 is -0.5.
     '''
     return struct.unpack("f", struct.pack("I", i))[0]
 
@@ -156,3 +202,17 @@ def invertSide(side):
     a hassle for api-writer and user. So it's just a string.'''
     return "blue" if side == "red" else ("red" if side == "blue" else "draw")
 
+def killUnlessCurrent(greenlet, greenlet_name):
+    '''Kill a greenlet, unless it is the current greenlet running
+
+    :param greenlet: greenlet to kill
+    :param greenlet_name: Name of greenlet, for logging purposes
+    '''
+    if not greenlet:
+        logger.debug("%s greenlet was not running" % greenlet_name)
+    elif (greenlet == gevent.getcurrent()):
+        logger.debug("%s greenlet is the current one; not killing" % greenlet_name)
+    else:
+        logger.debug("Killing {2}.\nCurrent greenlet: {0}\n{2} greenlet: {1}"
+                     .format(gevent.getcurrent(), greenlet, greenlet_name))
+        greenlet.kill(block=False)

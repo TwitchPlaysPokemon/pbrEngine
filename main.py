@@ -19,15 +19,13 @@ import crashchecker
 import monitor
 
 from pbrEngine import PBREngine
-from pbrEngine.states import PbrStates
+from pbrEngine.states import EngineStates
 from pbrEngine import Colosseums
 from pbrEngine import AvatarsBlue, AvatarsRed
 
 with open("testpkmn.yaml", encoding="utf-8") as f:
     yaml_data = yaml.load_all(f)
     data = [pokecat.instantiate_pokeset(pokecat.populate_pokeset(single_set)) for single_set in yaml_data]
-    for d in data:
-        d["ingamename_cmdsafe"] = d["ingamename"].encode("ascii", "replace").decode()
     # reduce by shinies
     #data = [d for d in data if not d["shiny"]]
     # TODO remove this again, it's debugging stuff
@@ -59,7 +57,7 @@ def countdown(t=20):
         t -= 1
         if t <= 0:
             t = 0
-            pbr.start()
+            pbr.matchStart()
             break
 
 
@@ -70,9 +68,9 @@ def new():
     pkmn = random.sample(data, 6)
     colosseum = random.choice(list(Colosseums))
 
-    pbr.new(colosseum, pkmn[:3], pkmn[3:6],
-            random.choice(list(AvatarsBlue)),
-            random.choice(list(AvatarsRed)))
+    pbr.matchPrepare(colosseum, pkmn[:3], pkmn[3:6],
+                     random.choice(list(AvatarsBlue)),
+                     random.choice(list(AvatarsRed)))
     # pbr.new(colosseum, [data[398]], [data[9], data[10], data[12]])
     # pbr.new(random.randint(0,9),
     #         random.sample([data[201], data[49], data[359]],
@@ -84,13 +82,13 @@ def new():
 
 
 def onState(state):
-    if state == PbrStates.WAITING_FOR_NEW:
+    if state == EngineStates.WAITING_FOR_NEW:
         new()
 
 
 def onAttack(side, monindex, moveindex, movename, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) uses %s." % (mon["ingamename_cmdsafe"], side, movename))
+    display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
 
 def onWin(winner):
@@ -102,12 +100,12 @@ def onWin(winner):
 
 def onDeath(side, monindex):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is down." % (mon["ingamename_cmdsafe"], side))
+    display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
 
 
 def onSwitch(side, monindex, obj):
     mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is sent out." % (mon["ingamename_cmdsafe"], side))
+    display.addEvent("%s (%s) is sent out." % (mon["ingamename"], side))
 
 
 def actionCallback(side, fails, moves, switch, cause):
@@ -159,7 +157,7 @@ def main():
     pbr.on_state += onState
     pbr.on_win += onWin
     pbr.on_attack += onAttack
-    pbr.on_death += onDeath
+    pbr.on_faint += onDeath
     pbr.on_switch += onSwitch
     pbr.connect()
     pbr.on_gui += lambda gui: display.reprint()

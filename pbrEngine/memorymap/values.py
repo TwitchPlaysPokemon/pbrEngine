@@ -12,6 +12,7 @@ from enum import IntEnum
 # buttons. concatenate to 16 bit integer with binary OR
 
 class WiimoteButton(IntEnum):
+    NONE  = 0x0000
     LEFT  = 0x0001
     RIGHT = 0x0002
     DOWN  = 0x0004
@@ -58,19 +59,19 @@ class Colosseums(IntEnum):
 
 
 class FieldEffects(IntEnum):
-    # Weather that can end after some number of turns (ie. everything but fog)
+    # Weather that can end after some number of turn (ie. everything but fog)
     # is indicated by 0x1 for rain, 0x4 for sand, etc.
-    WEATHER_MASK    = 0x000080FF
-    NONE            = 0X00000000
-    RAIN            = 0X00000002    # Unending
-    SAND            = 0X00000008    # Unending
-    SUN             = 0X00000020    # Unending
-    HAIL            = 0X00000080    # Unending
-    FOG             = 0X00008000    # Unending
+    WEATHER_MASK    = 0x80FF
+    NONE            = 0x0000
+    RAIN            = 0x0002    # Unending
+    SAND            = 0x0008    # Unending
+    SUN             = 0x0020    # Unending
+    HAIL            = 0x0080    # Unending
+    FOG             = 0x8000    # Unending
     # Animations never appear for these:
     # UPROAR          = 0X00000700    # Seems to be unending
-    # GRAVITY         = 0X00007000    # 7 turns of gravity. Counts down
-    # TRICK_ROOM      = 0X00070000    # 7 turns of tr. Counts down
+    # GRAVITY         = 0X00007000    # 7 turn of gravity. Counts down
+    # TRICK_ROOM      = 0X00070000    # 7 turn of tr. Counts down
 
 
 class TrainerStyle(IntEnum):
@@ -96,11 +97,6 @@ class TrainerStyle(IntEnum):
     LITTLE_GIRL_C = 0x11
 
 
-class BPStructOffsets(IntEnum):
-    PKMN_BLUE = 0x5AB74
-    PKMN_RED  = 0x5B94C
-
-
 DefaultValues = {
     "GUI_POS_X": intToFloatRepr(0xbe830304),
     "GUI_POS_Y": intToFloatRepr(0x41700000),
@@ -108,6 +104,24 @@ DefaultValues = {
     "SPEED2": 0x40a00000,
     "BLUR1": 0x4b7fffff,
     "BLUR2": 0x47c35000,
+}
+
+GuiPositionGroups = {
+    "PBR_DEFAULT": {  # The game's default values. Currently unused
+        "GUI_POS_X": intToFloatRepr(0xbe830304),  # -0.25
+        "GUI_POS_Y": intToFloatRepr(0x41700000),  # 15
+        "GUI_SIZE" : intToFloatRepr(0x3f880000),  # 1.06
+        "GUI_WIDTH": intToFloatRepr(0x3FAACCCD),  # 1.33
+    },
+    "MAIN": {
+        "GUI_POS_X": intToFloatRepr(0xbec20304),  # -.38
+        "GUI_POS_Y": intToFloatRepr(0xc1e00000),  # -28.0
+        "GUI_SIZE" : intToFloatRepr(0x3f6cd800),  # -0.92
+        "GUI_WIDTH": intToFloatRepr(0x3fa3ccdd),  # 1.28
+    },
+    "OFFSCREEN": {
+        "GUI_POS_Y": 100000.0,
+    }
 }
 
 
@@ -168,17 +182,18 @@ class GuiStateBP(IntEnum):
 
 
 class GuiStateMenu(IntEnum):
-    MAIN_MENU       = 0x2d
-    BATTLE_PASS     = 0x39
-    BATTLE_TYPE     = 0x40
-    BATTLE_PLAYERS  = 0x85
-    BATTLE_REMOTES  = 0x8a
-    BATTLE_RULES    = 0x90 # unfortunately stage selection AND rules
+    PRE_MAIN_MENU   = 0x0133
+    MAIN_MENU       = 0x002d
+    BATTLE_PASS     = 0x0039
+    BATTLE_TYPE     = 0x0040
+    BATTLE_PLAYERS  = 0x0085
+    BATTLE_REMOTES  = 0x008a
+    BATTLE_RULES    = 0x0090 # unfortunately stage selection AND rules
                            # use GuiStateRules for better distinction
-    SAVE            = 0x61
-    SAVE_CONFIRM    = 0x69
-    SAVE_CONTINUE   = 0x26c
-    SAVE_TYP2       = 0x26f # thank you press 2
+    SAVE            = 0x0061
+    SAVE_CONFIRM    = 0x0069
+    SAVE_CONTINUE   = 0x026c
+    SAVE_TYP2       = 0x026f # thank you press 2
 
 
 class GuiStateRules(IntEnum):
@@ -202,14 +217,19 @@ class GuiStateOrderSelection(IntEnum):
     SELECT  = 0x03
     CONFIRM = 0x0e
 
-
 class GuiStateMatch(IntEnum):
+    SWITCH_POPUP = 0x000800fd
+
+    # Values for GUI_STATE_MATCH & 0x00FF0000 >> 16
     FADE_IN = 0x02
     IDLE    = 0x08
     MOVES   = 0x03
     GIVE_IN = 0x0b
     PKMN    = 0x05
-    PKMN_2  = 0xfd # 2nd indicator, actually at different address (2 bytes further)
+
+    # Values for GUI_STATE_MATCH & 0xFF
+    TARGET  = 0xfc
+    SWITCH  = 0xfd
 
 
 class StatePopupBox(IntEnum):
@@ -220,12 +240,43 @@ class StatePopupBox(IntEnum):
 ##########################################
 # can stay unused by using inputs instead.
 
-class GuiTarget(IntEnum):
-    GIVE_IN       = 0x000400ff
-    SELECT_MOVE   = 0x000400fc
-    SWITCH_PKMN   = 0x000400fd
-    CONFIRM_PKMN  = 0x000600fd
-    INSTA_GIVE_IN = 0x000400fe
+class GuiMatchInputExecute(IntEnum):
+    # Written to Locations.INPUT_EXECUTE unless otherwise indicated
+
+    GIVE_IN             = 0x000400ff
+    INSTA_GIVE_IN       = 0x000400fe
+
+    # Execute a silent 2 press that enters switching menu
+    EXECUTE_SWITCH_MENU = 0x000400fd
+
+    # Accompanied by a write of the move value to Locations.WHICH_MOVE.
+    # Accompanied by EXECUTE_MOVE2.
+    EXECUTE_MOVE        = 0x000800fc  # execute a move input
+    EXECUTE_MOVE_HIDE_MENU = 0x000600fc #check this # I don't remember what this is about
+
+    # Accompanied by a write of the pkmn value to Locations.WHICH_PKMN.
+    # Accompanied by EXECTE_SWITCH2.
+    EXECUTE_SWITCH      = 0x000800fd  # execute a pokemon switch input
+
+    # Accompanied by a write of the pkmn value to Locations.WHICH_PKMN
+    EXECUTE_TARGET      = 0x000600fc  # execute a pokemon target input (doubles only)
+
+    # The values below are written to Locations.INPUT_EXECUTE2.
+
+    # Possibly prevents an extremely rare failure where a valid move selection
+    # leaves the HP bars on screen, and causes subsequent button presses to be ignored.
+    EXECUTE_MOVE2 = 0x60  # execute a move input
+
+    # Prevents an invalid switch selection (e.g., arena trap) from causing cause
+    # subsequent button presses to be ignored.
+    EXECUTE_SWITCH2 = 0xA0  # execute a pokemon switch input
+
+    # old values, remove them later
+    # GIVE_IN       = 0x000400ff
+    # EXECUTE_MOVE   = 0x000400fc
+    # SWITCH_PKMN   = 0x000400fd
+    # CONFIRM_PKMN  = 0x000600fd
+    # INSTA_GIVE_IN = 0x000400fe
 
 
 class MoveInput(IntEnum):
@@ -234,3 +285,8 @@ class MoveInput(IntEnum):
     RIGHT = 1 
     LEFT  = 2
     DOWN  = 3
+
+
+class RulesetOffsets(IntEnum):
+    MOVE_TIMER   = 0x9
+    BATTLE_TIMER = 0xB

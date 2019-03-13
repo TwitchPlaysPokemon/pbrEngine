@@ -5,167 +5,181 @@ Created on 22.09.2015
 '''
 
 import logging
+from copy import deepcopy
 
-from ..util import invertSide, swap, EventHook
+from ..util import invertSide, swap, EventHook, sanitizeTeamIngamenames
 
 logger = logging.getLogger("pbrEngine")
-
+dlogger = logging.getLogger("pbrDebug")
 
 class Match(object):
     def __init__(self, timer):
         self._timer = timer
-        self.new([], [])
-
         '''
-        Event of a pokemon dying.
-        arg0: <side> "blue" "red"
-        arg2: <monindex> 0-2, index of the dead pokemon
+        Event of a pokemon fainting.
+        arg0: <side> "blue" or "red"
+        arg2: <slot> team index of the dead pokemon
         '''
-        self.on_death = EventHook(side=str, monindex=int)
+        self.on_faint = EventHook(side=str, slot=int)
         self.on_win = EventHook(winner=str)
-        self.on_switch = EventHook(side=str, monindex=int)
+        self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int)
 
         self._check_greenlet = None
         self._lastMove = ("blue", "")
 
-    def new(self, pkmn_blue, pkmn_red):
-        self.pkmn_blue = pkmn_blue
-        self.pkmn_red = pkmn_red
-        pkmn_both = pkmn_blue+pkmn_red
-        if len(set(p["ingamename"] for p in pkmn_both)) < len(pkmn_both):
-            raise ValueError("Ingamenames of all Pokemon in a match must be unique: %s"
-                             % ", ".join(p["ingamename"] for p in pkmn_both))
-        self.alive_blue = [True for _ in pkmn_blue]
-        self.alive_red = [True for _ in pkmn_red]
-        self.current_blue = 0
-        self.current_red = 0
-        self.next_pkmn = -1
-        # mappings from pkmn# to button#
-        self.map_blue = list(range(len(pkmn_blue)))
-        self.map_red = list(range(len(pkmn_red)))
-        self._orderBlue = list(range(1, 1+len(pkmn_blue)))
-        self._orderRed = list(range(1, 1+len(pkmn_red)))
+    def new(self, teams, fDoubles):
+        self._fDoubles = fDoubles
+        sanitizeTeamIngamenames(teams)
+        pkmn_blue, pkmn_red = teams
 
-    def getCurrentBlue(self):
-        return self.pkmn_blue[self.current_blue]
+        # Switches during gameplay cause the ingame team order to deviate from the
+        # starting team order. The ingame order is what actually determines which button
+        # maps to which Pokemon.
 
-    def getCurrentRed(self):
-        return self.pkmn_red[self.current_red]
+        # These fields keep teams in their ingame order.
+        self.teams = {"blue": list(pkmn_blue), "red": list(pkmn_red)}
+        self.teamsLive = deepcopy(self.teams)
+        self.areFainted = {"blue": [False] * len(pkmn_blue), "red": [False] * len(pkmn_red)}
+
+        # This maps a pkmn's ingame order slot to its starting order slot. Both are
+        # 0-indexed. Ex:
+        # <slot at start of match> = self.slotSOMap[side][<current ingame slot>]
+        self.slotSOMap = {"blue": list(range(len(pkmn_blue))),
+                          "red": list(range(len(pkmn_red)))}
+
+    def teamsCopy(self):
+        return {"blue": list(self.teams["blue"]), "red": list(self.teams["red"])}
+
+    def getFrozenSlotConverter(self):
+        slotSOMap = deepcopy(self.slotSOMap)
+        def frozenSlotConverter(convertTo, slotOrTeamOrTeams, side=None):
+            return self.slotConvert(convertTo, slotOrTeamOrTeams, side, slotSOMap)
+        return frozenSlotConverter
+
+    def slotConvert(self, convertTo, slotOrTeamOrTeams, side=None, slotSOMap=None):
+        convertTo = convertTo.upper()
+        convertTo = ("SO" if convertTo == "STARTING" else
+                     "IGO" if convertTo == "INGAME" else convertTo)
+        slotSOMap = slotSOMap or self.slotSOMap
+        assert convertTo in ("SO", "IGO"), "conversion must be SO or IGO"
+        if isinstance(slotOrTeamOrTeams, dict):
+            if side:
+                raise ValueError("Side may not be specified when value is a dict")
+            teams_in = slotOrTeamOrTeams
+            teams_out = {"blue": [], "red": []}
+            for side in ("blue", "red"):
+                if convertTo == "SO":
+                    teams_out[side] = [teams_in[side][slotSOMap[side].index(slotSO)]
+                                       for slotSO in range(len(teams_in[side]))]
+                else:
+                    teams_out[side] = [teams_in[side][slotSOMap[side][slotIGO]]
+                                       for slotIGO in range(len(teams_in[side]))]
+            return teams_out
+        elif isinstance(slotOrTeamOrTeams, list):
+            team_in = slotOrTeamOrTeams
+            assert side, "Side must be specified when value is a list"
+            if convertTo == "SO":
+                return [team_in[slotSOMap[side].index(slotSO)]
+                        for slotSO in range(len(team_in))]
+            else:
+                return [team_in[slotSOMap[side][slotIGO]]
+                        for slotIGO in range(len(team_in))]
+        elif isinstance(slotOrTeamOrTeams, int):
+            slot = slotOrTeamOrTeams
+            assert side, "Side must be specified when value is an int"
+            if convertTo == "SO":
+                return slotSOMap[side][slot]
+            else:
+                return slotSOMap[side].index(slot)
+        else:
+            raise ValueError("value must be of type int, list, or dict")
 
     def setLastMove(self, side, move):
         self._lastMove = (side, move)
 
-    def _checkOrder(self, order, length):
-        if max(order) != length:
-            raise ValueError("Length of order-list does not match number of " +
-                             "pokemon: %s " % order)
-        if sorted(order) != list(range(1, 1+length)):
-            raise ValueError("Order-list must contain numbers 1-n " +
-                             "(amount of pokemon) only: %s " % order)
-
-    def get_switch_options(self, side):
-        '''Returns 0-based indices of pokemon being available
-        to switch to for that team. Basically alive pokemon minus
-        the current one. No 100% switch success guaranteed on these.
+    def switchesAvailable(self, side):
         '''
-        # get as list of tuples (index, alive)
-        options = self.alive_blue if side == "blue" else self.alive_red
-        options = list(enumerate(options))
-        # filter out current
-        del options[(self.current_blue if side == "blue" else self.current_red)]
-        # get indices of alive pokemon
-        options = [index for index, alive in options if alive]
-        return options
-
-    @property
-    def order_blue(self):
-        return self._orderBlue
-
-    @order_blue.setter
-    def order_blue(self, order):
-        self._checkOrder(order, len(self.pkmn_blue))
-        self._orderBlue = order
-
-    @property
-    def order_red(self):
-        return self._orderRed
-
-    @order_red.setter
-    def order_red(self, order):
-        self._checkOrder(order, len(self.pkmn_red))
-        self._orderRed = order
-
-    def apply_order(self):
-        self.pkmn_blue = [self.pkmn_blue[i-1] for i in self._orderBlue]
-        self.pkmn_red = [self.pkmn_red[i-1] for i in self._orderRed]
+        Returns the ingame slots of the Pokemon available to switch to for this team.
+        Basically fainted pokemon minus the current ones.  Does not include effects of
+        arena trap, etc.
+        '''
+        return [
+            not is_fainted and
+            not slot == 0 and                  # already in battle
+            not (slot == 1 and self._fDoubles) # already in battle
+            for slot, is_fainted in enumerate(self.areFainted[side])
+        ]
 
     def fainted(self, side, pkmn_name):
-        assert side in ("blue", "red")
-        index = self.get_pkmn_index_by_name(side, pkmn_name)
-        if index is None:
-            # uh-oh. just assume the current one faints. might fail in some
-            # extremely rare cases
-            logger.critical("Did not recognize pokemon name: %s", pkmn_name)
-            index = self.current_blue if side == "blue" else self.current_red
-        if side == "blue":
-            self.alive_blue[index] = False
-        else:
-            self.alive_red[index] = False
-        self.on_death(side=side, monindex=index)
+        slot = self.getSlotFromIngamename(side, pkmn_name)
+        if slot is None:
+            logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
+            return
+        elif self.areFainted[side][slot]:
+            logger.error("{} ({} {}) fainted, but was already marked as fainted"
+                         .format(pkmn_name, side, slot))
+            return
+        self.areFainted[side][slot] = True
+        self.on_faint(side=side, slot=slot)
         self.update_winning_checker()
 
     def update_winning_checker(self):
         '''Initiates a delayed win detection.
         Has to be delayed, because there might be followup-deaths.'''
-        if not any(self.alive_blue) or not any(self.alive_red):
+        if all(self.areFainted["blue"]) or all(self.areFainted["red"]):
             # kill already running wincheckers
             if self._check_greenlet and not self._check_greenlet.ready():
                 self._check_greenlet.kill()
             # 11s delay = enough time for swampert (>7s death animation) to die
             self._check_greenlet = self._timer.spawn_later(660, self.checkWinner)
 
-    def switched(self, side, next_pkmn):
-        '''
-        Is called when a pokemon has been switch with another one.
-        Triggers the on_switch event and fixes the switch-mappings
-        '''
-        if side == "blue":
-            swap(self.map_blue, self.current_blue, next_pkmn)
-            self.current_blue = next_pkmn
-            self.on_switch(side=side, monindex=next_pkmn)
-        else:
-            swap(self.map_red, self.current_red, next_pkmn)
-            self.current_red = next_pkmn
-            self.on_switch(side=side, monindex=next_pkmn)
-
-    def get_pkmn_index_by_name(self, side, pkmn_name):
-        # check each pokemon if that is the one
-        for i, v in enumerate(self.pkmn_blue if side == "blue"
-                              else self.pkmn_red):
+    def getSlotFromIngamename(self, side, pkmn_name):
+        # Returns the slot of the pokemon with this name.
+        for i, v in enumerate(self.teams[side]):
             if v["ingamename"] == pkmn_name:
+                # dlogger.info("{}'s {} successfully recognized."
+                #              .format(side, pkmn_name))
                 return i
+        raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
+                         .format(pkmn_name, side, self.teams[side]))
+
+    def switched(self, side, slot_active, pkmn_name):
+        '''
+        A new active Pokemon name was detected, which indicates a switch.
+        The name of the active pokemon at `slot_active` was changed to `pkmn_name`.
+        The new ingame ordering is equal to the old ingame ordering, with exactly
+        one swap applied. Note: In a double KO, trainers select their new slot 0 and sends
+        it out, then do the same for their new slot 1.  So it is still one swap at a time.
+        '''
+        slot_inactive = self.getSlotFromIngamename(side, pkmn_name)
+        if slot_inactive == slot_active:
+            dlogger.error("Detected switch, but active Pokemon are unchanged.")
+            return
+        if self.areFainted[side][slot_inactive]:
+            raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
+                             " into battle. slotSOMap: {}"
+                             .format(side, pkmn_name, slot_active, self.slotSOMap))
+        swap(self.teams[side], slot_inactive, slot_active)
+        swap(self.teamsLive[side], slot_inactive, slot_active)
+        swap(self.slotSOMap[side], slot_inactive, slot_active)
+        swap(self.areFainted[side], slot_inactive, slot_active)
+        # Otherwise both pkmn are fainted, and the fainted list is correct as-is
+        self.on_switch(side=side, slot_active=slot_active, slot_inactive=slot_inactive)
 
     def draggedOut(self, side, pkmn_name):
-        # fix the order-mapping.
-        index = self.get_pkmn_index_by_name(side, pkmn_name)
-        if index is None:
-            # uh-oh, just assume the next one.
-            # will have a 50% chance of failure
-            self.switched(side, self.get_switch_options(side)[0])
-        else:
-            self.switched(side, index)
+        pass
 
     def checkWinner(self):
         '''
+        TODO this will be an issue if we ever slow down below 1x speed. Why aren't we just spawning the match finished check when the quit menu comes up?
         Shall be called about 11 seconds after a fainted textbox appears.
         Must have this delay if the 2nd pokemon died as well and this was a
         KAPOW-death, therefore no draw.
         '''
-        deadBlue = not any(self.alive_blue)
-        deadRed = not any(self.alive_red)
+        deadBlue = all(self.areFainted["blue"])
+        deadRed = all(self.areFainted["red"])
         winner = "draw"
-        if deadBlue and deadRed:
-            # draw? check further
+        if deadBlue and deadRed:  # Possible draw, but check for special cases.
             side, move = self._lastMove
             if move.lower() in ("explosion", "selfdestruct", "self-destruct"):
                 winner = invertSide(side)

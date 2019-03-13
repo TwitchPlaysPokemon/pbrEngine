@@ -4,18 +4,39 @@ Created on 26.09.2015
 @author: Felk
 '''
 
-from enum import IntEnum
+import random
 
 
-# the enum's values are the actual battle pass numbers. They are not random!
+def generateDefaultAvatars():
+    '''pick 2 default avatars for the match'''
+    default_avatars = []
+    for char_style in random.sample(range(1, 7), 2):
+        avatar = {
+            "CHARACTER_STYLE": char_style,
+            "SKIN"      : random.randrange(3),
+            # Muscle man has an extra head option, spiky hair
+            "HEAD"      : random.randint(1, 4) if char_style == 2 else random.randrange(5),
+            "HAIR"      : random.randrange(3),
+            "FACE"      : 0,
+            "TOP"       : random.randrange(5),
+            # Little girl breaks if bottom isn't 0 or 1
+            "BOTTOM"    : 0 if char_style == 6 else random.randrange(5),
+            "SHOES"     : 0,
+            "HANDS"     : 0,
+            "BAG"       : 0,
+            "GLASSES"   : 0,
+            "BADGES"    : 0,
+        }
+        default_avatars.append(avatar)
+    return default_avatars
 
-class AvatarsBlue(IntEnum):
-    BLUE   = 0
-    GREEN  = 2
-    YELLOW = 4
+
+def main():
+    for _ in range(5):
+        print(generateDefaultAvatars())
 
 
-class AvatarsRed(IntEnum):
-    RED   = 1
-    BLACK = 3
-    PINK  = 5
+if __name__ == "__main__":
+    main()
+
+
