@@ -245,7 +245,7 @@ class PBREngine():
         :param reason: Enum member of dolphinWatch.DisconnectReason
         '''
         if reason == DisconnectReason.CONNECTION_NOT_ESTABLISHED:
-            if self._reconnectAttempts <= 3:
+            if self._reconnectAttempts <= 6:
                 self._reconnectAttempts += 1
                 logger.warning("Dolphin connection not established yet. Reconnecting in 3s...")
                 gevent.sleep(3)
@@ -253,7 +253,7 @@ class PBREngine():
             else:
                 self._reconnectAttempts = 0
                 self._connected = False
-                raise DolphinNotConnected("Dolphin connection not established after 5 attempts, giving up")
+                raise DolphinNotConnected("Dolphin connection not established after 6 attempts, giving up")
         else:
             self._reconnectAttempts = 0
             self._connected = False
