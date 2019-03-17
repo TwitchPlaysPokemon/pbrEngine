@@ -6,22 +6,25 @@ Created on 22.09.2015
 import gevent
 import time
 import collections
-
+from dolphinWatch import DolphinNotConnected
 
 class Timer(object):
     def __init__(self):
+        self.connected = False
         self.frame = 0
         self._framePrev = 0
         self._timerPrev = time.clock()
         self.speed_plots = collections.deque([1.0], 20)
 
-    def sleep(self, frames):
+    def sleep(self, frames, raiseIfNotConnected=True):
         '''
         Shall be called as a sleep() function based on emulated time.
         Uses the game's framecount as timesource.
         '''
         finish = self.frame + frames
         while self.frame < finish:
+            if raiseIfNotConnected and not self.connected:
+                raise DolphinNotConnected
             gevent.sleep(0.05)
 
     def sleepThen(self, frames, then, *args):

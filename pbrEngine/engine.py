@@ -19,6 +19,7 @@ from functools import partial
 from enum import Enum
 from contextlib import suppress
 from copy import deepcopy
+from datetime import datetime
 
 from .eps import get_pokemon_from_data
 
@@ -202,12 +203,13 @@ class PBREngine():
         self.state = EngineStates.INIT
         self.colosseum = 0
         self.avatars = {"blue": None, "red": None}
+        self.lastStartTime = datetime.utcnow()
         self.hide_gui = False
         self.gui = PbrGuis.MENU_MAIN  # most recent/last gui, for info
         self._startingWeather = None
         self._inputTimer = 0  # no limit
         self._battleTimer = 0  # no limit
-
+        self._fConnected = False
         self.reset()
 
         gevent.spawn(self._stuckPresser).link_exception(_logOnException)
@@ -250,9 +252,11 @@ class PBREngine():
                 self._dolphin.connect()  # recursion
             else:
                 self._reconnectAttempts = 0
-                raise RuntimeError("Dolphin connection not established after 5 attempts, giving up")
+                self._connected = False
+                raise DolphinNotConnected("Dolphin connection not established after 5 attempts, giving up")
         else:
             self._reconnectAttempts = 0
+            self._connected = False
 
     def stop(self):
         '''
@@ -263,6 +267,15 @@ class PBREngine():
         self._dolphin.disconnect()
         killUnlessCurrent(self._stuckcrasher_start_greenlet, "start stuckcrasher")
         killUnlessCurrent(self._stuckcrasher_prepare_greenlet, "prepare stuckcrasher")
+
+    @property
+    def _connected(self):
+        return self._fConnected
+
+    @_connected.setter
+    def _connected(self, fConnected):
+        self._fConnected = fConnected
+        self.timer.connected = fConnected
 
     def _watcher2(self, data):
         logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
@@ -302,6 +315,7 @@ class PBREngine():
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
+        self._connected = True
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
         self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
@@ -694,7 +708,7 @@ class PBREngine():
         If so, it assumes the last input got lost and repeats that.
         '''
         while True:
-            self.timer.sleep(20)
+            self.timer.sleep(20, raiseIfNotConnected=False)
             if self.state in (EngineStates.MATCH_RUNNING, EngineStates.WAITING_FOR_NEW,
                               EngineStates.WAITING_FOR_START):
                 continue
@@ -1127,6 +1141,7 @@ class PBREngine():
         self.timer.spawn_later(450, self._setupPreBattlePkmn).link_exception(_logOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
+        self.lastStartTime = datetime.utcnow()
 
     def _matchStartDelayed(self):
         # just after the "whoosh" sound, and right before the colosseum becomes visible
@@ -1831,8 +1846,6 @@ class PBREngine():
             else:
                 self.setGuiPositionGroup("MAIN")
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
-            # we can safely assume we are in match state now
-            self._setState(EngineStates.MATCH_RUNNING)
             # shift gui back to normal position
             if self.hide_gui:
                 self.setGuiPositionGroup("OFFSCREEN")
@@ -1887,9 +1900,8 @@ def _logOnException(greenlet):
     try:
         greenlet.get()
     except EngineCrash:
-        logger.info("Greenlet crashed deliberately to exit after calling the crash "
-                     "callback", exc_info=True)
+        logger.info("Greenlet exited after calling the crash callback", exc_info=True)
     except DolphinNotConnected:
-        logger.debug("Greenlet crashed because dolphin was not connected", exc_info=True)
+        logger.debug("Greenlet exited because dolphin was not connected", exc_info=True)
     except Exception:
         logger.exception("Engine greenlet crashed")
