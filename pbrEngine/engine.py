@@ -1234,8 +1234,8 @@ class PBREngine():
         if not from_move_select:
             _, next_pkmn = self._getAction(True)
 
-        # silent = not is_switch  # Only beep when switching.
-        silent = True
+        silent = not is_switch  # Only beep when switching.
+        # silent = False  # True still occasionally causes a softlock for some reason
 
         iterations = 0
         while self._fGuiPkmnUp and recorded_state == self._getInputState():
@@ -1416,8 +1416,8 @@ class PBREngine():
         self._numMoveSelections += 1
         recorded_state = self._getInputState()  # Get incremented numMoveSelections
 
-        # silent = action[0] == "move"  # Only beep when switching.
-        silent = True
+        silent = action[0] == "move"  # Only beep when switching.
+        # silent = True
 
         if action[0] == "move":
             next_move, next_pkmn = action[1], action[2]
