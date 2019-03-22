@@ -21,7 +21,6 @@ import monitor
 from pbrEngine import PBREngine
 from pbrEngine.states import EngineStates
 from pbrEngine import Colosseums
-from pbrEngine import AvatarsBlue, AvatarsRed
 
 with open("testpkmn.yaml", encoding="utf-8") as f:
     yaml_data = yaml.load_all(f)
@@ -51,15 +50,6 @@ with open("testpkmn.yaml", encoding="utf-8") as f:
         #                                   .encode('ascii', 'replace')
         #                                   .decode())
 
-def countdown(t=20):
-    while True:
-        gevent.sleep(1)
-        t -= 1
-        if t <= 0:
-            t = 0
-            pbr.matchStart()
-            break
-
 
 def new():
     global logfile
@@ -68,9 +58,7 @@ def new():
     pkmn = random.sample(data, 6)
     colosseum = random.choice(list(Colosseums))
 
-    pbr.matchPrepare(colosseum, pkmn[:3], pkmn[3:6],
-                     random.choice(list(AvatarsBlue)),
-                     random.choice(list(AvatarsRed)))
+    pbr.matchPrepare([pkmn[:3], pkmn[3:6]], colosseum)
     # pbr.new(colosseum, [data[398]], [data[9], data[10], data[12]])
     # pbr.new(random.randint(0,9),
     #         random.sample([data[201], data[49], data[359]],
@@ -78,16 +66,17 @@ def new():
     #         random.sample([d for d in data if d["position"] not
     #                        in ["201", "49", "359"]],
     #         random.choice([1, 2, 3])))
-    gevent.spawn(countdown)
 
 
 def onState(state):
     if state == EngineStates.WAITING_FOR_NEW:
         new()
+    elif state == EngineStates.WAITING_FOR_START:
+        pbr.matchStart()
 
 
-def onAttack(side, monindex, moveindex, movename, obj):
-    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
+def onAttack(side, slot, moveindex, movename, teams, obj):
+    mon = pbr.match.teams[side][slot]
     display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
 
@@ -98,32 +87,32 @@ def onWin(winner):
         display.addEvent("> The game ended in a draw! <")
 
 
-def onDeath(side, monindex):
-    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
+def onFaint(side, slot, fainted, teams, slotConvert):
+    mon = pbr.match.teams[side][slot]
     display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
 
 
-def onSwitch(side, monindex, obj):
-    mon = (pbr.match.pkmn_blue if side == "blue" else pbr.match.pkmn_red)[monindex]
-    display.addEvent("%s (%s) is sent out." % (mon["ingamename"], side))
+def onSwitch(side, slot_active, slot_inactive, pokeset_sentout, pokeset_recalled, obj):
+    display.addEvent("%s (%s) is sent out." % (pokeset_sentout["ingamename"], side))
 
 
-def actionCallback(side, fails, moves, switch, cause):
+def actionCallback(turn, side, slot, cause, fails, switchesAvailable, fainted, teams, slotConvert):
     display.addEvent("Cause for action request: %s" % (cause.value,))
     options = []
-    if moves:
+    if cause.value == "regular":
         options += ["a"]*4 + ["b"]*3 + ["c"]*2 + ["d"]
-    #if switch:
-    elif switch:  # don't switch if not necessary to speed battles up for testing
-        options += ["1", "2", "3", "4", "5", "6"]
+    else: # don't switch if not necessary to speed battles up for testing
+        for x, slot in enumerate(switchesAvailable):
+            if slot == True:
+                options += [x]
     move = random.choice(options)
-    return (move, move)
+    return (move, None, None)
 
 
 _BASEPATH = "G:/TPP/rc1"
 
 
-def onCrash(pbr):
+def onCrash(reason):
     display.addEvent("Dolphin unresponsive. Restarting...")
     # kill dolphin (caution: windows only solution because wynaut)
     os.system("taskkill /im Dolphin.exe /f")
@@ -144,25 +133,25 @@ def onCrash(pbr):
 
 def main():
     global checker, display, pbr
-    logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+    #logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
     # init the PBR engine and hook everything up
-    pbr = PBREngine(actionCallback)
+    pbr = PBREngine(actionCallback, onCrash)
 
     # command line monitor for displaying states, events etc.
     display = monitor.Monitor(pbr)
 
     # start the crash detection thingy
-    checker = crashchecker.Checker(pbr, onCrash)
+    #checker = crashchecker.Checker(pbr, onCrash)
 
     pbr.on_state += onState
     pbr.on_win += onWin
     pbr.on_attack += onAttack
-    pbr.on_faint += onDeath
+    pbr.on_faint += onFaint
     pbr.on_switch += onSwitch
-    pbr.connect()
+    pbr.start()
     pbr.on_gui += lambda gui: display.reprint()
     pbr.setVolume(20)
-    pbr.setFov(0.7)
+    pbr.matchFov = 0.7
 
     # don't terminate please
     gevent.sleep(100000000000)
