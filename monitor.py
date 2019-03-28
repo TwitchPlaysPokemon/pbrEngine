@@ -41,21 +41,24 @@ class Monitor(object):
         print(" |     State: %36s |" % EngineStates(self.pbr.state).name)
         print(" |       Gui: %36s |" % PbrGuis(self.pbr.gui).name)
         print(" +------------------------+------------------------+")
-        lenBlue = len(self.pbr.match.pkmn_blue)
-        lenRed = len(self.pbr.match.pkmn_red)
-        for i in range(max(lenBlue, lenRed)):
-            blue = self.pbr.match.pkmn_blue[i] if i < lenBlue else None
-            red = self.pbr.match.pkmn_red[i] if i < lenRed else None
-            print(" | %s  %-20s|%20s  %s |" % (
-                ("X" if not self.pbr.match.alive_blue[i]
-                 else (">" if i == self.pbr.match.current_blue
-                       else " ")) if blue else " ",
-                blue["ingamename"] if blue else " ",
-                red["ingamename"] if red else " ",
-                ("X" if not self.pbr.match.alive_red[i]
-                 else ("<" if i == self.pbr.match.current_red
-                       else " ")) if red else " ",
-            ))
+        if hasattr(self.pbr.match, "teams"):
+            pkmn_blue = self.pbr.match.teams["blue"]
+            pkmn_red = self.pbr.match.teams["red"]
+            lenBlue = len(pkmn_blue)
+            lenRed = len(pkmn_red)
+            for i in range(max(lenBlue, lenRed)):
+                blue = pkmn_blue[i] if i < lenBlue else None
+                red = pkmn_red[i] if i < lenRed else None
+                print(" | %s  %-20s|%20s  %s |" % (
+                    ("X" if self.pbr.match.areFainted["blue"][i]
+                    else (">" if i == 0
+                           else " ")) if blue else " ",
+                    self.pbr.match.teams["blue"][i]["ingamename"] if blue else " ",
+                    self.pbr.match.teams["red"][i]["ingamename"] if red else " ",
+                    ("X" if self.pbr.match.areFainted["red"][i]
+                    else ("<" if i == 0
+                           else " ")) if red else " ",
+                ))
         print(" +------------------------+------------------------+")
         print(" | Last events (newest on top):                    |")
         print(" |                                                 |")
