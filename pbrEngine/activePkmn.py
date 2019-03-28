@@ -1,6 +1,7 @@
 import logging
 from time import time
 from functools import partial
+from copy import deepcopy
 import pokecat
 
 from .memorymap.addresses import ActivePkmnOffsets
@@ -112,7 +113,7 @@ class ActivePkmn:
                 # update moves
                 if len(pokeset["moves"]) == moveslot:
                     # try to append the new move
-                    newmove = pokecat.gen4data.get_move(moveid)
+                    newmove = deepcopy(pokecat.gen4data.get_move(moveid))
                     if not newmove:  # doesn't happen afaik
                         logger.error("Pokemon {}-{} has invalid move id of {}"
                                      .format(self.side, self.slot, moveid))
@@ -121,7 +122,7 @@ class ActivePkmn:
                 else:
                     # try to overwrite the old move, if needed
                     if pokeset["moves"][moveslot]["id"] != moveid:
-                        newmove = pokecat.gen4data.get_move(moveid)
+                        newmove = deepcopy(pokecat.gen4data.get_move(moveid))
                         if not newmove:  # doesn't happen afaik
                             logger.error("Pokemon {}-{} has invalid move id of {}"
                                          .format(self.side, self.slot, moveid))
@@ -136,7 +137,7 @@ class ActivePkmn:
             abilityid = self.fields["ABILITY"]
             # try to overwite the old ability, if needed
             if pokeset["ability"]["id"] != abilityid:
-                newability = pokecat.gen4data.get_ability(self.fields["ABILITY"])
+                newability = deepcopy(pokecat.gen4data.get_ability(self.fields["ABILITY"]))
                 if not newability:  # doesn't happen afaik
                     logger.error("Pokemon {}-{} has invalid ability id of {}"
                                  .format(self.side, self.slot, abilityid))
@@ -147,7 +148,7 @@ class ActivePkmn:
             itemid = self.fields["ITEM"]
             # try to overwite the old item, if needed
             if pokeset["item"]["id"] != itemid:
-                newitem = pokecat.gen4data.get_item(self.fields["ITEM"])
+                newitem = deepcopy(pokecat.gen4data.get_item(self.fields["ITEM"]))
                 if not newitem:  # doesn't happen afaik
                     logger.error("Pokemon {}-{} has invalid item id of {}"
                                  .format(self.side, self.slot, itemid))

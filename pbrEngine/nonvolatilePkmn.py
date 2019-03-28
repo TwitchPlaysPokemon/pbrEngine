@@ -2,6 +2,7 @@ import logging
 from time import time
 from functools import partial
 from collections import namedtuple
+from copy import deepcopy
 import pokecat
 
 from .memorymap.addresses import NonvolatilePkmnOffsets
@@ -110,19 +111,19 @@ class NonvolatilePkmn:
                 # update moves
                 if len(pokeset["moves"]) == moveslot:
                     # try to append the new move
-                    newmove = pokecat.gen4data.get_move(moveid)
+                    newmove = deepcopy(pokecat.gen4data.get_move(moveid))
                     if not newmove:  # doesn't happen afaik
                         logger.error("Pokemon {}-{} has invalid move id of {}"
-                                     .format(self.side, self.slot, moveid))
+                                     .format(self.side, self.slotSO, moveid))
                         break
                     pokeset["moves"].append(newmove)
                 else:
                     # try to overwrite the old move, if needed
                     if pokeset["moves"][moveslot]["id"] != moveid:
-                        newmove = pokecat.gen4data.get_move(moveid)
+                        newmove = deepcopy(pokecat.gen4data.get_move(moveid))
                         if not newmove:  # doesn't happen afaik
                             logger.error("Pokemon {}-{} has invalid move id of {}"
-                                         .format(self.side, self.slot, moveid))
+                                         .format(self.side, self.slotSO, moveid))
                             break
                         pokeset["moves"][moveslot] = newmove
                 # update move pp
@@ -134,10 +135,10 @@ class NonvolatilePkmn:
             abilityid = self.fields["ABILITY"]
             # try to overwite the old ability, if needed
             if pokeset["ability"]["id"] != abilityid:
-                newability = pokecat.gen4data.get_ability(self.fields["ABILITY"])
+                newability = deepcopy(pokecat.gen4data.get_ability(self.fields["ABILITY"]))
                 if not newability:  # doesn't happen afaik
                     logger.error("Pokemon {}-{} has invalid ability id of {}"
-                                 .format(self.side, self.slot, abilityid))
+                                 .format(self.side, self.slotSO, abilityid))
                 else:
                     pokeset["ability"] = newability
 
@@ -145,10 +146,10 @@ class NonvolatilePkmn:
             itemid = self.fields["ITEM"]
             # try to overwite the old item, if needed
             if pokeset["item"]["id"] != itemid:
-                newitem = pokecat.gen4data.get_item(self.fields["ITEM"])
+                newitem = deepcopy(pokecat.gen4data.get_item(self.fields["ITEM"]))
                 if not newitem:  # doesn't happen afaik
                     logger.error("Pokemon {}-{} has invalid item id of {}"
-                                 .format(self.side, self.slot, itemid))
+                                 .format(self.side, self.slotSO, itemid))
                 else:
                     pokeset["item"] = newitem
 
