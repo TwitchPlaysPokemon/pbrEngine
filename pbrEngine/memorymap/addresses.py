@@ -159,6 +159,7 @@ class Locations(Enum):
     HP_RED           = Loc(0x478fa2, 2)
 
     FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
+    ANIMATION_STRENGTH = Loc(0x6426b8, 4)  # default 1.0
 
     # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 

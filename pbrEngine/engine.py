@@ -199,6 +199,7 @@ class PBREngine():
         self._matchEmuSpeed = 1.0
         self._matchAnimSpeed = 1.0
         self._matchFieldEffectStrength = 1.0
+        self._matchAnimationStrength = 1.0
 
         self.state = EngineStates.INIT
         self.colosseum = 0
@@ -636,6 +637,25 @@ class PBREngine():
         :param val: animation strength as a float
         '''
         self._dolphin.write32(Locations.FIELD_EFFECT_STRENGTH.value.addr,
+                              floatToIntRepr(val))
+
+    @property
+    def matchAnimationStrength(self):
+        return self._matchAnimationStrength
+
+    @matchAnimationStrength.setter
+    def matchAnimationStrength(self, val=1.0):
+        self._matchAnimationStrength = val
+        if self.state == EngineStates.MATCH_RUNNING:
+            with suppress(DolphinNotConnected):
+                self._setAnimationStrength(val)
+
+    def _setAnimationStrength(self, val=1.0):
+        '''
+        Sets the animation strength of the game's field effects (weather, etc).
+        :param val: animation strength as a float
+        '''
+        self._dolphin.write32(Locations.ANIMATION_STRENGTH.value.addr,
                               floatToIntRepr(val))
 
     def setGuiPositionGroup(self, position_group="MAIN"):
@@ -1151,6 +1171,7 @@ class PBREngine():
         self._setAnimSpeed(self._matchAnimSpeed)
         self._setAnnouncer(self._fMatchAnnouncer)
         self._setFieldEffectStrength(self._matchFieldEffectStrength)
+        self._setAnimationStrength(self._matchAnimationStrength)
 
     def _matchOver(self, winner):
         '''
