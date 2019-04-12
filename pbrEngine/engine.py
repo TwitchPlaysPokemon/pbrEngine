@@ -27,7 +27,7 @@ from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffs
 from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, EngineStates
-from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
+from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
 from .avatars import generateDefaultAvatars
@@ -281,6 +281,8 @@ class PBREngine():
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
         self._connected = True
+        self._dolphin._subscribe(32, NestedLocations.ONSCREEN_TEXT.value.startingAddr,
+                                 self._distinguishOnscreenTextPointer)
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
         self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
@@ -363,6 +365,7 @@ class PBREngine():
         self._fMatchCancelled = False
         self._fDoubles = False
         self._move_select_followup = None
+        self._bpGroupsLoc = None
 
         self.active = {"blue": [], "red": []}
         self.nonvolatileSO = {"blue": [], "red": []}
@@ -455,7 +458,7 @@ class PBREngine():
         self._setState(EngineStates.PREPARING_STAGE)
         self._select(2)  # Select Free Battle
 
-    def matchStart(self):
+    def matchStart(self, avatars=None):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason
@@ -468,6 +471,9 @@ class PBREngine():
         if self.state > EngineStates.WAITING_FOR_START:
             self._crash("Early match start")
             return
+        if not avatars:
+            avatars = generateDefaultAvatars()
+        self.avatars = avatars
         if self.state == EngineStates.WAITING_FOR_START:
             # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
@@ -801,12 +807,13 @@ class PBREngine():
 
 
     def _injectPokemon(self):
-        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        self._bpGroupsLoc = self._dolphinIO.readNestedAddr(
+            NestedLocations.LOADED_BPASSES_GROUPS)
         writes = []
         for side_offset, data in (
                 (LoadedBPOffsets.BP_BLUE.value.addr, self.match.teams["blue"]),
                 (LoadedBPOffsets.BP_RED.value.addr, self.match.teams["red"])):
-            pkmnLoc = (bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
+            pkmnLoc = (self._bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
                        side_offset + LoadedBPOffsets.PKMN.value.addr)
             for poke_i, pkmn_dict in enumerate(data):
                 pokemon = get_pokemon_from_data(pkmn_dict)
@@ -821,16 +828,13 @@ class PBREngine():
         self.timer.sleep(20)
 
     def _injectAvatars(self):
-        avatars = generateDefaultAvatars()
-        self.avatars = {"blue": avatars[0], "red": avatars[1]}
-        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
         writes = []
         for side_offset, avatar in (
                 (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
                 (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
-            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
+            avatarLoc = self._bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
             logger.debug("avatar loc: {:0X}".format(avatarLoc))
-            for optionName, optionVal in avatar.items():
+            for optionName, optionVal in avatar['APPEARANCE'].items():
                 optionLoc = LoadedBPOffsets[optionName].value
                 logger.debug("Writing option {}: {:0X} <- {}"
                              .format(optionName, avatarLoc + optionLoc.addr, optionVal))
@@ -1418,8 +1422,42 @@ class PBREngine():
     #          certain value changes.            #
     ##############################################
 
+    def _distinguishOnscreenTextPointer(self, addr):
+        if self.state == EngineStates.MATCH_RUNNING:
+            logger.debug("Onscreen text addr: {:0X}".format(addr))
+            if addr < 0x90000000:
+                return  # irrelevant data
+            offset = addr - self._bpGroupsLoc
+            red_team_offset = LoadedBPOffsets.BP_RED.value.addr
+            if offset > red_team_offset:
+                offset -= red_team_offset
+                side = "red"
+            else:
+                side = "blue"
+            logger.debug("Found offset: {:0X}, {}".format(offset, side))
+            for _id, text in self.avatars[side]["CATCHPHRASES"].items():
+                if offset == LoadedBPOffsets[_id].value.addr:
+                    self._injectCatchphrase(addr, text, side, LoadedBPOffsets[_id].name)
+                    if offset == LoadedBPOffsets.FIRST_SENT_OUT.value.addr:
+                        # split-screen catcphrases. addr will only point to the red
+                        # catchphrase, but blue catchphrase needs to be injected too.
+                        self._injectCatchphrase(
+                            addr - red_team_offset,
+                            self.avatars["blue"]["CATCHPHRASES"]["FIRST_SENT_OUT"],
+                            "blue",
+                            "FIRST_SENT_OUT"
+                        )
+
+    def _injectCatchphrase(self, addr, text, side, catchphrase_id):
+        # inject catchphrase
+        bytes = stringToBytes(text)
+        writes = [(8, addr + i, byte) for i, byte in enumerate(bytes)]
+        logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
+                     .format(side, catchphrase_id, addr, text, writes))
+        self._dolphinIO.writeMulti(writes)
+
     def _distinguishWin(self, value):
-        logger.error("Win result: {:0X}".format(value))
+        logger.debug("Win result addr: {:0X}".format(value))
         if self.state != EngineStates.MATCH_RUNNING:
             return
         if value == 0:

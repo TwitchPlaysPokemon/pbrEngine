@@ -210,6 +210,8 @@ class NestedLocations(Enum):
     PRE_BATTLE_BLUE    = NestedLoc(0x6405f4, 0xA4, [0x4, 0x4, 0x0])
     PRE_BATTLE_RED     = NestedLoc(0x6405f4, 0xA4, [0x4, 0x8, 0x0])
 
+    # Points to move names in "Team blue's <> used <>", and also to onscreen catchphrases.
+    ONSCREEN_TEXT      = NestedLoc(0x487770, 1, [0])
 
 class BattleSettingsOffsets(Enum):
     RULESET         = Loc(0x04, 1)
@@ -272,7 +274,7 @@ class LoadedBPOffsets(Enum):
     # Below: offsets from the start of NestedLocations.LOADED_BPASSES_GROUPS
     ########
     SETTINGS            = Loc(-0x450, 4)
-    GROUP1              = Loc(0x0, 4)         # Only this data determines avatars for the battle.
+    GROUP1              = Loc(0x0, 4)         # Only this data determines avatars attributes for the battle.
     GROUP2              = Loc(0x1bb0, 4)      # Only this data determines pkmn for the battle.
     GROUP3              = Loc(0x1bb0 * 2, 4)  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".
 
@@ -312,11 +314,11 @@ class LoadedBPOffsets(Enum):
     # is represented as FFFF 0015.
     GREETING            = Loc(0X28, 48)  # 24 chars
     # 0000 FFFF  <- bytes in between GREETING and POKEMON_SENT_OUT
-    POKEMON_SENT_OUT    = Loc(0x5c, 52)  # 12 chars, newline, 12 chars (a newline is FFFF FFFE)
+    FIRST_SENT_OUT      = Loc(0x5c, 52)  # 12 chars, newline, 12 chars (a newline is FFFF FFFE)
     # 0000 0000  <- similarly 
-    POKEMON_SHIFT1      = Loc(0x94, 48)  # 24 chars
+    POKEMON_RECALLED    = Loc(0x94, 48)  # 24 chars
     # 0000 0000
-    POKEMON_SHIFT2      = Loc(0xc8, 48)  # 24 chars
+    POKEMON_SENT_OUT    = Loc(0xc8, 48)  # 24 chars
     # 0000 FFFF
     WIN                 = Loc(0xfc, 52)  # 24 chars, newline, 24 chars
     # 0000 0000

@@ -162,8 +162,14 @@ def stringToBytes(string):
     data = []
     for c in string:
         if c == "\n":
-            # this is a line break. I do not know why.
+            # this is a line break, which is similar to line breaks in https://bulbapedia.bulbagarden.net/wiki/Character_encoding_in_Generation_III
             data += [0xff, 0xff, 0xff, 0xfe]
+        # `<>` are illegal ingamename characters, but we use them in
+        # catchphrases as a placeholder for the Pokemon name.
+        elif c == "<":
+            data += [0xff, 0xff]
+        elif c == ">":
+            data += [0x00, 0x15]
         else:
             # add padding. each character has 2 bytes
             data += [0x00, ord(c)]
