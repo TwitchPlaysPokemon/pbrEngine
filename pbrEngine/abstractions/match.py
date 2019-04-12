@@ -48,7 +48,7 @@ class Match(object):
                           "red": list(range(len(pkmn_red)))}
 
     def teamsCopy(self):
-        return {"blue": list(self.teams["blue"]), "red": list(self.teams["red"])}
+        return {"blue": list(self.teamsLive["blue"]), "red": list(self.teamsLive["red"])}
 
     def getFrozenSlotConverter(self):
         slotSOMap = deepcopy(self.slotSOMap)

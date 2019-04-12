@@ -167,7 +167,7 @@ class PBREngine():
         '''
         self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
                                    pokeset_sentout=dict, pokeset_recalled=dict,
-                                   obj=object)
+                                   obj=object, teams=dict, slotConvert=callable)
         '''
         Event of information text appearing in one of those black boxes.
         Also includes fly-by texts (It's super/not very effective!, A critical hit!)
@@ -391,6 +391,7 @@ class PBREngine():
         self._fLastGuiWasSwitchPopup = False
         self._fNeedPkmnInput = False
         self._fGuiPkmnUp = False
+        self._gui_group = GuiPositionGroups.MAIN
 
         self._selecting_moves = True
         self._next_pkmn = -1
@@ -431,7 +432,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -463,6 +464,7 @@ class PBREngine():
         self.reset()
         self.colosseum = colosseum
         self._fDoubles = fDoubles
+        self._gui_group = gui_group
         self._posBlues = list(range(0, 1))
         self._posReds = list(range(1, 3))
         self.match.new(teams, fDoubles)
@@ -658,16 +660,16 @@ class PBREngine():
         self._dolphin.write32(Locations.ANIMATION_STRENGTH.value.addr,
                               floatToIntRepr(val))
 
-    def setGuiPositionGroup(self, position_group="MAIN"):
+    def setGuiPositionGroup(self, position_group=GuiPositionGroups.MAIN):
         '''
         Sets the Gui's x-coordinate, y-coordinate, size, and width to values specified
         in a position group.
-        :param position_group: name of the desired group 
+        :param position_group: name of the desired group
         '''
-        for pos_name, pos_val in GuiPositionGroups[position_group].items():
+        for pos_name, pos_val in position_group.value.items():
             self._dolphin.write32(getattr(Locations, pos_name).value.addr,
                                   floatToIntRepr(pos_val))
-        
+
 
     #######################################################
     #             Below are helper functions.             #
@@ -704,13 +706,15 @@ class PBREngine():
                        pokeset_sentout=self.match.teams[side][slot_active],
                        pokeset_recalled=self.match.teams[side][slot_inactive],
                        obj=self._actionCallbackObjStore[side][slot_active],
+                       teams=self.match.teamsCopy(),
+                       slotConvert=self.match.getFrozenSlotConverter(),
                        )
         self._actionCallbackObjStore[side][slot_active] = None
 
     def _match_faint(self, side, slot):
         self.match.teamsLive[side][slot]["curr_hp"] = 0
         self.on_teams_update(
-            teams=self.match.teamsLive,
+            teams=self.match.teamsCopy(),
             slotConvert=self.match.getFrozenSlotConverter(),
         )
         self.on_faint(
@@ -1031,7 +1035,7 @@ class PBREngine():
                          pokesetOnly=None):
         logger.debug("Updating live teams. ppOnly: %s readActiveSlots: %s pokesetOnly: %s" %
                        (ppOnly, readActiveSlots, pokesetOnly))
-        teams = self.match.teamsLive
+        teams = self.match.teamsCopy()
         slotConvert = self.match.getFrozenSlotConverter()
 
         # I don't know if this is necessary
@@ -1241,9 +1245,9 @@ class PBREngine():
 
         # shift gui back to normal position
         if self.hide_gui:
-            self.setGuiPositionGroup("OFFSCREEN")
+            self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
         else:
-            self.setGuiPositionGroup("MAIN")
+            self.setGuiPositionGroup(self._gui_group)
 
         # The action callback might sleep.  Spawn a worker so self._distinguishGui()
         # doesn't get delayed as well.
@@ -1334,7 +1338,7 @@ class PBREngine():
             fails=self._numMoveSelections,
             switchesAvailable = self.match.switchesAvailable(side),
             fainted=deepcopy(self.match.areFainted),
-            teams=self.match.teamsLive,
+            teams=self.match.teamsCopy(),
             slotConvert=self.match.getFrozenSlotConverter(),
         )
 
@@ -1594,7 +1598,7 @@ class PBREngine():
         if self.state != EngineStates.MATCH_RUNNING:
             return
         # move gui back into place. Don't hide this even with hide_gui set
-        self.setGuiPositionGroup("MAIN")
+        self.setGuiPositionGroup(self._gui_group)
         text = bytesToString(data)
         # skip text invalidations
         if text.startswith("##"):
@@ -1662,7 +1666,7 @@ class PBREngine():
         if string.startswith("##"):
             return
 
-        self.setGuiPositionGroup("MAIN")
+        self.setGuiPositionGroup(self._gui_group)
 
         # log the whole thing
         self.on_infobox(text=string)
@@ -1863,15 +1867,15 @@ class PBREngine():
                 return
             # try early: shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPositionGroup("OFFSCREEN")
+                self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
             else:
-                self.setGuiPositionGroup("MAIN")
+                self.setGuiPositionGroup(self._gui_group)
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPositionGroup("OFFSCREEN")
+                self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
             else:
-                self.setGuiPositionGroup("MAIN")
+                self.setGuiPositionGroup(self._gui_group)
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get
