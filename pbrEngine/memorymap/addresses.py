@@ -189,6 +189,15 @@ class NestedLocations(Enum):
     ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])
     ACTIVE_PKMN_SLOTS  = NestedLoc(0x6405C0, 192, [0x30, 0x219C])
 
+    # 00: match ongoing
+    # 01: blue win
+    # 02: red win
+    # 03: draw
+    # 80: draw (both sides forfeited)
+    # c1: red forfeited (injecting this doesn't work- pbr just ignores it)
+    # c3: blue forfeited (injecting this doesn't work- pbr just ignores it)
+    WIN_RESULT         = NestedLoc(0x6405C0, 1, [0x23e4])
+
     # Fixed-order non-volitile pkmn data.
     # Non-volatile means this data does not contain any bytes for volatile conditions like
     # confuse, transform effects, mimic effects, etc.

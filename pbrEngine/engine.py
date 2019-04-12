@@ -115,7 +115,6 @@ class PBREngine():
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
-        self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
         self.match.on_faint += self._match_faint
         # event callbacks
@@ -278,41 +277,6 @@ class PBREngine():
         self._fConnected = fConnected
         self.timer.connected = fConnected
 
-    def _watcher2(self, data):
-        logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
-    def _watcher3(self, data):
-        logger.debug("{}: {:02x}".format(Locations.WHICH_PKMN.name, data))
-
-    def _distinguishMatch(self, data):
-        logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
-        prevGuiStateMatch = self._guiStateMatch
-        gui_type = data >> 16 & 0xff
-        pkmn_input_type = data & 0xff
-
-        if self.state == EngineStates.MATCH_RUNNING:
-            # True if in the pkmn select menu, and a pkmn input needs to be made
-            # (i.e., there are no popups, and a pkmn input has not successfully gone
-            # through yet).
-            self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
-
-            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
-                                            GuiStateMatch.SWITCH_POPUP)
-
-            # True when the pkmn menu pops up, and remains true until it is gone.
-            # Remains true through any "can't switch" popups.
-            self._fGuiPkmnUp = pkmn_input_type in (GuiStateMatch.TARGET,
-                                                   GuiStateMatch.SWITCH)
-        else:
-            self._fNeedPkmnInput = False
-            self._fLastGuiWasSwitchPopup = False
-            self._fGuiPkmnUp = False
-
-        self._guiStateMatch = data
-
-        if prevGuiStateMatch >> 16 & 0xff != gui_type:
-            # If not a duplicate, run self._distinguishGui() with the gui.
-            self._distinguisher.distinguishMatch(gui_type)
-
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
@@ -357,13 +321,12 @@ class PBREngine():
         self._subscribe(Locations.POPUP_BOX.value,
                         self._distinguisher.distinguishPopup)
 
-        self._subscribe(Locations.WHICH_MOVE.value, self._watcher2)
-        self._subscribe(Locations.WHICH_PKMN.value, self._watcher3)
+        self._subscribe(Locations.WHICH_MOVE.value, self._distinguishWhichMove)
+        self._subscribe(Locations.WHICH_PKMN.value, self._distinguishWhichPkmn)
 
         # stuff processed by abstractions
         self._subscribe(Locations.CURSOR_POS.value, self.cursor.updateCursorPos)
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
-        # ##
 
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
         self._setState(EngineStates.INIT)
@@ -803,73 +766,17 @@ class PBREngine():
         '''
         Once the in-battle structures are ready, read/write weather and battle pkmn data
         '''
+        self._setupWinResult()
         if self._startingWeather:
             self._setStartingWeather()
         self._setupActivePkmn()
         self._setupNonvolatilePkmn()
 
-    def _tempCallback(self, type, side, slot, name, val):
+    def _livePkmnCallback(self, type, side, slot, name, val):
         if self.state != EngineStates.MATCH_RUNNING:
             return
         assert type in ("active", "nonvolatile"), "Invalid type: %s" % type
         logger.debug("[{}] {} {}: {} is now {:0X}".format(type, side, slot, name, val))
-
-    def checkNestedLocs(self):  # TODO move elsewhere, this is just debugging code
-        while True:
-            self.timer.sleep(20)
-            fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
-            if fieldEffectsLoc:
-                fieldEffects = self._dolphinIO.read32(fieldEffectsLoc)
-                logger.info("Field effects at {:08X} has value {:08X}"
-                            .format(fieldEffectsLoc, fieldEffects))
-
-            ibBlueLoc = self._dolphinIO.readNestedAddr(NestedLocations.IB_BLUE)
-            if ibBlueLoc:
-                ibBlue = self._dolphinIO.read16(ibBlueLoc)
-                logger.info("Blue species at {:08X} has value {:08X}"
-                            .format(ibBlueLoc, ibBlue))
-
-    def _readTest(self):
-        '''Test many reads of '''
-        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
-        logger.debug("preloc: {:0X}".format(preBattleLoc))
-        expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
-        while True:
-            logger.warning("Reading HP many times")
-            for i in range(20000):
-                hp = self._dolphinIO.read16(preBattleLoc +
-                                            NonvolatilePkmnOffsets.CURR_HP.value.addr,
-                                            numAttempts=2)
-                if hp != expectedHP:
-                    logger.error("HP was %s", hp)
-                if i % 500 == 0:
-                    logger.info("(read %d so far)", i)
-                    # prevent "Connection with wiimote lost bla bla"
-                    self._pressButton(WiimoteButton.NONE)  # no button press
-            logger.warning("Done reading, sleeping for a bit")
-            gevent.sleep(5)
-
-    def _writeTest(self):
-        '''Test many reads of '''
-        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
-        # TODO
-        # if not preBattleLoc:
-        #     return
-        # logger.debug("preloc: {:0X}".format(preBattleLoc))
-        # expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
-        # while True:
-        #     logger.warning("Reading HP many times")
-        #     for i in range(20000):
-        #         hp = self._dolphinIO.read16(preBattleLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
-        #                                     numAttempts=2)
-        #         if hp != expectedHP:
-        #             logger.error("HP was {}".format(hp))
-        #         if i % 500 == 0:
-        #             logger.info("(read %d so far)" % i)
-        #             # prevent "Connection with wiimote lost bla bla"
-        #             self._pressButton(WiimoteButton.NONE)  # no button press
-        #     logger.warning("Done reading, sleeping for a bit")
-        #     gevent.sleep(5)
 
     def _injectSettings(self):
         rulesetLoc = self._dolphinIO.readNestedAddr(NestedLocations.RULESET)
@@ -974,6 +881,10 @@ class PBREngine():
                 #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
                 #     0x9)
 
+    def _setupWinResult(self):
+        self._win_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
+        logger.info("Win result address: {:0X}".format(self._win_addr))
+        self._dolphin._subscribe(8, self._win_addr, self._distinguishWin)
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -1006,7 +917,7 @@ class PBREngine():
             if slot == 1 and not self._fDoubles:
                 continue
             for side in ("blue", "red"):
-                debugCallback = partial(self._tempCallback, "active", side, slot)
+                debugCallback = partial(self._livePkmnCallback, "active", side, slot)
                 # PBR forces doubles battles to start with >=2 mons per side.
                 logger.info("Setting up active pkmn: side %s, slot %d", side, slot)
                 active = ActivePkmn(side, slot, activeLoc + offset,
@@ -1022,7 +933,7 @@ class PBREngine():
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_RED))):
             for slotSO, pokeset in enumerate(self.match.teams[side]):
                 logger.info("Setting up nonvolatile pkmn: side %s, slot %d", side, slotSO)
-                debugCallback = partial(self._tempCallback, "nonvolatile", side, slotSO)
+                debugCallback = partial(self._livePkmnCallback, "nonvolatile", side, slotSO)
                 nonvolatile = NonvolatilePkmn(
                     side, slotSO, nonvolatileLoc +
                                   slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length,
@@ -1208,6 +1119,7 @@ class PBREngine():
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
         # Unsubscribe from memory addresses that change from match to match
+        self._dolphin._unSubscribe(self._win_addr)
         for side in ("blue", "red"):
             for active in list(self.active[side]):
                     active.unsubscribe()
@@ -1424,10 +1336,8 @@ class PBREngine():
         self._pressButton(WiimoteButton.NONE)  # no button press
 
         if self._fMatchCancelled:  # quit the match if it was cancelled
-            self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
-                                  GuiMatchInputExecute.INSTA_GIVE_IN)
-            gevent.sleep(11)  # Adjust timing for consistency with the delay of match.checkWinner
-            self._matchOver("draw")
+            win_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
+            self._dolphinIO.write(8, win_addr, 0x80)
             return
         self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
         action = self._getAction(False)  # May sleep
@@ -1507,6 +1417,58 @@ class PBREngine():
     #   Their job is to know what to do when a   #
     #          certain value changes.            #
     ##############################################
+
+    def _distinguishWin(self, value):
+        logger.error("Win result: {:0X}".format(value))
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if value == 0:
+            return  # Expected to read 0 initially
+        gevent.sleep(11)
+        if value in (0x80, 3, 0xc1, 0xc3):
+            self._matchOver("draw")
+        elif value == 1:
+            self._matchOver("blue")
+        elif value == 2:
+            self._matchOver("red")
+        else:
+            self._crash(reason="Unrecognized win result value: {:0X}".format(value))
+
+    def _distinguishWhichMove(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
+
+    def _distinguishWhichPkmn(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_PKMN.name, data))
+
+    def _distinguishMatch(self, data):
+        logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
+        prevGuiStateMatch = self._guiStateMatch
+        gui_type = data >> 16 & 0xff
+        pkmn_input_type = data & 0xff
+
+        if self.state == EngineStates.MATCH_RUNNING:
+            # True if in the pkmn select menu, and a pkmn input needs to be made
+            # (i.e., there are no popups, and a pkmn input has not successfully gone
+            # through yet).
+            self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
+
+            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
+                                            GuiStateMatch.SWITCH_POPUP)
+
+            # True when the pkmn menu pops up, and remains true until it is gone.
+            # Remains true through any "can't switch" popups.
+            self._fGuiPkmnUp = pkmn_input_type in (GuiStateMatch.TARGET,
+                                                   GuiStateMatch.SWITCH)
+        else:
+            self._fNeedPkmnInput = False
+            self._fLastGuiWasSwitchPopup = False
+            self._fGuiPkmnUp = False
+
+        self._guiStateMatch = data
+
+        if prevGuiStateMatch >> 16 & 0xff != gui_type:
+            # If not a duplicate, run self._distinguishGui() with the gui.
+            self._distinguisher.distinguishMatch(gui_type)
 
     def _distinguishTurn(self, val):
         # See Locations.CURRENT_TURN
@@ -1687,13 +1649,7 @@ class PBREngine():
         if match:
             side = match.group(1).lower()
             self.match.draggedOut(side, match.group(2))
-            self.match.getSlotFromIngamename(side, match.group(2))
             return
-
-        # update the win detection for each (unprocessed) message.
-        # e.g. "xyz was buffeted by the sandstorm" takes extra time for
-        # the 2nd pokemon to die and therefore needs a timer reset
-        self.match.update_winning_checker()
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
