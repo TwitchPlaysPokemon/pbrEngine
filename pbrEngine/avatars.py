@@ -10,8 +10,9 @@ import random
 def generateDefaultAvatars():
     '''pick 2 default avatars for the match'''
     default_avatars = []
-    for char_style in random.sample(range(1, 7), 2):
+    for team_i, char_style in enumerate(random.sample(range(1, 7), 2)):
         avatar = {
+            "NAME": "Team %s" % ["Blue", "Red"][team_i],
             "APPEARANCE": {
                 "CHARACTER_STYLE": char_style,
                 "SKIN"      : random.randrange(3),
@@ -55,7 +56,6 @@ def generateDefaultAvatars():
         }
         default_avatars.append(avatar)
     return {"blue": default_avatars[0], "red": default_avatars[1]}
-
 
 def main():
     for _ in range(5):

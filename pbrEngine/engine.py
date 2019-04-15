@@ -277,10 +277,62 @@ class PBREngine():
         self._fConnected = fConnected
         self.timer.connected = fConnected
 
+    def _distinguishBattleResultText(self, val):
+        logger.debug("Detected battle result text: %s" % val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleResultText:
+            return
+        self._writingBattleResultText = True
+        resultText = self._battleText["WIN_RESULT"][self._win_result.upper()]
+        if resultText:
+            bytes = stringToBytes(resultText)
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_RESULT_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_RESULT_TEXT.value.addr + i, byte)
+        self._writingBattleResultText = False
+
+    def _distinguishBattleOpeningText(self, val):
+        logger.debug(val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleOpeningText:
+            return
+        self._writingBattleOpeningText = True
+        # OPENING_LINE1
+        if self._battleText["OPENING_LINE1"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE1"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + i, byte)
+        # OPENING_LINE2
+        if self._battleText["OPENING_LINE2"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE2"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte)
+        # OPENING_LINE3
+        if self._battleText["OPENING_LINE3"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE3"])
+            if self._language == "es":
+                subtext_offset = 0x92978
+            else:
+                subtext_offset = 0xb09ca
+            msgtext_addr = self._dolphinIO.read32(Locations.MESSAGE_DATA.value.addr, numAttempts=1)
+            subtext_addr = msgtext_addr + subtext_offset
+            writes = [(8, subtext_addr + i, byte) for i, byte in enumerate(bytes)]
+            logger.debug(writes)
+            self._dolphinIO.writeMulti(writes)
+        self._writingBattleOpeningText = False
+
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
         self._connected = True
+        self._subscribeMulti(Locations.BATTLE_OPENING_TEXT.value,
+                             self._distinguishBattleOpeningText)
+        self._subscribeMulti(Locations.BATTLE_RESULT_TEXT.value,
+                             self._distinguishBattleResultText)
+        self._subscribe(Locations.GUI_MATCH_OVER.value, self._distinguishGameOver)
         self._dolphin._subscribe(32, NestedLocations.ONSCREEN_TEXT.value.startingAddr,
                                  self._distinguishOnscreenTextPointer)
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
@@ -392,13 +444,31 @@ class PBREngine():
         self._fWaitForStart = True
         self._fBpPage2 = False
         self._fBattleStateReady = False
+        self._writingBattleOpeningText = False
+        self._writingBattleResultText = False
+
+        self._win_result_addr = None
+        self._win_result = "draw"
+        self._language = "en"
+        # Leave entries blank for default values
+        self._battleText = {
+            "OPENING_LINE1": "",  # Defaults to "<> Colosseum"
+            "OPENING_LINE2": "",  # Defaults to "2-Player Battle"
+            "OPENING_LINE3": "",  # Defaults to "Free Battle"
+            "WIN_RESULT": {
+                "BLUE": "",  # Defaults to "WINNER"
+                "RED": "",  # Defaults to "WINNER"
+                "DRAW": "",  # Defaults to "DRAW"
+            }
+        }
+
 
     ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN, language="en", battleText=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -437,6 +507,9 @@ class PBREngine():
         self._startingWeather = startingWeather
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
+        self._language = language
+        if battleText:
+            self._battleText = battleText
 
         if self.state == EngineStates.WAITING_FOR_NEW:
             self._selectFreeBattle()
@@ -772,11 +845,31 @@ class PBREngine():
         '''
         Once the in-battle structures are ready, read/write weather and battle pkmn data
         '''
-        self._setupWinResult()
+        self._setupWinResultDetection()
         if self._startingWeather:
             self._setStartingWeather()
         self._setupActivePkmn()
         self._setupNonvolatilePkmn()
+
+    def _setupWinResultDetection(self):
+        self._win_result_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
+        logger.debug("Win result addr: {:0X}".format(self._win_result_addr))
+        self._dolphin._subscribe(8, self._win_result_addr, self._distinguishWinResult)
+
+    def _distinguishWinResult(self, result):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if result == 0:
+            return  # Expected to read as 0 initially
+        logger.debug("Detected win result: {:0X}".format(result))
+        if result in (0x80, 3, 0xc1, 0xc3):
+            self._win_result = "draw"
+        elif result == 1:
+            self._win_result = "blue"
+        elif result == 2:
+            self._win_result = "red"
+        else:
+            self._crash(reason="Unrecognized win result: {:0X}".format(result))
 
     def _livePkmnCallback(self, type, side, slot, name, val):
         if self.state != EngineStates.MATCH_RUNNING:
@@ -832,13 +925,15 @@ class PBREngine():
         for side_offset, avatar in (
                 (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
                 (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
-            avatarLoc = self._bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
-            logger.debug("avatar loc: {:0X}".format(avatarLoc))
+            teamAddr = self._bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
+            logger.debug("avatar team address: {:0X}".format(teamAddr))
+            name_bytes = stringToBytes(avatar['NAME'])
+            writes.extend([(8, teamAddr + i, byte) for i, byte in enumerate(name_bytes)])
             for optionName, optionVal in avatar['APPEARANCE'].items():
                 optionLoc = LoadedBPOffsets[optionName].value
                 logger.debug("Writing option {}: {:0X} <- {}"
-                             .format(optionName, avatarLoc + optionLoc.addr, optionVal))
-                writes.append((8*optionLoc.length, avatarLoc + optionLoc.addr, optionVal))
+                             .format(optionName, teamAddr + optionLoc.addr, optionVal))
+                writes.append((8*optionLoc.length, teamAddr + optionLoc.addr, optionVal))
         self._dolphinIO.writeMulti(writes)
 
     def _setupPreBattlePkmn(self):
@@ -884,11 +979,6 @@ class PBREngine():
                 # self._dolphinIO.write8(
                 #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
                 #     0x9)
-
-    def _setupWinResult(self):
-        self._win_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
-        logger.info("Win result address: {:0X}".format(self._win_addr))
-        self._dolphin._subscribe(8, self._win_addr, self._distinguishWin)
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -1123,7 +1213,7 @@ class PBREngine():
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
         # Unsubscribe from memory addresses that change from match to match
-        self._dolphin._unSubscribe(self._win_addr)
+        self._dolphin._unSubscribe(self._win_result_addr)
         for side in ("blue", "red"):
             for active in list(self.active[side]):
                     active.unsubscribe()
@@ -1340,8 +1430,7 @@ class PBREngine():
         self._pressButton(WiimoteButton.NONE)  # no button press
 
         if self._fMatchCancelled:  # quit the match if it was cancelled
-            win_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
-            self._dolphinIO.write(8, win_addr, 0x80)
+            self._dolphinIO.write(8, self._win_result_addr, 0x80)
             return
         self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
         action = self._getAction(False)  # May sleep
@@ -1437,16 +1526,22 @@ class PBREngine():
             logger.debug("Found offset: {:0X}, {}".format(offset, side))
             for _id, text in self.avatars[side]["CATCHPHRASES"].items():
                 if offset == LoadedBPOffsets[_id].value.addr:
-                    self._injectCatchphrase(addr, text, side, LoadedBPOffsets[_id].name)
                     if offset == LoadedBPOffsets.FIRST_SENT_OUT.value.addr:
                         # split-screen catcphrases. addr will only point to the red
                         # catchphrase, but blue catchphrase needs to be injected too.
-                        self._injectCatchphrase(
+                        # Spawn this separately so the blue catchphrase isn't forced to
+                        # wait for red catchphrase injection to complete
+                        # (dolphinIO writes take some time due to memory unreliability,
+                        # and whatever junk is in the blue catchphrase will be onscreen
+                        # until overwritten by blue catchphrase injection)
+                        gevent.spawn(
+                            self._injectCatchphrase,
                             addr - red_team_offset,
                             self.avatars["blue"]["CATCHPHRASES"]["FIRST_SENT_OUT"],
                             "blue",
                             "FIRST_SENT_OUT"
                         )
+                    self._injectCatchphrase(addr, text, side, LoadedBPOffsets[_id].name)
 
     def _injectCatchphrase(self, addr, text, side, catchphrase_id):
         # inject catchphrase
@@ -1456,21 +1551,17 @@ class PBREngine():
                      .format(side, catchphrase_id, addr, text, writes))
         self._dolphinIO.writeMulti(writes)
 
-    def _distinguishWin(self, value):
-        logger.debug("Win result addr: {:0X}".format(value))
+    def _distinguishGameOver(self, game_over):
         if self.state != EngineStates.MATCH_RUNNING:
             return
-        if value == 0:
+        if game_over == 0:
             return  # Expected to read 0 initially
-        gevent.sleep(11)
-        if value in (0x80, 3, 0xc1, 0xc3):
-            self._matchOver("draw")
-        elif value == 1:
-            self._matchOver("blue")
-        elif value == 2:
-            self._matchOver("red")
-        else:
-            self._crash(reason="Unrecognized win result value: {:0X}".format(value))
+        elif game_over != 1:
+            logger.error("Unexpected game over value: {:0X}".format(game_over))
+        logger.debug("Detected Game Over")
+        self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
+        gevent.spawn_later(2, self.setGuiPositionGroup, GuiPositionGroups.PBR_DEFAULT)
+        self._matchOver(self._win_result)
 
     def _distinguishWhichMove(self, data):
         logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
@@ -1672,22 +1763,35 @@ class PBREngine():
         self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
-        match = re.search(r"^Team (Blue|Red)'s (.+?) fainted!$",
-                          string)
+        if self._language == "es":
+            match = re.search(r"El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$",
+                              string)
+        else:
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$",
+                              string)
         if match:
-            side = match.group(1).lower()
-            self.match.getSlotFromIngamename(side, match.group(2))
-            self.match.fainted(side, match.group(2))
+            side = self._get_side_from_player_name(match.group("player"))
+            self.match.getSlotFromIngamename(side, match.group("pkmn"))
+            self.match.fainted(side, match.group("pkmn"))
             self._expectedActionCause[side][self._slot] = ActionCause.FAINT
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search(
-            r"^Team (Blue|Red)'s (.+?) was dragged out!$", string)
+            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
         if match:
-            side = match.group(1).lower()
+            side = self._get_side_from_player_name(match.group("player"))
             self.match.draggedOut(side, match.group(2))
             return
+
+    def _get_side_from_player_name(self, player):
+        if player == self.avatars["blue"]["NAME"]:
+            return "blue"
+        elif player == self.avatars["red"]["NAME"]:
+            return "red"
+        else:
+            raise ValueError("Unrecognized player nome: %s Avatars: %s" %
+                             (player, self.avatars))
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.

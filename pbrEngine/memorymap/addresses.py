@@ -113,6 +113,7 @@ class Locations(Enum):
     GUI_STATE_ORDER  = Loc(0x487445, 1)
     GUI_STATE_BP_SELECTION = Loc(0x476973, 1)
     GUI_TEMPTEXT     = Loc(0x4fd4a4, 72)
+    GUI_MATCH_OVER   = Loc(0x479f20, 4)
 
     # One byte per pkmn. The value is the pkmn's slot for the match, or 0 if not selected.
     ORDER_BLUE       = Loc(0x48745c, 6)
@@ -160,6 +161,12 @@ class Locations(Enum):
 
     FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
     ANIMATION_STRENGTH = Loc(0x6426b8, 4)  # default 1.0
+
+    # E.g., Waterfall Colosseum / 2-Player Battle
+    BATTLE_OPENING_TEXT = Loc(0x479f44, 0xa0)
+    BATTLE_RESULT_TEXT = Loc(0x479fe4, 0x50)
+
+    MESSAGE_DATA = Loc(0x63e90c, 0x4)  # If this breaks, try 0x4fcf20
 
     # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
