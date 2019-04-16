@@ -313,8 +313,14 @@ class PBREngine():
         # OPENING_LINE3
         if self._battleText["OPENING_LINE3"]:
             bytes = stringToBytes(self._battleText["OPENING_LINE3"])
-            if self._language == "es":
+            if self._language == "de":
+                subtext_offset = 0xa971a
+            elif self._language == "es":
                 subtext_offset = 0x92978
+            elif self._language == "fr":
+                subtext_offset = 0xb2e3a
+            elif self._language == "it":
+                subtext_offset = 0xacdfc
             else:
                 subtext_offset = 0xb09ca
             msgtext_addr = self._dolphinIO.read32(Locations.MESSAGE_DATA.value.addr, numAttempts=1)
@@ -1763,9 +1769,15 @@ class PBREngine():
         self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
-        if self._language == "es":
-            match = re.search(r"El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$",
-                              string)
+        if self._language == "de":
+            # has an extra space after player name, for some reason
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
+        elif self._language == "es":
+            match = re.search(r"^El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
+        elif self._language == "fr":
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
+        elif self._language == "it":
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
         else:
             match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$",
                               string)
@@ -1790,7 +1802,7 @@ class PBREngine():
         elif player == self.avatars["red"]["NAME"]:
             return "red"
         else:
-            raise ValueError("Unrecognized player nome: %s Avatars: %s" %
+            raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
                              (player, self.avatars))
 
     def _distinguishGui(self, gui):

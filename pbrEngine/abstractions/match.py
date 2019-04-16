@@ -112,7 +112,7 @@ class Match(object):
     def fainted(self, side, pkmn_name):
         slot = self.getSlotFromIngamename(side, pkmn_name)
         if slot is None:
-            logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
+            logger.error("Didn't recognize pokemon name: `{}`", pkmn_name)
             return
         elif self.areFainted[side][slot]:
             logger.error("{} ({} {}) fainted, but was already marked as fainted"
