@@ -7,6 +7,15 @@ Created on 26.09.2015
 import random
 
 
+CATCHPHRASE_BYTE_LIMITS = {
+    "GREETING"          : 48,
+    "FIRST_SENT_OUT"    : 50,
+    "POKEMON_RECALLED"  : 48,
+    "POKEMON_SENT_OUT"  : 48,
+    "WIN"               : 50,
+    "LOSE"              : 50,
+}
+
 def generateDefaultAvatars():
     '''pick 2 default avatars for the match'''
     default_avatars = []

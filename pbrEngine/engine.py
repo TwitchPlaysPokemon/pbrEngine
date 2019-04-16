@@ -30,7 +30,7 @@ from .states import PbrGuis, EngineStates
 from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
-from .avatars import generateDefaultAvatars
+from .avatars import generateDefaultAvatars, CATCHPHRASE_BYTE_LIMITS
 from .activePkmn import ActivePkmn
 from .nonvolatilePkmn import NonvolatilePkmn
 
@@ -928,9 +928,9 @@ class PBREngine():
 
     def _injectAvatars(self):
         writes = []
-        for side_offset, avatar in (
-                (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
-                (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
+        for side, side_offset, avatar in (
+                ("blue", LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
+                ("red", LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
             teamAddr = self._bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
             logger.debug("avatar team address: {:0X}".format(teamAddr))
             name_bytes = stringToBytes(avatar['NAME'])
@@ -940,6 +940,18 @@ class PBREngine():
                 logger.debug("Writing option {}: {:0X} <- {}"
                              .format(optionName, teamAddr + optionLoc.addr, optionVal))
                 writes.append((8*optionLoc.length, teamAddr + optionLoc.addr, optionVal))
+            # Catchphrases are injected in real time to overcome normal character limits, 
+            # but the lag sometimes causes default/old catchphrase data to be visible
+            # onscreen for a few ms. To minimize that, we inject catchphrases here too
+            # (but with a character limit).
+            for _id, text in avatar["CATCHPHRASES"].items():
+                bytes = stringToBytes(text)[:CATCHPHRASE_BYTE_LIMITS[_id]] + [0, 0]
+                addr = teamAddr + LoadedBPOffsets[_id].value.addr
+                writes += [(8, addr + i, byte) for i, byte in enumerate(bytes)]
+                logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
+                             .format(side, _id, addr, text, writes))
+
+
         self._dolphinIO.writeMulti(writes)
 
     def _setupPreBattlePkmn(self):
@@ -1773,7 +1785,7 @@ class PBREngine():
             # has an extra space after player name, for some reason
             match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
         elif self._language == "es":
-            match = re.search(r"^El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
+            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
         elif self._language == "fr":
             match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
         elif self._language == "it":
