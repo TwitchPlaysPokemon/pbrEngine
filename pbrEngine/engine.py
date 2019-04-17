@@ -277,59 +277,6 @@ class PBREngine():
         self._fConnected = fConnected
         self.timer.connected = fConnected
 
-    def _distinguishBattleResultText(self, val):
-        logger.debug("Detected battle result text: %s" % val)
-        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleResultText:
-            return
-        self._writingBattleResultText = True
-        resultText = self._battleText["WIN_RESULT"][self._win_result.upper()]
-        if resultText:
-            bytes = stringToBytes(resultText)
-            for i, byte in enumerate(bytes):
-                logger.debug("{:0X} <- {:0X}".format(
-                    Locations.BATTLE_RESULT_TEXT.value.addr + i, byte))
-                self._dolphin.write(8, Locations.BATTLE_RESULT_TEXT.value.addr + i, byte)
-        self._writingBattleResultText = False
-
-    def _distinguishBattleOpeningText(self, val):
-        logger.debug(val)
-        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleOpeningText:
-            return
-        self._writingBattleOpeningText = True
-        # OPENING_LINE1
-        if self._battleText["OPENING_LINE1"]:
-            bytes = stringToBytes(self._battleText["OPENING_LINE1"])
-            for i, byte in enumerate(bytes):
-                logger.debug("{:0X} <- {:0X}".format(
-                    Locations.BATTLE_OPENING_TEXT.value.addr + i, byte))
-                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + i, byte)
-        # OPENING_LINE2
-        if self._battleText["OPENING_LINE2"]:
-            bytes = stringToBytes(self._battleText["OPENING_LINE2"])
-            for i, byte in enumerate(bytes):
-                logger.debug("{:0X} <- {:0X}".format(
-                    Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte))
-                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte)
-        # OPENING_LINE3
-        if self._battleText["OPENING_LINE3"]:
-            bytes = stringToBytes(self._battleText["OPENING_LINE3"])
-            if self._language == "de":
-                subtext_offset = 0xa971a
-            elif self._language == "es":
-                subtext_offset = 0x92978
-            elif self._language == "fr":
-                subtext_offset = 0xb2e3a
-            elif self._language == "it":
-                subtext_offset = 0xacdfc
-            else:
-                subtext_offset = 0xb09ca
-            msgtext_addr = self._dolphinIO.read32(Locations.MESSAGE_DATA.value.addr, numAttempts=1)
-            subtext_addr = msgtext_addr + subtext_offset
-            writes = [(8, subtext_addr + i, byte) for i, byte in enumerate(bytes)]
-            logger.debug(writes)
-            self._dolphinIO.writeMulti(writes)
-        self._writingBattleOpeningText = False
-
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
@@ -1237,7 +1184,9 @@ class PBREngine():
                     active.unsubscribe()
             for nonvolatile in list(self.nonvolatileSO[side]):
                     nonvolatile.unsubscribe()
-        self._select(3)  # Select Quit
+        # Wait a bit, because manually selecting forfeit will set the cursor to 1 a bit
+        # prematurely (only relevant when debugging)
+        self._selectLater(30, 3)  # Select Quit
 
     def _nextPkmn(self):
         '''
@@ -1528,6 +1477,66 @@ class PBREngine():
     #   Their job is to know what to do when a   #
     #          certain value changes.            #
     ##############################################
+
+    def _distinguishBattleResultText(self, val):
+        logger.debug("Detected battle result text: %s" % val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleResultText:
+            return
+        self._writingBattleResultText = True
+        resultText = self._battleText["WIN_RESULT"][self._win_result.upper()]
+        if resultText:
+            bytes = stringToBytes(resultText)
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_RESULT_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_RESULT_TEXT.value.addr + i, byte)
+        self._writingBattleResultText = False
+        gevent.spawn_later(1.5, self._speedUpEnding)
+
+    def _speedUpEnding(self):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        logger.debug("Speeding up end of match")
+        self._setAnimSpeed(3)
+
+    def _distinguishBattleOpeningText(self, val):
+        logger.debug(val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleOpeningText:
+            return
+        self._writingBattleOpeningText = True
+        # OPENING_LINE1
+        if self._battleText["OPENING_LINE1"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE1"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + i, byte)
+        # OPENING_LINE2
+        if self._battleText["OPENING_LINE2"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE2"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte)
+        # OPENING_LINE3
+        if self._battleText["OPENING_LINE3"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE3"])
+            if self._language == "de":
+                subtext_offset = 0xa971a
+            elif self._language == "es":
+                subtext_offset = 0x92978
+            elif self._language == "fr":
+                subtext_offset = 0xb2e3a
+            elif self._language == "it":
+                subtext_offset = 0xacdfc
+            else:
+                subtext_offset = 0xb09ca
+            msgtext_addr = self._dolphinIO.read32(Locations.MESSAGE_DATA.value.addr, numAttempts=1)
+            subtext_addr = msgtext_addr + subtext_offset
+            writes = [(8, subtext_addr + i, byte) for i, byte in enumerate(bytes)]
+            logger.debug(writes)
+            self._dolphinIO.writeMulti(writes)
+        self._writingBattleOpeningText = False
 
     def _distinguishOnscreenTextPointer(self, addr):
         if self.state == EngineStates.MATCH_RUNNING:
