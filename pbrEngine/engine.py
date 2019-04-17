@@ -903,6 +903,7 @@ class PBREngine():
 
     def _setupPreBattlePkmn(self):
         logger.info("Setting up pre-battle pkmn")
+        writes = []
         for side, preBattleLoc in (
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED))):
@@ -926,15 +927,40 @@ class PBREngine():
                         break
                 if not (pokeset["stats"]["hp"] ==
                         self._dolphinIO.read16(
-                            pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr) ==
-                        self._dolphinIO.read16(
                             pkmnLoc + NonvolatilePkmnOffsets.MAX_HP.value.addr)):
                     success = False
                 if not success:
                     logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
                     self._crash(reason="Incorrect pokemon detected")
-                # self._dolphinIO.write16(pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
-                #                         pokeset["stats"]["hp"] // 2)
+
+                if pokeset["stats"]["hp"] != pokeset["curr_hp"]:
+                    writes.append((16,
+                                   pkmnLoc +NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                                   pokeset["curr_hp"]))
+                status_nv = pokeset["status"]["nonvolatile"]
+                status_val = 0
+                if status_nv["slp"]:
+                    status_val = status_nv["slp"]
+                if status_nv["psn"]:
+                    status_val += 0x08
+                if status_nv["brn"]:
+                    status_val += 0x10
+                if status_nv["frz"]:
+                    status_val += 0x20
+                if status_nv["par"]:
+                    status_val += 0x40
+                if status_nv["tox"]:
+                    status_val += 0x80
+                if status_val:
+                    writes.append((8,
+                                   pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                                   status_val))
+                if status_nv["tox"]:
+                    writes.append((8,
+                                   pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
+                                   status_nv["tox"] - 1))
+
+
                 # self._dolphinIO.write8(
                 #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
                 #     random.choice([0x40, 0x20, 0x10, 0x8, 0x2]))
@@ -944,6 +970,10 @@ class PBREngine():
                 # self._dolphinIO.write8(
                 #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
                 #     0x9)
+        if writes:
+            logger.info("Injecting pre-battle values...")
+            self._dolphinIO.writeMulti(writes)
+            logger.info("Done injecting pre-battle values")
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -1172,13 +1202,16 @@ class PBREngine():
         Resets some match settings as needed.
         Clicks on "Quit", which takes us to the Battle Menu (PbrGuis.MENU_BATTLE_TYPE)
         '''
+        logger.debug("Quitting match")
         self._resetBlur()
         self.setVolume(0)  # Mute match setup beeping
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
         # Unsubscribe from memory addresses that change from match to match
+        logger.debug("Unsubscribing win result")
         self._dolphin._unSubscribe(self._win_result_addr)
+        logger.debug("Unsubscribing live data reads")
         for side in ("blue", "red"):
             for active in list(self.active[side]):
                     active.unsubscribe()
@@ -1186,6 +1219,7 @@ class PBREngine():
                     nonvolatile.unsubscribe()
         # Wait a bit, because manually selecting forfeit will set the cursor to 1 a bit
         # prematurely (only relevant when debugging)
+        logger.info("Selecting quit in 30 frames")
         self._selectLater(30, 3)  # Select Quit
 
     def _nextPkmn(self):
@@ -1397,7 +1431,9 @@ class PBREngine():
         self._pressButton(WiimoteButton.NONE)  # no button press
 
         if self._fMatchCancelled:  # quit the match if it was cancelled
-            self._dolphinIO.write(8, self._win_result_addr, 0x80)
+            logger.info("Injecting double forfeit")
+            # We're subscribed to the win result, so don't read or it'll nuke that subscription.
+            self._dolphinIO.write(8, self._win_result_addr, 0x80, maxAttempts=1, readsPerAttempt=0)
             return
         self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
         action = self._getAction(False)  # May sleep

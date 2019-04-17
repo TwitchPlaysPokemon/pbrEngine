@@ -27,7 +27,7 @@ class ActivePkmn:
         # values- hence we need initial values in place for the 1st move selection of
         # the match.
         self.fields["MAX_HP"] = startingPokeset["stats"]["hp"]
-        self.fields["CURR_HP"] = startingPokeset["stats"]["hp"]
+        self.fields["CURR_HP"] = startingPokeset["curr_hp"]
         self.fields["TYPE0"] = pokecat.gen4data.TYPES.index(
             startingPokeset["species"]["types"][0])
         if len(startingPokeset["species"]["types"]) > 1:

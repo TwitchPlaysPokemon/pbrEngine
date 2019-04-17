@@ -4,7 +4,11 @@ Created on 22.09.2015
 @author: Felk
 '''
 
+import logging
 from ..memorymap.addresses import Locations
+
+
+logger = logging.getLogger("pbrEngine")
 
 
 class Cursor(object):
@@ -39,9 +43,12 @@ class Cursor(object):
         # Is very useful, because for some guis the indicator of being
         # input-ready is the cursor being set to a specific position.
         self._lastPos = pos
-        try:
-            event = self._events[pos]
-            event[0](*event[1])
-            del self._events[pos]
-        except:
-            pass
+        if pos in self._events:
+            try:
+                event = self._events[pos]
+                event[0](*event[1])
+                del self._events[pos]
+            except:
+                logger.error("Error during cursor callback",
+                             stack_info=True, exc_info=True)
+                pass
