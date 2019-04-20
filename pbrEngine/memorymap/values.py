@@ -6,6 +6,7 @@ Created on 09.09.2015
 
 from ..util import intToFloatRepr
 from enum import IntEnum, Enum
+import collections
 
 
 ##########################################
@@ -56,6 +57,30 @@ class Colosseums(IntEnum):
     SUNSET      = 0x380003f0
     STARGAZER   = 0x380003f1
     LAGOON      = 0x380003f2
+
+# `num` matches Nintendo's Wii language numbering.
+Language = collections.namedtuple("Language", "name code num supported")
+
+
+def getLanguage(text):
+    for lang in WII_LANGUAGES:
+        if text.lower() in (lang.name.lower(), lang.code, str(lang.num)):
+            return lang
+    return None
+
+
+WII_LANGUAGES = [
+    Language("Japanese", "ja", 0, False),  # Not PAL, so incompatible with pbrEngine
+    Language("English", "en", 1, True),
+    Language("German", "de", 2, True),
+    Language("French", "fr", 3, True),
+    Language("Spanish", "es", 4, True),
+    Language("Italian", "it", 5, True),
+    Language("Dutch", "nl", 6, False),  # Not sure if exists
+    Language("Simplified Chinese", "zh_CN", 7, False),  # Not sure if exists
+    Language("Traditional Chinese", "zh_TW", 8, False),  # Not sure if exists
+    Language("Korean", "ko", 9, False),  # Not sure if exists
+]
 
 
 class FieldEffects(IntEnum):

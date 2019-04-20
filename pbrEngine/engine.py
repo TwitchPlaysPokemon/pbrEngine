@@ -24,7 +24,7 @@ from datetime import datetime
 from .eps import get_pokemon_from_data
 
 from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups, getLanguage
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, EngineStates
 from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
@@ -402,7 +402,7 @@ class PBREngine():
 
         self._win_result_addr = None
         self._win_result = "draw"
-        self._language = "en"
+        self._language = getLanguage("english")
         # Leave entries blank for default values
         self._battleText = {
             "OPENING_LINE1": "",  # Defaults to "<> Colosseum"
@@ -421,7 +421,7 @@ class PBREngine():
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN, language="en", battleText=None):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -908,10 +908,11 @@ class PBREngine():
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED))):
             for slotSO, pokeset in enumerate(self.match.teams[side]):
-                logger.info("Setting up pre-battle pkmn: side %s, slot %d", side, slotSO)
                 success = False
                 pkmnLoc = (preBattleLoc +
                            slotSO * NestedLocations.PRE_BATTLE_BLUE.value.length)
+                logger.info("Setting up pre-battle pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slotSO, pkmnLoc))
                 expected_moves = [move["id"] for move in pokeset["moves"]]
                 while len(expected_moves) < 4:
                     expected_moves.append(0)
@@ -1008,8 +1009,10 @@ class PBREngine():
             for side in ("blue", "red"):
                 debugCallback = partial(self._livePkmnCallback, "active", side, slot)
                 # PBR forces doubles battles to start with >=2 mons per side.
-                logger.info("Setting up active pkmn: side %s, slot %d", side, slot)
-                active = ActivePkmn(side, slot, activeLoc + offset,
+                pkmnLoc = activeLoc + offset
+                logger.info("Setting up active pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slot, pkmnLoc))
+                active = ActivePkmn(side, slot, pkmnLoc,
                                     self.match.teams[side][slot], self._dolphin,
                                     debugCallback)
                 offset += NestedLocations.ACTIVE_PKMN.value.length
@@ -1021,11 +1024,13 @@ class PBREngine():
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_RED))):
             for slotSO, pokeset in enumerate(self.match.teams[side]):
-                logger.info("Setting up nonvolatile pkmn: side %s, slot %d", side, slotSO)
+                pkmnLoc = (nonvolatileLoc +
+                           slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length)
+                logger.info("Setting up nonvolatile pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slotSO, pkmnLoc))
                 debugCallback = partial(self._livePkmnCallback, "nonvolatile", side, slotSO)
                 nonvolatile = NonvolatilePkmn(
-                    side, slotSO, nonvolatileLoc +
-                                  slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length,
+                    side, slotSO, pkmnLoc,
                     self.nonvolatileMoveOffsetsSO[side][slotSO],
                     self.match.teams[side][slotSO],
                     self._dolphin, debugCallback)
@@ -1557,13 +1562,13 @@ class PBREngine():
         # OPENING_LINE3
         if self._battleText["OPENING_LINE3"]:
             bytes = stringToBytes(self._battleText["OPENING_LINE3"])
-            if self._language == "de":
+            if self._language.code == "de":
                 subtext_offset = 0xa971a
-            elif self._language == "es":
+            elif self._language.code == "es":
                 subtext_offset = 0x92978
-            elif self._language == "fr":
+            elif self._language.code == "fr":
                 subtext_offset = 0xb2e3a
-            elif self._language == "it":
+            elif self._language.code == "it":
                 subtext_offset = 0xacdfc
             else:
                 subtext_offset = 0xb09ca
@@ -1622,9 +1627,36 @@ class PBREngine():
         elif game_over != 1:
             logger.error("Unexpected game over value: {:0X}".format(game_over))
         logger.debug("Detected Game Over")
+        self._updateLiveTeams()
+        self._checkExpectedWinResult()
         self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
         gevent.spawn_later(2, self.setGuiPositionGroup, GuiPositionGroups.PBR_DEFAULT)
         self._matchOver(self._win_result)
+        
+    def _checkExpectedWinResult(self):
+        """For checking that pbr's tiebreak rules are what we think they are"""
+        expectedResult = self._calcExpectedWinResult()
+        if not self._fMatchCancelled and self._win_result != expectedResult:
+            logger.error("Unexpected win result: got %s, expected %s. Teams data: %s",
+                         self._win_result, expectedResult, self.match.teamsLive)
+        
+    def _calcExpectedWinResult(self):
+        teams = self.match.teamsLive
+        match = self.match
+        faintedBlue = len([p for p in match.areFainted["blue"] if p])
+        faintedRed = len([p for p in match.areFainted["red"] if p])
+        if faintedBlue != faintedRed:
+            return "blue" if faintedBlue < faintedRed else "red"
+        avgBlueHpPercRemaining = sum([
+            p['curr_hp'] / p['stats']['hp'] for p in teams['blue']
+        ]) / len(teams['blue'])
+        avgRedHpPercRemaining = sum([
+            p['curr_hp'] / p['stats']['hp'] for p in teams['red']
+        ]) / len(teams['red'])
+        if avgBlueHpPercRemaining == avgRedHpPercRemaining:
+            return 'draw'
+        else:
+            return 'blue' if avgBlueHpPercRemaining > avgRedHpPercRemaining else 'red'
 
     def _distinguishWhichMove(self, data):
         logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
@@ -1826,14 +1858,14 @@ class PBREngine():
         self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
-        if self._language == "de":
+        if self._language.code == "de":
             # has an extra space after player name, for some reason
             match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
-        elif self._language == "es":
+        elif self._language.code == "es":
             match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
-        elif self._language == "fr":
+        elif self._language.code == "fr":
             match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
-        elif self._language == "it":
+        elif self._language.code == "it":
             match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
         else:
             match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$",
