@@ -24,13 +24,13 @@ from datetime import datetime
 from .eps import get_pokemon_from_data
 
 from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups, getLanguage
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, EngineStates
-from .util import bytesToString, floatToIntRepr, EventHook, killUnlessCurrent
+from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
-from .avatars import generateDefaultAvatars
+from .avatars import generateDefaultAvatars, CATCHPHRASE_BYTE_LIMITS
 from .activePkmn import ActivePkmn
 from .nonvolatilePkmn import NonvolatilePkmn
 
@@ -115,7 +115,6 @@ class PBREngine():
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
-        self.match.on_win += self._matchOver
         self.match.on_switch += self._switched
         self.match.on_faint += self._match_faint
         # event callbacks
@@ -167,7 +166,7 @@ class PBREngine():
         '''
         self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
                                    pokeset_sentout=dict, pokeset_recalled=dict,
-                                   obj=object)
+                                   obj=object, teams=dict, slotConvert=callable)
         '''
         Event of information text appearing in one of those black boxes.
         Also includes fly-by texts (It's super/not very effective!, A critical hit!)
@@ -278,45 +277,17 @@ class PBREngine():
         self._fConnected = fConnected
         self.timer.connected = fConnected
 
-    def _watcher2(self, data):
-        logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
-    def _watcher3(self, data):
-        logger.debug("{}: {:02x}".format(Locations.WHICH_PKMN.name, data))
-
-    def _distinguishMatch(self, data):
-        logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
-        prevGuiStateMatch = self._guiStateMatch
-        gui_type = data >> 16 & 0xff
-        pkmn_input_type = data & 0xff
-
-        if self.state == EngineStates.MATCH_RUNNING:
-            # True if in the pkmn select menu, and a pkmn input needs to be made
-            # (i.e., there are no popups, and a pkmn input has not successfully gone
-            # through yet).
-            self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
-
-            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
-                                            GuiStateMatch.SWITCH_POPUP)
-
-            # True when the pkmn menu pops up, and remains true until it is gone.
-            # Remains true through any "can't switch" popups.
-            self._fGuiPkmnUp = pkmn_input_type in (GuiStateMatch.TARGET,
-                                                   GuiStateMatch.SWITCH)
-        else:
-            self._fNeedPkmnInput = False
-            self._fLastGuiWasSwitchPopup = False
-            self._fGuiPkmnUp = False
-
-        self._guiStateMatch = data
-
-        if prevGuiStateMatch >> 16 & 0xff != gui_type:
-            # If not a duplicate, run self._distinguishGui() with the gui.
-            self._distinguisher.distinguishMatch(gui_type)
-
     def _initDolphinWatch(self, watcher):
         # ## subscribing to all indicators of interest. mostly gui
         # misc. stuff processed here
         self._connected = True
+        self._subscribeMulti(Locations.BATTLE_OPENING_TEXT.value,
+                             self._distinguishBattleOpeningText)
+        self._subscribeMulti(Locations.BATTLE_RESULT_TEXT.value,
+                             self._distinguishBattleResultText)
+        self._subscribe(Locations.GUI_MATCH_OVER.value, self._distinguishGameOver)
+        self._dolphin._subscribe(32, NestedLocations.ONSCREEN_TEXT.value.startingAddr,
+                                 self._distinguishOnscreenTextPointer)
         self._subscribe(Locations.CURRENT_TURN.value, self._distinguishTurn)
         self._subscribe(Locations.CURRENT_SIDE.value, self._distinguishSide)
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
@@ -357,13 +328,12 @@ class PBREngine():
         self._subscribe(Locations.POPUP_BOX.value,
                         self._distinguisher.distinguishPopup)
 
-        self._subscribe(Locations.WHICH_MOVE.value, self._watcher2)
-        self._subscribe(Locations.WHICH_PKMN.value, self._watcher3)
+        self._subscribe(Locations.WHICH_MOVE.value, self._distinguishWhichMove)
+        self._subscribe(Locations.WHICH_PKMN.value, self._distinguishWhichPkmn)
 
         # stuff processed by abstractions
         self._subscribe(Locations.CURSOR_POS.value, self.cursor.updateCursorPos)
         self._subscribe(Locations.FRAMECOUNT.value, self.timer.updateFramecount)
-        # ##
 
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
         self._setState(EngineStates.INIT)
@@ -391,6 +361,7 @@ class PBREngine():
         self._fLastGuiWasSwitchPopup = False
         self._fNeedPkmnInput = False
         self._fGuiPkmnUp = False
+        self._gui_group = GuiPositionGroups.MAIN
 
         self._selecting_moves = True
         self._next_pkmn = -1
@@ -399,6 +370,7 @@ class PBREngine():
         self._fMatchCancelled = False
         self._fDoubles = False
         self._move_select_followup = None
+        self._bpGroupsLoc = None
 
         self.active = {"blue": [], "red": []}
         self.nonvolatileSO = {"blue": [], "red": []}
@@ -425,13 +397,31 @@ class PBREngine():
         self._fWaitForStart = True
         self._fBpPage2 = False
         self._fBattleStateReady = False
+        self._writingBattleOpeningText = False
+        self._writingBattleResultText = False
+
+        self._win_result_addr = None
+        self._win_result = "draw"
+        self._language = getLanguage("english")
+        # Leave entries blank for default values
+        self._battleText = {
+            "OPENING_LINE1": "",  # Defaults to "<> Colosseum"
+            "OPENING_LINE2": "",  # Defaults to "2-Player Battle"
+            "OPENING_LINE3": "",  # Defaults to "Free Battle"
+            "WIN_RESULT": {
+                "BLUE": "",  # Defaults to "WINNER"
+                "RED": "",  # Defaults to "WINNER"
+                "DRAW": "",  # Defaults to "DRAW"
+            }
+        }
+
 
     ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -463,12 +453,16 @@ class PBREngine():
         self.reset()
         self.colosseum = colosseum
         self._fDoubles = fDoubles
+        self._gui_group = gui_group
         self._posBlues = list(range(0, 1))
         self._posReds = list(range(1, 3))
         self.match.new(teams, fDoubles)
         self._startingWeather = startingWeather
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
+        self._language = language
+        if battleText:
+            self._battleText = battleText
 
         if self.state == EngineStates.WAITING_FOR_NEW:
             self._selectFreeBattle()
@@ -490,7 +484,7 @@ class PBREngine():
         self._setState(EngineStates.PREPARING_STAGE)
         self._select(2)  # Select Free Battle
 
-    def matchStart(self):
+    def matchStart(self, avatars=None):
         '''
         Starts a prepared match.
         If the selection is not finished for some reason
@@ -503,6 +497,9 @@ class PBREngine():
         if self.state > EngineStates.WAITING_FOR_START:
             self._crash("Early match start")
             return
+        if not avatars:
+            avatars = generateDefaultAvatars()
+        self.avatars = avatars
         if self.state == EngineStates.WAITING_FOR_START:
             # We're paused and waiting for this call. Resume and start the match now.
             self._dolphin.resume()
@@ -658,16 +655,16 @@ class PBREngine():
         self._dolphin.write32(Locations.ANIMATION_STRENGTH.value.addr,
                               floatToIntRepr(val))
 
-    def setGuiPositionGroup(self, position_group="MAIN"):
+    def setGuiPositionGroup(self, position_group=GuiPositionGroups.MAIN):
         '''
         Sets the Gui's x-coordinate, y-coordinate, size, and width to values specified
         in a position group.
-        :param position_group: name of the desired group 
+        :param position_group: name of the desired group
         '''
-        for pos_name, pos_val in GuiPositionGroups[position_group].items():
+        for pos_name, pos_val in position_group.value.items():
             self._dolphin.write32(getattr(Locations, pos_name).value.addr,
                                   floatToIntRepr(pos_val))
-        
+
 
     #######################################################
     #             Below are helper functions.             #
@@ -704,13 +701,15 @@ class PBREngine():
                        pokeset_sentout=self.match.teams[side][slot_active],
                        pokeset_recalled=self.match.teams[side][slot_inactive],
                        obj=self._actionCallbackObjStore[side][slot_active],
+                       teams=self.match.teamsCopy(),
+                       slotConvert=self.match.getFrozenSlotConverter(),
                        )
         self._actionCallbackObjStore[side][slot_active] = None
 
     def _match_faint(self, side, slot):
         self.match.teamsLive[side][slot]["curr_hp"] = 0
         self.on_teams_update(
-            teams=self.match.teamsLive,
+            teams=self.match.teamsCopy(),
             slotConvert=self.match.getFrozenSlotConverter(),
         )
         self.on_faint(
@@ -799,73 +798,37 @@ class PBREngine():
         '''
         Once the in-battle structures are ready, read/write weather and battle pkmn data
         '''
+        self._setupWinResultDetection()
         if self._startingWeather:
             self._setStartingWeather()
         self._setupActivePkmn()
         self._setupNonvolatilePkmn()
 
-    def _tempCallback(self, type, side, slot, name, val):
+    def _setupWinResultDetection(self):
+        self._win_result_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
+        logger.debug("Win result addr: {:0X}".format(self._win_result_addr))
+        self._dolphin._subscribe(8, self._win_result_addr, self._distinguishWinResult)
+
+    def _distinguishWinResult(self, result):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if result == 0:
+            return  # Expected to read as 0 initially
+        logger.debug("Detected win result: {:0X}".format(result))
+        if result in (0x80, 3, 0xc1, 0xc3):
+            self._win_result = "draw"
+        elif result == 1:
+            self._win_result = "blue"
+        elif result == 2:
+            self._win_result = "red"
+        else:
+            self._crash(reason="Unrecognized win result: {:0X}".format(result))
+
+    def _livePkmnCallback(self, type, side, slot, name, val):
         if self.state != EngineStates.MATCH_RUNNING:
             return
         assert type in ("active", "nonvolatile"), "Invalid type: %s" % type
         logger.debug("[{}] {} {}: {} is now {:0X}".format(type, side, slot, name, val))
-
-    def checkNestedLocs(self):  # TODO move elsewhere, this is just debugging code
-        while True:
-            self.timer.sleep(20)
-            fieldEffectsLoc = self._dolphinIO.readNestedAddr(NestedLocations.FIELD_EFFECTS)
-            if fieldEffectsLoc:
-                fieldEffects = self._dolphinIO.read32(fieldEffectsLoc)
-                logger.info("Field effects at {:08X} has value {:08X}"
-                            .format(fieldEffectsLoc, fieldEffects))
-
-            ibBlueLoc = self._dolphinIO.readNestedAddr(NestedLocations.IB_BLUE)
-            if ibBlueLoc:
-                ibBlue = self._dolphinIO.read16(ibBlueLoc)
-                logger.info("Blue species at {:08X} has value {:08X}"
-                            .format(ibBlueLoc, ibBlue))
-
-    def _readTest(self):
-        '''Test many reads of '''
-        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
-        logger.debug("preloc: {:0X}".format(preBattleLoc))
-        expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
-        while True:
-            logger.warning("Reading HP many times")
-            for i in range(20000):
-                hp = self._dolphinIO.read16(preBattleLoc +
-                                            NonvolatilePkmnOffsets.CURR_HP.value.addr,
-                                            numAttempts=2)
-                if hp != expectedHP:
-                    logger.error("HP was %s", hp)
-                if i % 500 == 0:
-                    logger.info("(read %d so far)", i)
-                    # prevent "Connection with wiimote lost bla bla"
-                    self._pressButton(WiimoteButton.NONE)  # no button press
-            logger.warning("Done reading, sleeping for a bit")
-            gevent.sleep(5)
-
-    def _writeTest(self):
-        '''Test many reads of '''
-        preBattleLoc = self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_PKMN)
-        # TODO
-        # if not preBattleLoc:
-        #     return
-        # logger.debug("preloc: {:0X}".format(preBattleLoc))
-        # expectedHP = self.match.teams["blue"][0]["stats"]["hp"]
-        # while True:
-        #     logger.warning("Reading HP many times")
-        #     for i in range(20000):
-        #         hp = self._dolphinIO.read16(preBattleLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
-        #                                     numAttempts=2)
-        #         if hp != expectedHP:
-        #             logger.error("HP was {}".format(hp))
-        #         if i % 500 == 0:
-        #             logger.info("(read %d so far)" % i)
-        #             # prevent "Connection with wiimote lost bla bla"
-        #             self._pressButton(WiimoteButton.NONE)  # no button press
-        #     logger.warning("Done reading, sleeping for a bit")
-        #     gevent.sleep(5)
 
     def _injectSettings(self):
         rulesetLoc = self._dolphinIO.readNestedAddr(NestedLocations.RULESET)
@@ -890,12 +853,13 @@ class PBREngine():
 
 
     def _injectPokemon(self):
-        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
+        self._bpGroupsLoc = self._dolphinIO.readNestedAddr(
+            NestedLocations.LOADED_BPASSES_GROUPS)
         writes = []
         for side_offset, data in (
                 (LoadedBPOffsets.BP_BLUE.value.addr, self.match.teams["blue"]),
                 (LoadedBPOffsets.BP_RED.value.addr, self.match.teams["red"])):
-            pkmnLoc = (bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
+            pkmnLoc = (self._bpGroupsLoc + LoadedBPOffsets.GROUP2.value.addr +
                        side_offset + LoadedBPOffsets.PKMN.value.addr)
             for poke_i, pkmn_dict in enumerate(data):
                 pokemon = get_pokemon_from_data(pkmn_dict)
@@ -910,32 +874,45 @@ class PBREngine():
         self.timer.sleep(20)
 
     def _injectAvatars(self):
-        avatars = generateDefaultAvatars()
-        self.avatars = {"blue": avatars[0], "red": avatars[1]}
-        bpGroupsLoc = self._dolphinIO.readNestedAddr(NestedLocations.LOADED_BPASSES_GROUPS)
         writes = []
-        for side_offset, avatar in (
-                (LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
-                (LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
-            avatarLoc = bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
-            logger.debug("avatar loc: {:0X}".format(avatarLoc))
-            for optionName, optionVal in avatar.items():
+        for side, side_offset, avatar in (
+                ("blue", LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
+                ("red", LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
+            teamAddr = self._bpGroupsLoc + LoadedBPOffsets.GROUP1.value.addr + side_offset
+            logger.debug("avatar team address: {:0X}".format(teamAddr))
+            name_bytes = stringToBytes(avatar['NAME'])
+            writes.extend([(8, teamAddr + i, byte) for i, byte in enumerate(name_bytes)])
+            for optionName, optionVal in avatar['APPEARANCE'].items():
                 optionLoc = LoadedBPOffsets[optionName].value
                 logger.debug("Writing option {}: {:0X} <- {}"
-                             .format(optionName, avatarLoc + optionLoc.addr, optionVal))
-                writes.append((8*optionLoc.length, avatarLoc + optionLoc.addr, optionVal))
+                             .format(optionName, teamAddr + optionLoc.addr, optionVal))
+                writes.append((8*optionLoc.length, teamAddr + optionLoc.addr, optionVal))
+            # Catchphrases are injected in real time to overcome normal character limits, 
+            # but the lag sometimes causes default/old catchphrase data to be visible
+            # onscreen for a few ms. To minimize that, we inject catchphrases here too
+            # (but with a character limit).
+            for _id, text in avatar["CATCHPHRASES"].items():
+                bytes = stringToBytes(text)[:CATCHPHRASE_BYTE_LIMITS[_id]] + [0, 0]
+                addr = teamAddr + LoadedBPOffsets[_id].value.addr
+                writes += [(8, addr + i, byte) for i, byte in enumerate(bytes)]
+                logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
+                             .format(side, _id, addr, text, writes))
+
+
         self._dolphinIO.writeMulti(writes)
 
     def _setupPreBattlePkmn(self):
         logger.info("Setting up pre-battle pkmn")
+        writes = []
         for side, preBattleLoc in (
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED))):
             for slotSO, pokeset in enumerate(self.match.teams[side]):
-                logger.info("Setting up pre-battle pkmn: side %s, slot %d", side, slotSO)
                 success = False
                 pkmnLoc = (preBattleLoc +
                            slotSO * NestedLocations.PRE_BATTLE_BLUE.value.length)
+                logger.info("Setting up pre-battle pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slotSO, pkmnLoc))
                 expected_moves = [move["id"] for move in pokeset["moves"]]
                 while len(expected_moves) < 4:
                     expected_moves.append(0)
@@ -951,15 +928,40 @@ class PBREngine():
                         break
                 if not (pokeset["stats"]["hp"] ==
                         self._dolphinIO.read16(
-                            pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr) ==
-                        self._dolphinIO.read16(
                             pkmnLoc + NonvolatilePkmnOffsets.MAX_HP.value.addr)):
                     success = False
                 if not success:
                     logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
                     self._crash(reason="Incorrect pokemon detected")
-                # self._dolphinIO.write16(pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
-                #                         pokeset["stats"]["hp"] // 2)
+
+                if pokeset["stats"]["hp"] != pokeset["curr_hp"]:
+                    writes.append((16,
+                                   pkmnLoc +NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                                   pokeset["curr_hp"]))
+                status_nv = pokeset["status"]["nonvolatile"]
+                status_val = 0
+                if status_nv["slp"]:
+                    status_val = status_nv["slp"]
+                if status_nv["psn"]:
+                    status_val += 0x08
+                if status_nv["brn"]:
+                    status_val += 0x10
+                if status_nv["frz"]:
+                    status_val += 0x20
+                if status_nv["par"]:
+                    status_val += 0x40
+                if status_nv["tox"]:
+                    status_val += 0x80
+                if status_val:
+                    writes.append((8,
+                                   pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
+                                   status_val))
+                if status_nv["tox"]:
+                    writes.append((8,
+                                   pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
+                                   status_nv["tox"] - 1))
+
+
                 # self._dolphinIO.write8(
                 #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
                 #     random.choice([0x40, 0x20, 0x10, 0x8, 0x2]))
@@ -969,7 +971,10 @@ class PBREngine():
                 # self._dolphinIO.write8(
                 #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
                 #     0x9)
-
+        if writes:
+            logger.info("Injecting pre-battle values...")
+            self._dolphinIO.writeMulti(writes)
+            logger.info("Done injecting pre-battle values")
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -1002,10 +1007,12 @@ class PBREngine():
             if slot == 1 and not self._fDoubles:
                 continue
             for side in ("blue", "red"):
-                debugCallback = partial(self._tempCallback, "active", side, slot)
+                debugCallback = partial(self._livePkmnCallback, "active", side, slot)
                 # PBR forces doubles battles to start with >=2 mons per side.
-                logger.info("Setting up active pkmn: side %s, slot %d", side, slot)
-                active = ActivePkmn(side, slot, activeLoc + offset,
+                pkmnLoc = activeLoc + offset
+                logger.info("Setting up active pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slot, pkmnLoc))
+                active = ActivePkmn(side, slot, pkmnLoc,
                                     self.match.teams[side][slot], self._dolphin,
                                     debugCallback)
                 offset += NestedLocations.ACTIVE_PKMN.value.length
@@ -1017,11 +1024,13 @@ class PBREngine():
                 ("blue", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_BLUE)),
                 ("red", self._dolphinIO.readNestedAddr(NestedLocations.NON_VOLATILE_RED))):
             for slotSO, pokeset in enumerate(self.match.teams[side]):
-                logger.info("Setting up nonvolatile pkmn: side %s, slot %d", side, slotSO)
-                debugCallback = partial(self._tempCallback, "nonvolatile", side, slotSO)
+                pkmnLoc = (nonvolatileLoc +
+                           slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length)
+                logger.info("Setting up nonvolatile pkmn: side {}, slot {} at {:0X}"
+                            .format(side, slotSO, pkmnLoc))
+                debugCallback = partial(self._livePkmnCallback, "nonvolatile", side, slotSO)
                 nonvolatile = NonvolatilePkmn(
-                    side, slotSO, nonvolatileLoc +
-                                  slotSO * NestedLocations.NON_VOLATILE_BLUE.value.length,
+                    side, slotSO, pkmnLoc,
                     self.nonvolatileMoveOffsetsSO[side][slotSO],
                     self.match.teams[side][slotSO],
                     self._dolphin, debugCallback)
@@ -1031,7 +1040,7 @@ class PBREngine():
                          pokesetOnly=None):
         logger.debug("Updating live teams. ppOnly: %s readActiveSlots: %s pokesetOnly: %s" %
                        (ppOnly, readActiveSlots, pokesetOnly))
-        teams = self.match.teamsLive
+        teams = self.match.teamsCopy()
         slotConvert = self.match.getFrozenSlotConverter()
 
         # I don't know if this is necessary
@@ -1198,18 +1207,25 @@ class PBREngine():
         Resets some match settings as needed.
         Clicks on "Quit", which takes us to the Battle Menu (PbrGuis.MENU_BATTLE_TYPE)
         '''
+        logger.debug("Quitting match")
         self._resetBlur()
         self.setVolume(0)  # Mute match setup beeping
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
         # Unsubscribe from memory addresses that change from match to match
+        logger.debug("Unsubscribing win result")
+        self._dolphin._unSubscribe(self._win_result_addr)
+        logger.debug("Unsubscribing live data reads")
         for side in ("blue", "red"):
             for active in list(self.active[side]):
                     active.unsubscribe()
             for nonvolatile in list(self.nonvolatileSO[side]):
                     nonvolatile.unsubscribe()
-        self._select(3)  # Select Quit
+        # Wait a bit, because manually selecting forfeit will set the cursor to 1 a bit
+        # prematurely (only relevant when debugging)
+        logger.info("Selecting quit in 30 frames")
+        self._selectLater(30, 3)  # Select Quit
 
     def _nextPkmn(self):
         '''
@@ -1241,9 +1257,9 @@ class PBREngine():
 
         # shift gui back to normal position
         if self.hide_gui:
-            self.setGuiPositionGroup("OFFSCREEN")
+            self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
         else:
-            self.setGuiPositionGroup("MAIN")
+            self.setGuiPositionGroup(self._gui_group)
 
         # The action callback might sleep.  Spawn a worker so self._distinguishGui()
         # doesn't get delayed as well.
@@ -1334,7 +1350,7 @@ class PBREngine():
             fails=self._numMoveSelections,
             switchesAvailable = self.match.switchesAvailable(side),
             fainted=deepcopy(self.match.areFainted),
-            teams=self.match.teamsLive,
+            teams=self.match.teamsCopy(),
             slotConvert=self.match.getFrozenSlotConverter(),
         )
 
@@ -1420,10 +1436,9 @@ class PBREngine():
         self._pressButton(WiimoteButton.NONE)  # no button press
 
         if self._fMatchCancelled:  # quit the match if it was cancelled
-            self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
-                                  GuiMatchInputExecute.INSTA_GIVE_IN)
-            gevent.sleep(11)  # Adjust timing for consistency with the delay of match.checkWinner
-            self._matchOver("draw")
+            logger.info("Injecting double forfeit")
+            # We're subscribed to the win result, so don't read or it'll nuke that subscription.
+            self._dolphinIO.write(8, self._win_result_addr, 0x80, maxAttempts=1, readsPerAttempt=0)
             return
         self._expectedActionCause[self._side][self._slot] = ActionCause.REGULAR
         action = self._getAction(False)  # May sleep
@@ -1503,6 +1518,181 @@ class PBREngine():
     #   Their job is to know what to do when a   #
     #          certain value changes.            #
     ##############################################
+
+    def _distinguishBattleResultText(self, val):
+        logger.debug("Detected battle result text: %s" % val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleResultText:
+            return
+        self._writingBattleResultText = True
+        resultText = self._battleText["WIN_RESULT"][self._win_result.upper()]
+        if resultText:
+            bytes = stringToBytes(resultText)
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_RESULT_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_RESULT_TEXT.value.addr + i, byte)
+        self._writingBattleResultText = False
+        gevent.spawn_later(1.5, self._speedUpEnding)
+
+    def _speedUpEnding(self):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        logger.debug("Speeding up end of match")
+        self._setAnimSpeed(3)
+
+    def _distinguishBattleOpeningText(self, val):
+        logger.debug(val)
+        if self.state != EngineStates.MATCH_RUNNING or self._writingBattleOpeningText:
+            return
+        self._writingBattleOpeningText = True
+        # OPENING_LINE1
+        if self._battleText["OPENING_LINE1"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE1"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + i, byte)
+        # OPENING_LINE2
+        if self._battleText["OPENING_LINE2"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE2"])
+            for i, byte in enumerate(bytes):
+                logger.debug("{:0X} <- {:0X}".format(
+                    Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte))
+                self._dolphin.write(8, Locations.BATTLE_OPENING_TEXT.value.addr + 0x50 + i, byte)
+        # OPENING_LINE3
+        if self._battleText["OPENING_LINE3"]:
+            bytes = stringToBytes(self._battleText["OPENING_LINE3"])
+            if self._language.code == "de":
+                subtext_offset = 0xa971a
+            elif self._language.code == "es":
+                subtext_offset = 0x92978
+            elif self._language.code == "fr":
+                subtext_offset = 0xb2e3a
+            elif self._language.code == "it":
+                subtext_offset = 0xacdfc
+            else:
+                subtext_offset = 0xb09ca
+            msgtext_addr = self._dolphinIO.read32(Locations.MESSAGE_DATA.value.addr, numAttempts=1)
+            subtext_addr = msgtext_addr + subtext_offset
+            writes = [(8, subtext_addr + i, byte) for i, byte in enumerate(bytes)]
+            logger.debug(writes)
+            self._dolphinIO.writeMulti(writes)
+        self._writingBattleOpeningText = False
+
+    def _distinguishOnscreenTextPointer(self, addr):
+        if self.state == EngineStates.MATCH_RUNNING:
+            logger.debug("Onscreen text addr: {:0X}".format(addr))
+            if addr < 0x90000000:
+                return  # irrelevant data
+            offset = addr - self._bpGroupsLoc
+            red_team_offset = LoadedBPOffsets.BP_RED.value.addr
+            if offset > red_team_offset:
+                offset -= red_team_offset
+                side = "red"
+            else:
+                side = "blue"
+            logger.debug("Found offset: {:0X}, {}".format(offset, side))
+            for _id, text in self.avatars[side]["CATCHPHRASES"].items():
+                if offset == LoadedBPOffsets[_id].value.addr:
+                    if offset == LoadedBPOffsets.FIRST_SENT_OUT.value.addr:
+                        # split-screen catcphrases. addr will only point to the red
+                        # catchphrase, but blue catchphrase needs to be injected too.
+                        # Spawn this separately so the blue catchphrase isn't forced to
+                        # wait for red catchphrase injection to complete
+                        # (dolphinIO writes take some time due to memory unreliability,
+                        # and whatever junk is in the blue catchphrase will be onscreen
+                        # until overwritten by blue catchphrase injection)
+                        gevent.spawn(
+                            self._injectCatchphrase,
+                            addr - red_team_offset,
+                            self.avatars["blue"]["CATCHPHRASES"]["FIRST_SENT_OUT"],
+                            "blue",
+                            "FIRST_SENT_OUT"
+                        )
+                    self._injectCatchphrase(addr, text, side, LoadedBPOffsets[_id].name)
+
+    def _injectCatchphrase(self, addr, text, side, catchphrase_id):
+        # inject catchphrase
+        bytes = stringToBytes(text)
+        writes = [(8, addr + i, byte) for i, byte in enumerate(bytes)]
+        logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
+                     .format(side, catchphrase_id, addr, text, writes))
+        self._dolphinIO.writeMulti(writes)
+
+    def _distinguishGameOver(self, game_over):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if game_over == 0:
+            return  # Expected to read 0 initially
+        elif game_over != 1:
+            logger.error("Unexpected game over value: {:0X}".format(game_over))
+        logger.debug("Detected Game Over")
+        self._updateLiveTeams()
+        self._checkExpectedWinResult()
+        self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
+        gevent.spawn_later(2, self.setGuiPositionGroup, GuiPositionGroups.PBR_DEFAULT)
+        self._matchOver(self._win_result)
+        
+    def _checkExpectedWinResult(self):
+        """For checking that pbr's tiebreak rules are what we think they are"""
+        expectedResult = self._calcExpectedWinResult()
+        if not self._fMatchCancelled and self._win_result != expectedResult:
+            logger.error("Unexpected win result: got %s, expected %s. Teams data: %s",
+                         self._win_result, expectedResult, self.match.teamsLive)
+        
+    def _calcExpectedWinResult(self):
+        teams = self.match.teamsLive
+        match = self.match
+        faintedBlue = len([p for p in match.areFainted["blue"] if p])
+        faintedRed = len([p for p in match.areFainted["red"] if p])
+        if faintedBlue != faintedRed:
+            return "blue" if faintedBlue < faintedRed else "red"
+        avgBlueHpPercRemaining = sum([
+            p['curr_hp'] / p['stats']['hp'] for p in teams['blue']
+        ]) / len(teams['blue'])
+        avgRedHpPercRemaining = sum([
+            p['curr_hp'] / p['stats']['hp'] for p in teams['red']
+        ]) / len(teams['red'])
+        if avgBlueHpPercRemaining == avgRedHpPercRemaining:
+            return 'draw'
+        else:
+            return 'blue' if avgBlueHpPercRemaining > avgRedHpPercRemaining else 'red'
+
+    def _distinguishWhichMove(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_MOVE.name, data))
+
+    def _distinguishWhichPkmn(self, data):
+        logger.debug("{}: {:02x}".format(Locations.WHICH_PKMN.name, data))
+
+    def _distinguishMatch(self, data):
+        logger.debug("{}: {:08x}".format(Locations.GUI_STATE_MATCH.name, data))
+        prevGuiStateMatch = self._guiStateMatch
+        gui_type = data >> 16 & 0xff
+        pkmn_input_type = data & 0xff
+
+        if self.state == EngineStates.MATCH_RUNNING:
+            # True if in the pkmn select menu, and a pkmn input needs to be made
+            # (i.e., there are no popups, and a pkmn input has not successfully gone
+            # through yet).
+            self._fNeedPkmnInput = gui_type == GuiStateMatch.PKMN
+
+            self._fLastGuiWasSwitchPopup = (prevGuiStateMatch ==
+                                            GuiStateMatch.SWITCH_POPUP)
+
+            # True when the pkmn menu pops up, and remains true until it is gone.
+            # Remains true through any "can't switch" popups.
+            self._fGuiPkmnUp = pkmn_input_type in (GuiStateMatch.TARGET,
+                                                   GuiStateMatch.SWITCH)
+        else:
+            self._fNeedPkmnInput = False
+            self._fLastGuiWasSwitchPopup = False
+            self._fGuiPkmnUp = False
+
+        self._guiStateMatch = data
+
+        if prevGuiStateMatch >> 16 & 0xff != gui_type:
+            # If not a duplicate, run self._distinguishGui() with the gui.
+            self._distinguisher.distinguishMatch(gui_type)
 
     def _distinguishTurn(self, val):
         # See Locations.CURRENT_TURN
@@ -1594,7 +1784,7 @@ class PBREngine():
         if self.state != EngineStates.MATCH_RUNNING:
             return
         # move gui back into place. Don't hide this even with hide_gui set
-        self.setGuiPositionGroup("MAIN")
+        self.setGuiPositionGroup(self._gui_group)
         text = bytesToString(data)
         # skip text invalidations
         if text.startswith("##"):
@@ -1662,34 +1852,47 @@ class PBREngine():
         if string.startswith("##"):
             return
 
-        self.setGuiPositionGroup("MAIN")
+        self.setGuiPositionGroup(self._gui_group)
 
         # log the whole thing
         self.on_infobox(text=string)
 
         # CASE 1: Someone fainted.
-        match = re.search(r"^Team (Blue|Red)'s (.+?) fainted!$",
-                          string)
+        if self._language.code == "de":
+            # has an extra space after player name, for some reason
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
+        elif self._language.code == "es":
+            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
+        elif self._language.code == "fr":
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
+        elif self._language.code == "it":
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
+        else:
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$",
+                              string)
         if match:
-            side = match.group(1).lower()
-            self.match.getSlotFromIngamename(side, match.group(2))
-            self.match.fainted(side, match.group(2))
+            side = self._get_side_from_player_name(match.group("player"))
+            self.match.getSlotFromIngamename(side, match.group("pkmn"))
+            self.match.fainted(side, match.group("pkmn"))
             self._expectedActionCause[side][self._slot] = ActionCause.FAINT
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search(
-            r"^Team (Blue|Red)'s (.+?) was dragged out!$", string)
+            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
         if match:
-            side = match.group(1).lower()
+            side = self._get_side_from_player_name(match.group("player"))
             self.match.draggedOut(side, match.group(2))
-            self.match.getSlotFromIngamename(side, match.group(2))
             return
 
-        # update the win detection for each (unprocessed) message.
-        # e.g. "xyz was buffeted by the sandstorm" takes extra time for
-        # the 2nd pokemon to die and therefore needs a timer reset
-        self.match.update_winning_checker()
+    def _get_side_from_player_name(self, player):
+        if player == self.avatars["blue"]["NAME"]:
+            return "blue"
+        elif player == self.avatars["red"]["NAME"]:
+            return "red"
+        else:
+            raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
+                             (player, self.avatars))
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
@@ -1863,15 +2066,15 @@ class PBREngine():
                 return
             # try early: shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPositionGroup("OFFSCREEN")
+                self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
             else:
-                self.setGuiPositionGroup("MAIN")
+                self.setGuiPositionGroup(self._gui_group)
         elif gui == PbrGuis.MATCH_MOVE_SELECT:
             # shift gui back to normal position
             if self.hide_gui:
-                self.setGuiPositionGroup("OFFSCREEN")
+                self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
             else:
-                self.setGuiPositionGroup("MAIN")
+                self.setGuiPositionGroup(self._gui_group)
             # erase the "xyz used move" string, so we get the event of it
             # changing.
             # Change the character "R" or "B" to 0, so this change won't get

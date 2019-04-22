@@ -5,7 +5,8 @@ Created on 09.09.2015
 '''
 
 from ..util import intToFloatRepr
-from enum import IntEnum
+from enum import IntEnum, Enum
+import collections
 
 
 ##########################################
@@ -57,6 +58,30 @@ class Colosseums(IntEnum):
     STARGAZER   = 0x380003f1
     LAGOON      = 0x380003f2
 
+# `num` matches Nintendo's Wii language numbering.
+Language = collections.namedtuple("Language", "name code num supported")
+
+
+def getLanguage(text):
+    for lang in WII_LANGUAGES:
+        if text.lower() in (lang.name.lower(), lang.code, str(lang.num)):
+            return lang
+    return None
+
+
+WII_LANGUAGES = [
+    Language("Japanese", "ja", 0, False),  # Not PAL, so incompatible with pbrEngine
+    Language("English", "en", 1, True),
+    Language("German", "de", 2, True),
+    Language("French", "fr", 3, True),
+    Language("Spanish", "es", 4, True),
+    Language("Italian", "it", 5, True),
+    Language("Dutch", "nl", 6, False),  # Not sure if exists
+    Language("Simplified Chinese", "zh_CN", 7, False),  # Not sure if exists
+    Language("Traditional Chinese", "zh_TW", 8, False),  # Not sure if exists
+    Language("Korean", "ko", 9, False),  # Not sure if exists
+]
+
 
 class FieldEffects(IntEnum):
     # Weather that can end after some number of turn (ie. everything but fog)
@@ -98,31 +123,34 @@ class TrainerStyle(IntEnum):
 
 
 DefaultValues = {
-    "GUI_POS_X": intToFloatRepr(0xbe830304),
-    "GUI_POS_Y": intToFloatRepr(0x41700000),
     "SPEED1": 0x40a00015,
     "SPEED2": 0x40a00000,
     "BLUR1": 0x4b7fffff,
     "BLUR2": 0x47c35000,
 }
 
-GuiPositionGroups = {
-    "PBR_DEFAULT": {  # The game's default values. Currently unused
+class GuiPositionGroups(Enum):
+    PBR_DEFAULT = {  # The game's default values. Currently unused
         "GUI_POS_X": intToFloatRepr(0xbe830304),  # -0.25
         "GUI_POS_Y": intToFloatRepr(0x41700000),  # 15
         "GUI_SIZE" : intToFloatRepr(0x3f880000),  # 1.06
         "GUI_WIDTH": intToFloatRepr(0x3FAACCCD),  # 1.33
-    },
-    "MAIN": {
-        "GUI_POS_X": intToFloatRepr(0xbec20304),  # -.38
-        "GUI_POS_Y": intToFloatRepr(0xc1e00000),  # -28.0
-        "GUI_SIZE" : intToFloatRepr(0x3f6cd800),  # -0.92
-        "GUI_WIDTH": intToFloatRepr(0x3fa3ccdd),  # 1.28
-    },
-    "OFFSCREEN": {
+    }
+    MAIN = {
+        "GUI_POS_X": intToFloatRepr(0xbee80304),  # -.45
+        "GUI_POS_Y": intToFloatRepr(0xc2280000),  # -48
+        "GUI_SIZE" : intToFloatRepr(0x3f60d800),  # 0.87
+        "GUI_WIDTH": intToFloatRepr(0x3fa3c0dd),  # 1.28
+    }
+    MAIN_LOWERED = {
+        "GUI_POS_X": intToFloatRepr(0xbee80304),  # -.45
+        "GUI_POS_Y": intToFloatRepr(0xc2900000),  # -72
+        "GUI_SIZE" : intToFloatRepr(0x3f60d800),  # 0.87
+        "GUI_WIDTH": intToFloatRepr(0x3fa3c0dd),  # 1.28
+    }
+    OFFSCREEN = {
         "GUI_POS_Y": 100000.0,
     }
-}
 
 
 ##########################################

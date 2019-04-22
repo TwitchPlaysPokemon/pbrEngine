@@ -113,6 +113,7 @@ class Locations(Enum):
     GUI_STATE_ORDER  = Loc(0x487445, 1)
     GUI_STATE_BP_SELECTION = Loc(0x476973, 1)
     GUI_TEMPTEXT     = Loc(0x4fd4a4, 72)
+    GUI_MATCH_OVER   = Loc(0x479f20, 4)
 
     # One byte per pkmn. The value is the pkmn's slot for the match, or 0 if not selected.
     ORDER_BLUE       = Loc(0x48745c, 6)
@@ -161,6 +162,12 @@ class Locations(Enum):
     FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
     ANIMATION_STRENGTH = Loc(0x6426b8, 4)  # default 1.0
 
+    # E.g., Waterfall Colosseum / 2-Player Battle
+    BATTLE_OPENING_TEXT = Loc(0x479f44, 0xa0)
+    BATTLE_RESULT_TEXT = Loc(0x479fe4, 0x50)
+
+    MESSAGE_DATA = Loc(0x63e90c, 0x4)  # If this breaks, try 0x4fcf20
+
     # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
     # PRE_BATTLE_BLUE = Loc(0x922b8bc0, 4)
@@ -189,6 +196,15 @@ class NestedLocations(Enum):
     ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])
     ACTIVE_PKMN_SLOTS  = NestedLoc(0x6405C0, 192, [0x30, 0x219C])
 
+    # 00: match ongoing
+    # 01: blue win
+    # 02: red win
+    # 03: draw
+    # 80: draw (both sides forfeited)
+    # c1: red forfeited (injecting this doesn't work- pbr just ignores it)
+    # c3: blue forfeited (injecting this doesn't work- pbr just ignores it)
+    WIN_RESULT         = NestedLoc(0x6405C0, 1, [0x23e4])
+
     # Fixed-order non-volitile pkmn data.
     # Non-volatile means this data does not contain any bytes for volatile conditions like
     # confuse, transform effects, mimic effects, etc.
@@ -201,6 +217,8 @@ class NestedLocations(Enum):
     PRE_BATTLE_BLUE    = NestedLoc(0x6405f4, 0xA4, [0x4, 0x4, 0x0])
     PRE_BATTLE_RED     = NestedLoc(0x6405f4, 0xA4, [0x4, 0x8, 0x0])
 
+    # Points to move names in "Team blue's <> used <>", and also to onscreen catchphrases.
+    ONSCREEN_TEXT      = NestedLoc(0x487770, 1, [0])
 
 class BattleSettingsOffsets(Enum):
     RULESET         = Loc(0x04, 1)
@@ -263,7 +281,7 @@ class LoadedBPOffsets(Enum):
     # Below: offsets from the start of NestedLocations.LOADED_BPASSES_GROUPS
     ########
     SETTINGS            = Loc(-0x450, 4)
-    GROUP1              = Loc(0x0, 4)         # Only this data determines avatars for the battle.
+    GROUP1              = Loc(0x0, 4)         # Only this data determines avatars attributes for the battle.
     GROUP2              = Loc(0x1bb0, 4)      # Only this data determines pkmn for the battle.
     GROUP3              = Loc(0x1bb0 * 2, 4)  # Only this data determines avatars shown in the "vs" screen after clicking "Start Battle".
 
@@ -303,11 +321,11 @@ class LoadedBPOffsets(Enum):
     # is represented as FFFF 0015.
     GREETING            = Loc(0X28, 48)  # 24 chars
     # 0000 FFFF  <- bytes in between GREETING and POKEMON_SENT_OUT
-    POKEMON_SENT_OUT    = Loc(0x5c, 52)  # 12 chars, newline, 12 chars (a newline is FFFF FFFE)
+    FIRST_SENT_OUT      = Loc(0x5c, 52)  # 12 chars, newline, 12 chars (a newline is FFFF FFFE)
     # 0000 0000  <- similarly 
-    POKEMON_SHIFT1      = Loc(0x94, 48)  # 24 chars
+    POKEMON_RECALLED    = Loc(0x94, 48)  # 24 chars
     # 0000 0000
-    POKEMON_SHIFT2      = Loc(0xc8, 48)  # 24 chars
+    POKEMON_SENT_OUT    = Loc(0xc8, 48)  # 24 chars
     # 0000 FFFF
     WIN                 = Loc(0xfc, 52)  # 24 chars, newline, 24 chars
     # 0000 0000

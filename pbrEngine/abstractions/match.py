@@ -21,7 +21,6 @@ class Match(object):
         arg2: <slot> team index of the dead pokemon
         '''
         self.on_faint = EventHook(side=str, slot=int)
-        self.on_win = EventHook(winner=str)
         self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int)
 
         self._check_greenlet = None
@@ -48,7 +47,7 @@ class Match(object):
                           "red": list(range(len(pkmn_red)))}
 
     def teamsCopy(self):
-        return {"blue": list(self.teams["blue"]), "red": list(self.teams["red"])}
+        return {"blue": list(self.teamsLive["blue"]), "red": list(self.teamsLive["red"])}
 
     def getFrozenSlotConverter(self):
         slotSOMap = deepcopy(self.slotSOMap)
@@ -113,7 +112,7 @@ class Match(object):
     def fainted(self, side, pkmn_name):
         slot = self.getSlotFromIngamename(side, pkmn_name)
         if slot is None:
-            logger.error("Didn't recognize pokemon name: {} ", pkmn_name)
+            logger.error("Didn't recognize pokemon name: `{}`", pkmn_name)
             return
         elif self.areFainted[side][slot]:
             logger.error("{} ({} {}) fainted, but was already marked as fainted"
@@ -121,17 +120,6 @@ class Match(object):
             return
         self.areFainted[side][slot] = True
         self.on_faint(side=side, slot=slot)
-        self.update_winning_checker()
-
-    def update_winning_checker(self):
-        '''Initiates a delayed win detection.
-        Has to be delayed, because there might be followup-deaths.'''
-        if all(self.areFainted["blue"]) or all(self.areFainted["red"]):
-            # kill already running wincheckers
-            if self._check_greenlet and not self._check_greenlet.ready():
-                self._check_greenlet.kill()
-            # 11s delay = enough time for swampert (>7s death animation) to die
-            self._check_greenlet = self._timer.spawn_later(660, self.checkWinner)
 
     def getSlotFromIngamename(self, side, pkmn_name):
         # Returns the slot of the pokemon with this name.
@@ -168,23 +156,3 @@ class Match(object):
 
     def draggedOut(self, side, pkmn_name):
         pass
-
-    def checkWinner(self):
-        '''
-        TODO this will be an issue if we ever slow down below 1x speed. Why aren't we just spawning the match finished check when the quit menu comes up?
-        Shall be called about 11 seconds after a fainted textbox appears.
-        Must have this delay if the 2nd pokemon died as well and this was a
-        KAPOW-death, therefore no draw.
-        '''
-        deadBlue = all(self.areFainted["blue"])
-        deadRed = all(self.areFainted["red"])
-        winner = "draw"
-        if deadBlue and deadRed:  # Possible draw, but check for special cases.
-            side, move = self._lastMove
-            if move.lower() in ("explosion", "selfdestruct", "self-destruct"):
-                winner = invertSide(side)
-        elif deadBlue:
-            winner = "red"
-        else:
-            winner = "blue"
-        self.on_win(winner=winner)

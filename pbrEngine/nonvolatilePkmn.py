@@ -33,7 +33,8 @@ class NonvolatilePkmn:
         # Unfortunately, it takes some time for dolphin to respond with the current
         # values- hence we need initial values in place for the 1st move selection of
         # the match.
-        self.fields["MAX_HP"] = self.fields["CURR_HP"] = starting_pokeset["stats"]["hp"]
+        self.fields["MAX_HP"] = starting_pokeset["stats"]["hp"]
+        self.fields["CURR_HP"] = starting_pokeset["curr_hp"]
         self.fields["TOXIC_COUNTUP"] = 0
         self.fields["STATUS"] = 0
         for i in range(0, 4):
