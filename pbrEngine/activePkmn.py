@@ -81,6 +81,8 @@ class ActivePkmn:
             # print("Test:")
             # dolphin_callback(42)
             # print()
+            logger.debug("Subscribing to active pkmn field {} at {:0X}"
+                         .format(offset.name, offset_addr))
             dolphin._subscribe(offset_length * 8, offset_addr, dolphin_callback)
 
     def unsubscribe(self):
