@@ -76,7 +76,8 @@ class NonvolatilePkmn:
             if "PP" in offset.name or "MOVE" in offset.name:
                 offset_addr += movesOffset
             offset_length = offset.value.length
-            logger.debug("subscribing NVP %s at %s", offset.name, offset_addr)
+            logger.debug("Subscribing to non-volatile pkmn field {} at {:0X}"
+                         .format(offset.name, offset_addr))
             dolphin._subscribe(offset_length * 8, offset_addr, dolphin_callback)
 
     def unsubscribe(self):

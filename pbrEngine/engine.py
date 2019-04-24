@@ -19,7 +19,7 @@ from functools import partial
 from enum import Enum
 from contextlib import suppress
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .eps import get_pokemon_from_data
 
@@ -798,11 +798,14 @@ class PBREngine():
         '''
         Once the in-battle structures are ready, read/write weather and battle pkmn data
         '''
-        self._setupWinResultDetection()
-        if self._startingWeather:
-            self._setStartingWeather()
-        self._setupActivePkmn()
-        self._setupNonvolatilePkmn()
+        try:
+            self._setupWinResultDetection()
+            if self._startingWeather:
+                self._setStartingWeather()
+            self._setupActivePkmn()
+            self._setupNonvolatilePkmn()
+        except Exception:
+            self._crash("Battle state setup failed")
 
     def _setupWinResultDetection(self):
         self._win_result_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
@@ -901,39 +904,27 @@ class PBREngine():
 
         self._dolphinIO.writeMulti(writes)
 
-    def _setupPreBattlePkmn(self):
+    def _setupPreBattleTeams(self):
         logger.info("Setting up pre-battle pkmn")
+        setupStartTime = datetime.utcnow()
         writes = []
-        for side, preBattleLoc in (
-                ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE)),
-                ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED))):
+        moveReads = []
+        side_addresses = (
+                ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE,
+                                                        readsPerAttempt=1)),
+                ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED,
+                                                        readsPerAttempt=1)))
+        for side, preBattleLoc in side_addresses:
             for slotSO, pokeset in enumerate(self.match.teams[side]):
-                success = False
+                self.nonvolatileMoveOffsetsSO[side].append(None)
                 pkmnLoc = (preBattleLoc +
                            slotSO * NestedLocations.PRE_BATTLE_BLUE.value.length)
                 logger.info("Setting up pre-battle pkmn: side {}, slot {} at {:0X}"
                             .format(side, slotSO, pkmnLoc))
-                expected_moves = [move["id"] for move in pokeset["moves"]]
-                while len(expected_moves) < 4:
-                    expected_moves.append(0)
-                moveReads = []
                 for baseMovesOffset in range(0x00, 0x90, 0x10):
                     moveReads.extend([(16, pkmnLoc + baseMovesOffset + 2 * moveOffset)
                                       for moveOffset in range(4)])
-                moveReads = self._dolphinIO.readMulti(moveReads)
-                for row, baseMovesOffset in enumerate(range(0x00, 0x90, 0x10)):
-                    if moveReads[4*row : 4*(row+1)] == expected_moves:
-                        success = True
-                        self.nonvolatileMoveOffsetsSO[side].append(baseMovesOffset)
-                        break
-                if not (pokeset["stats"]["hp"] ==
-                        self._dolphinIO.read16(
-                            pkmnLoc + NonvolatilePkmnOffsets.MAX_HP.value.addr)):
-                    success = False
-                if not success:
-                    logger.debug("reads:%s\nlooking for:%s", moveReads, expected_moves)
-                    self._crash(reason="Incorrect pokemon detected")
-
+                # Append writes
                 if pokeset["stats"]["hp"] != pokeset["curr_hp"]:
                     writes.append((16,
                                    pkmnLoc +NonvolatilePkmnOffsets.CURR_HP.value.addr,
@@ -961,20 +952,37 @@ class PBREngine():
                                    pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
                                    status_nv["tox"] - 1))
 
-
-                # self._dolphinIO.write8(
-                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
-                #     random.choice([0x40, 0x20, 0x10, 0x8, 0x2]))
-                # self._dolphinIO.write8(
-                #     pkmnLoc + NonvolatilePkmnOffsets.STATUS.value.addr,
-                #     0x80)
-                # self._dolphinIO.write8(
-                #     pkmnLoc + NonvolatilePkmnOffsets.TOXIC_COUNTUP.value.addr,
-                #     0x9)
+        # Inject values first- this must finish before the pokemon come out.
         if writes:
             logger.info("Injecting pre-battle values...")
             self._dolphinIO.writeMulti(writes)
-            logger.info("Done injecting pre-battle values")
+            elapsed = datetime.utcnow() - setupStartTime
+            # if elapsed > timedelta(seconds=3):
+            #     logger.error("Pre-battle setup took %s seconds", elapsed)
+            logger.info("Done injecting pre-battle values after %s", elapsed)
+
+        # Determine the move offsets for nonvolatile pokemon data tracking.
+        # It's a brute force detection of 9 possible locations.
+        moveReads = self._dolphinIO.readMulti(moveReads)
+        for side, preBattleLoc in side_addresses:
+            for slotSO, pokeset in enumerate(self.match.teams[side]):
+                success = False
+                pkmnMoveReads = moveReads[:36]
+                moveReads = moveReads[36:]
+                expected_moves = [move["id"] for move in pokeset["moves"]]
+                while len(expected_moves) < 4:
+                    expected_moves.append(0)
+                for row, baseMovesOffset in enumerate(range(0x00, 0x90, 0x10)):
+                    if pkmnMoveReads[4*row : 4*(row+1)] == expected_moves:
+                        success = True
+                        self.nonvolatileMoveOffsetsSO[side][slotSO] = baseMovesOffset
+                        break
+                if not success:
+                    logger.debug("reads:%s\nlooking for:%s", pkmnMoveReads, expected_moves)
+                    self._crash(reason="Incorrect pokemon detected")
+
+        elapsed = datetime.utcnow() - setupStartTime
+        logger.info("Done setting up pre-battle pkmn after %s", elapsed)
 
     def _setStartingWeather(self):
         '''Set weather before the first turn of the battle
@@ -1165,9 +1173,15 @@ class PBREngine():
         self._injectAvatars()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
+        # In about 2 seconds, PBR will set the size of the HP bars (the ones that show
+        # damage reduction immediately as a pokemon gets injured) according to the
+        # current FOV. After that, changes to the FOV will not affect the HP bar size.
+        # So we set the fov right now.  This does not affect the size of the HP bars in
+        # the input selection guis.
+        gevent.spawn(self._setFov, self._matchFov).link_exception(_logOnException)
         self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
         self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
-        self.timer.spawn_later(450, self._setupPreBattlePkmn).link_exception(_logOnException)
+        self.timer.spawn_later(300, self._setupPreBattleTeams).link_exception(self._crashOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
         self.lastStartTime = datetime.utcnow()
@@ -1175,7 +1189,6 @@ class PBREngine():
     def _matchStartDelayed(self):
         # just after the "whoosh" sound, and right before the colosseum becomes visible
         self.setVolume(self._matchVolume)
-        self._setFov(self._matchFov)
         self._setEmuSpeed(self._matchEmuSpeed)
         self._setAnimSpeed(self._matchAnimSpeed)
         self._setAnnouncer(self._fMatchAnnouncer)
@@ -1636,17 +1649,21 @@ class PBREngine():
     def _checkExpectedWinResult(self):
         """For checking that pbr's tiebreak rules are what we think they are"""
         expectedResult = self._calcExpectedWinResult()
-        if not self._fMatchCancelled and self._win_result != expectedResult:
+        if (expectedResult is not None and not self._fMatchCancelled and
+                self._win_result != expectedResult):
             logger.error("Unexpected win result: got %s, expected %s. Teams data: %s",
                          self._win_result, expectedResult, self.match.teamsLive)
         
     def _calcExpectedWinResult(self):
         teams = self.match.teamsLive
         match = self.match
-        faintedBlue = len([p for p in match.areFainted["blue"] if p])
-        faintedRed = len([p for p in match.areFainted["red"] if p])
-        if faintedBlue != faintedRed:
-            return "blue" if faintedBlue < faintedRed else "red"
+        numFaintedBlue = len([p for p in match.areFainted["blue"] if p])
+        numFaintedRed = len([p for p in match.areFainted["red"] if p])
+        if (numFaintedBlue == len(teams["blue"]) and
+                numFaintedRed == len(teams["red"])):
+            return None  # not sure who won- depends on last moves and such
+        if numFaintedBlue != numFaintedRed:
+            return "blue" if numFaintedBlue < numFaintedRed else "red"
         avgBlueHpPercRemaining = sum([
             p['curr_hp'] / p['stats']['hp'] for p in teams['blue']
         ]) / len(teams['blue'])
@@ -2114,6 +2131,17 @@ class PBREngine():
         # Trigger the on_gui event now.
         # The gui is considered valid if we reach here.
         self.on_gui(gui=gui)
+
+    def _crashOnException(self, greenlet):
+        try:
+            greenlet.get()
+        except EngineCrash:
+            logger.info("Greenlet exited after calling the crash callback", exc_info=True)
+        except DolphinNotConnected:
+            logger.debug("Greenlet exited because dolphin was not connected", exc_info=True)
+        except Exception:
+            logger.exception("Engine greenlet crashed")
+            self._crash()
 
 
 class EngineCrash(Exception):
