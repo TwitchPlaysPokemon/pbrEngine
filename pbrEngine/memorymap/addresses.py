@@ -94,10 +94,10 @@ class Locations(Enum):
 
     # PNAME_BLUE       = Loc(0x8047850c, 20)
     # PNAME_RED        = Loc(0x80478f7c, 20)
-    PNAME_BLUE       = Loc(0xc80083452, 20)
-    PNAME_RED        = Loc(0xc80083486, 20)
-    PNAME_BLUE2      = Loc(0xc800834BA, 20)
-    PNAME_RED2       = Loc(0xc800834EE, 20)
+    PNAME_BLUE       = Loc(0x80c83452, 20)
+    PNAME_RED        = Loc(0x80c83486, 20)
+    PNAME_BLUE2      = Loc(0x80c834BA, 20)
+    PNAME_RED2       = Loc(0x80c834EE, 20)
     # PP_BLUE          = Loc(0x80478534, 4)  # TODO don't use yet, the addresses change, find the pattern
     # PP_RED           = Loc(0x80478f64, 4)  # ^
     CURSOR_POS       = Loc(0x8063eb9a, 2)
@@ -218,7 +218,7 @@ class NestedLocations(Enum):
     PRE_BATTLE_RED     = NestedLoc(0x806405f4, 0xA4, [0x4, 0x8, 0x0])
 
     # Points to move names in "Team blue's <> used <>", and also to onscreen catchphrases.
-    ONSCREEN_TEXT      = NestedLoc(0x487770, 1, [0])
+    ONSCREEN_TEXT      = NestedLoc(0x80487770, 1, [0])
 
 class BattleSettingsOffsets(Enum):
     RULESET         = Loc(0x04, 1)

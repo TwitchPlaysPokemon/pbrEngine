@@ -92,7 +92,7 @@ def onFaint(side, slot, fainted, teams, slotConvert):
     display.addEvent("%s (%s) is down." % (mon["ingamename"], side))
 
 
-def onSwitch(side, slot_active, slot_inactive, pokeset_sentout, pokeset_recalled, obj):
+def onSwitch(side, slot_active, slot_inactive, pokeset_sentout, pokeset_recalled, obj, teams, slotConvert):
     display.addEvent("%s (%s) is sent out." % (pokeset_sentout["ingamename"], side))
 
 
