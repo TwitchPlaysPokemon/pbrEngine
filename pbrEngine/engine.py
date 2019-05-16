@@ -23,8 +23,10 @@ from datetime import datetime, timedelta
 
 from .eps import get_pokemon_from_data
 
-from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, LoadedBPOffsets
-from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups, getLanguage
+from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, \
+    LoadedBPOffsets
+from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, CursorPosBP, GuiStateMatch, \
+    GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups, getLanguage
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, EngineStates
 from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
@@ -100,10 +102,12 @@ class PBREngine():
         '''
         logger.info("Initializing PBREngine")
         self._actionCallback = actionCallback
+
         def _crash(reason=None):
             logger.debug("pbrEngine crashing", stack_info=True)
             gevent.spawn(crashCallback, reason=reason).link_exception(_logOnException)
             raise EngineCrash(reason)
+
         self._crash = _crash
         self._distinguisher = Distinguisher(self._distinguishGui)
         self._dolphin = dolphinWatch.DolphinConnection(host, port)
@@ -148,7 +152,7 @@ class PBREngine():
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
         self.on_attack = EventHook(side=str, slot=int, moveindex=int,
-                                  movename=str, teams=dict, obj=object)
+                                   movename=str, teams=dict, obj=object)
         '''
         Event of a pokemon fainting.
         arg0: <side> "blue" "red"
@@ -228,7 +232,8 @@ class PBREngine():
         self._dolphin.connect()
         self._stuckcrasher_start_greenlet = gevent.spawn_later(
             40, self._stuckcrasher_start)
-        self._stuckcrasher_start_greenlet.link_exception(_logOnException)  # in a different statement, because link_exception returns nothing
+        self._stuckcrasher_start_greenlet.link_exception(
+            _logOnException)  # in a different statement, because link_exception returns nothing
 
     def _stuckcrasher_start(self):
         if self.state < EngineStates.WAITING_FOR_NEW:
@@ -340,7 +345,7 @@ class PBREngine():
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
 
     def _subscribe(self, loc, callback):
-        self._dolphin._subscribe(loc.length*8, loc.addr, callback)
+        self._dolphin._subscribe(loc.length * 8, loc.addr, callback)
 
     def _subscribeMulti(self, loc, callback):
         self._dolphin._subscribeMulti(loc.length, loc.addr, callback)
@@ -348,7 +353,7 @@ class PBREngine():
     def _subscribeMultiList(self, length, loc, callback):
         # used for a list/deque of strings
         for i in range(length):
-            self._dolphin._subscribeMulti(loc.length, loc.addr+loc.length*i,
+            self._dolphin._subscribeMulti(loc.length, loc.addr + loc.length * i,
                                           callback)
 
     def reset(self):
@@ -384,7 +389,7 @@ class PBREngine():
 
         # Used during match setup.
         self._moveBlueUsed = 0  # FIXME: never changed
-        self._moveRedUsed = 0   # FIXME: never changed
+        self._moveRedUsed = 0  # FIXME: never changed
         self._bp_offset = 0
         self._posBlues = []  # Used during BP selection
         self._posReds = []
@@ -415,13 +420,13 @@ class PBREngine():
             }
         }
 
-
     ################s####################################
     # The below functions are presented to the outside #
     #         Use these to control the PBR API         #
     ####################################################
 
-    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0, gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
+    def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0,
+                     gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -665,7 +670,6 @@ class PBREngine():
             self._dolphin.write32(getattr(Locations, pos_name).value.addr,
                                   floatToIntRepr(pos_val))
 
-
     #######################################################
     #             Below are helper functions.             #
     # They are just bundling or abstracting functionality #
@@ -854,7 +858,6 @@ class PBREngine():
         self._dolphinIO.write(offset.value.length * 8, settingsLoc + offset.value.addr,
                               self.colosseum & 0xFFFF)
 
-
     def _injectPokemon(self):
         self._bpGroupsLoc = self._dolphinIO.readNestedAddr(
             NestedLocations.LOADED_BPASSES_GROUPS)
@@ -889,7 +892,7 @@ class PBREngine():
                 optionLoc = LoadedBPOffsets[optionName].value
                 logger.debug("Writing option {}: {:0X} <- {}"
                              .format(optionName, teamAddr + optionLoc.addr, optionVal))
-                writes.append((8*optionLoc.length, teamAddr + optionLoc.addr, optionVal))
+                writes.append((8 * optionLoc.length, teamAddr + optionLoc.addr, optionVal))
             # Catchphrases are injected in real time to overcome normal character limits, 
             # but the lag sometimes causes default/old catchphrase data to be visible
             # onscreen for a few ms. To minimize that, we inject catchphrases here too
@@ -901,7 +904,6 @@ class PBREngine():
                 logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
                              .format(side, _id, addr, text, writes))
 
-
         self._dolphinIO.writeMulti(writes)
 
     def _setupPreBattleTeams(self):
@@ -910,10 +912,10 @@ class PBREngine():
         writes = []
         moveReads = []
         side_addresses = (
-                ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE,
-                                                        readsPerAttempt=1)),
-                ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED,
-                                                        readsPerAttempt=1)))
+            ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE,
+                                                    readsPerAttempt=1)),
+            ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED,
+                                                   readsPerAttempt=1)))
         for side, preBattleLoc in side_addresses:
             for slotSO, pokeset in enumerate(self.match.teams[side]):
                 self.nonvolatileMoveOffsetsSO[side].append(None)
@@ -927,7 +929,7 @@ class PBREngine():
                 # Append writes
                 if pokeset["stats"]["hp"] != pokeset["curr_hp"]:
                     writes.append((16,
-                                   pkmnLoc +NonvolatilePkmnOffsets.CURR_HP.value.addr,
+                                   pkmnLoc + NonvolatilePkmnOffsets.CURR_HP.value.addr,
                                    pokeset["curr_hp"]))
                 status_nv = pokeset["status"]["nonvolatile"]
                 status_val = 0
@@ -973,7 +975,7 @@ class PBREngine():
                 while len(expected_moves) < 4:
                     expected_moves.append(0)
                 for row, baseMovesOffset in enumerate(range(0x00, 0x90, 0x10)):
-                    if pkmnMoveReads[4*row : 4*(row+1)] == expected_moves:
+                    if pkmnMoveReads[4 * row: 4 * (row + 1)] == expected_moves:
                         success = True
                         self.nonvolatileMoveOffsetsSO[side][slotSO] = baseMovesOffset
                         break
@@ -1047,14 +1049,14 @@ class PBREngine():
     def _updateLiveTeams(self, ppOnly=False, readActiveSlots=False,
                          pokesetOnly=None):
         logger.debug("Updating live teams. ppOnly: %s readActiveSlots: %s pokesetOnly: %s" %
-                       (ppOnly, readActiveSlots, pokesetOnly))
+                     (ppOnly, readActiveSlots, pokesetOnly))
         teams = self.match.teamsCopy()
         slotConvert = self.match.getFrozenSlotConverter()
 
         # I don't know if this is necessary
         if readActiveSlots:
             loc = self._dolphinIO.readNestedAddr(NestedLocations.ACTIVE_PKMN_SLOTS)
-            activeSlotsMem = self._dolphinIO.readMulti([(8, loc + i) for i in range(0,4)])
+            activeSlotsMem = self._dolphinIO.readMulti([(8, loc + i) for i in range(0, 4)])
             if self._fDoubles:
                 activeSlotsSO = {"blue": [activeSlotsMem[0], activeSlotsMem[2]],
                                  "red": [activeSlotsMem[1], activeSlotsMem[3]]}
@@ -1085,7 +1087,8 @@ class PBREngine():
                     logger.debug("Updating active pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
                 else:
                     self.nonvolatileSO[side][slotSO].updatePokeset(pokeset, ppOnly)
-                    logger.debug("Updating nonvolatile pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
+                    logger.debug(
+                        "Updating nonvolatile pokeset. slots: %d, %d: %s" % (slot, slotSO, pokeset["ingamename"]))
                 pokecat.fix_moves(pokeset)
                 logger.debug("Pokeset %s after update %s" % (pokeset["ingamename"], pokeset))
 
@@ -1105,12 +1108,12 @@ class PBREngine():
     def pkmnSlotToButton(self, slot):
         # TODO fix sideways remote
         return [
-            WiimoteButton.RIGHT,    # 1st Pokemon, onscreen up
-            WiimoteButton.DOWN,     # 2nd "" right
-            WiimoteButton.UP,       # 3rd "" left
-            WiimoteButton.LEFT,     # 4th "" down
-            WiimoteButton.TWO,      # 5th "" two
-            WiimoteButton.ONE       # 6th "" one
+            WiimoteButton.RIGHT,  # 1st Pokemon, onscreen up
+            WiimoteButton.DOWN,  # 2nd "" right
+            WiimoteButton.UP,  # 3rd "" left
+            WiimoteButton.LEFT,  # 4th "" down
+            WiimoteButton.TWO,  # 5th "" two
+            WiimoteButton.ONE  # 6th "" one
         ][slot]
 
     def _getInputState(self):
@@ -1232,9 +1235,9 @@ class PBREngine():
         logger.debug("Unsubscribing live data reads")
         for side in ("blue", "red"):
             for active in list(self.active[side]):
-                    active.unsubscribe()
+                active.unsubscribe()
             for nonvolatile in list(self.nonvolatileSO[side]):
-                    nonvolatile.unsubscribe()
+                nonvolatile.unsubscribe()
         # Wait a bit, because manually selecting forfeit will set the cursor to 1 a bit
         # prematurely (only relevant when debugging)
         logger.info("Selecting quit in 30 frames")
@@ -1253,11 +1256,11 @@ class PBREngine():
         logger.debug("Entered _nextPkmn. State: %s", self._getInputState())
         # The coming loop sleeps, so use recorded_state to ensure we exit if
         # the move selection timer hit zero.
-        if self._move_select_followup:   # Here from the move select menu
+        if self._move_select_followup:  # Here from the move select menu
             from_move_select = True
             recorded_state, next_pkmn, is_switch = self._move_select_followup
             self._move_select_followup = None  # reset
-        else:   # Here from faint / baton pass / etc.
+        else:  # Here from faint / baton pass / etc.
             logger.debug("Updating teams (after faint / baton pass / etc)")
             # this doesn't work- if two mons faint and need switch selections,
             # active data is not in a valid state in between
@@ -1298,20 +1301,20 @@ class PBREngine():
                         self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
                                               GuiMatchInputExecute.EXECUTE_SWITCH)
                         self._dolphin.write8(Locations.INPUT_EXECUTE2.value.addr,
-                                              GuiMatchInputExecute.EXECUTE_SWITCH2)
+                                             GuiMatchInputExecute.EXECUTE_SWITCH2)
                         button_index = next_pkmn  # onscreen up == 0, right == 1, etc.
                     else:  # Targeting. Must be doubles
                         self._dolphin.write32(Locations.INPUT_EXECUTE.value.addr,
                                               GuiMatchInputExecute.EXECUTE_TARGET)
                         # Silent values don't correspond to the onscreen button values
                         if self._side == "blue":
-                            button_index = [1,2,4,8][next_pkmn]
+                            button_index = [1, 2, 4, 8][next_pkmn]
                         else:
-                            button_index = [2,1,8,4][next_pkmn]
+                            button_index = [2, 1, 8, 4][next_pkmn]
                     self._dolphin.write8(Locations.WHICH_PKMN.value.addr,
                                          button_index)
                     logger.debug("> %s (silent, pokemon select)",
-                                self.pkmnSlotToButton(next_pkmn).name)
+                                 self.pkmnSlotToButton(next_pkmn).name)
                 else:
                     button = self.pkmnSlotToButton(next_pkmn)
                     self._pressButton(button)
@@ -1361,7 +1364,7 @@ class PBREngine():
             slot=slot,
             cause=cause,
             fails=self._numMoveSelections,
-            switchesAvailable = self.match.switchesAvailable(side),
+            switchesAvailable=self.match.switchesAvailable(side),
             fainted=deepcopy(self.match.areFainted),
             teams=self.match.teamsCopy(),
             slotConvert=self.match.getFrozenSlotConverter(),
@@ -1645,7 +1648,7 @@ class PBREngine():
         self.setGuiPositionGroup(GuiPositionGroups.OFFSCREEN)
         gevent.spawn_later(2, self.setGuiPositionGroup, GuiPositionGroups.PBR_DEFAULT)
         self._matchOver(self._win_result)
-        
+
     def _checkExpectedWinResult(self):
         """For checking that pbr's tiebreak rules are what we think they are"""
         expectedResult = self._calcExpectedWinResult()
@@ -1653,7 +1656,7 @@ class PBREngine():
                 self._win_result != expectedResult):
             logger.error("Unexpected win result: got %s, expected %s. Teams data: %s",
                          self._win_result, expectedResult, self.match.teamsLive)
-        
+
     def _calcExpectedWinResult(self):
         teams = self.match.teamsLive
         match = self.match
@@ -1853,7 +1856,6 @@ class PBREngine():
             gevent.spawn_later(1.4, self._updateLiveTeams, ppOnly=True,
                                readActiveSlots=True, pokesetOnly=(side, slot)).link_exception(_logOnException)
 
-
     def _distinguishInfo(self, data):
         # Gets called each time the text in the infobox (xyz fainted, abc hurt
         # itself, etc.) changes and gets analyzed for possible events of
@@ -1916,8 +1918,8 @@ class PBREngine():
             return "red"
         else:
             raise ValueError(
-                "Unrecognized player name: `{}` Avatars: {} String Length: {}".format(player, self.avatars,
-                                                                                      truncate))
+                "Unrecognized player name: `{}` Avatars: {} post_processing names {},{} String Length: {}".format(
+                    player, self.avatars, blue_name, red_name, truncate))
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
@@ -1955,8 +1957,8 @@ class PBREngine():
         elif gui == PbrGuis.START_OPTIONS:
             self._pressLater(10, WiimoteButton.ONE)  # Backtrack
         elif (self.state < EngineStates.MATCH_RUNNING and
-                gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
-                        PbrGuis.START_MODE, PbrGuis.START_SAVEFILE)):
+              gui in (PbrGuis.START_WIIMOTE_INFO, PbrGuis.START_OPTIONS_SAVE,
+                      PbrGuis.START_MODE, PbrGuis.START_SAVEFILE)):
             self._pressLater(10, WiimoteButton.TWO)  # Click through all these
         elif gui == PbrGuis.PRE_MENU_MAIN:
             # Receptionist bows her head. When she's done bowing the main
@@ -1991,7 +1993,7 @@ class PBREngine():
         elif gui == PbrGuis.RULES_SETTINGS:  # The main rules menu
             if not self._fSelectedTppRules:
                 self.cursor.addEvent(CursorOffsets.RULESETS, self._select,
-                                     False, CursorOffsets.RULESETS+1)  # Select the TPP ruleset
+                                     False, CursorOffsets.RULESETS + 1)  # Select the TPP ruleset
                 self.cursor.addEvent(CursorPosMenu.RULES_CONFIRM,
                                      self._pressTwo)  # Confirm selection of the TPP ruleset
                 self._select(1)  # Select "Choose a Rule", which will trigger the two events above, in order
@@ -2034,29 +2036,31 @@ class PBREngine():
 
         # PKMN ORDER SELECTION
         elif (gui == PbrGuis.ORDER_SELECT and
-                self.state in (EngineStates.PREPARING_START, EngineStates.SELECTING_ORDER)):
+              self.state in (EngineStates.PREPARING_START, EngineStates.SELECTING_ORDER)):
             self._setState(EngineStates.SELECTING_ORDER)
             gevent.spawn(self._selectValidOrder).link_exception(_logOnException)
         # Inject the true match order, then click confirm.
         elif gui == PbrGuis.ORDER_CONFIRM and self.state == EngineStates.SELECTING_ORDER:
             logger.debug("ORDER_CONFIRM")
+
             def orderToInts(order):
-                vals = [0x07]*6
+                vals = [0x07] * 6
                 for i, v in enumerate(order):
-                    vals[v-1] = i+1
+                    vals[v - 1] = i + 1
                 # y u no explain, past me?
                 return (vals[0] << 24 | vals[1] << 16 | vals[2] << 8 | vals[3],
                         vals[4] << 8 | vals[5])
+
             if not self._fBlueChoseOrder:
                 self._fBlueChoseOrder = True
                 x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["blue"]))))
                 self._dolphin.write32(Locations.ORDER_BLUE.value.addr, x1)
-                self._dolphin.write16(Locations.ORDER_BLUE.value.addr+4, x2)
+                self._dolphin.write16(Locations.ORDER_BLUE.value.addr + 4, x2)
                 self._pressTwo()
             else:
                 x1, x2 = orderToInts(list(range(1, 1 + len(self.match.teams["red"]))))
                 self._dolphin.write32(Locations.ORDER_RED.value.addr, x1)
-                self._dolphin.write16(Locations.ORDER_RED.value.addr+4, x2)
+                self._dolphin.write16(Locations.ORDER_RED.value.addr + 4, x2)
 
                 if self._fWaitForStart:  # Wait for a call to start()
                     self._setState(EngineStates.WAITING_FOR_START)
