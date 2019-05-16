@@ -1877,17 +1877,17 @@ class PBREngine():
         # CASE 1: Someone fainted.
         if self._language.code == "de":
             # has an extra space after player name, for some reason
-            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string, 11)
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
         elif self._language.code == "es":
-            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string, 11)
+            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
         elif self._language.code == "fr":
-            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string, 11)
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
         elif self._language.code == "it":
-            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string, 11)
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
         else:
-            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$", string, 11)
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$", string)
         if match:
-            side = self._get_side_from_player_name(match.group("player"))
+            side = self._get_side_from_player_name(match.group("player"), 11)
             self.match.getSlotFromIngamename(side, match.group("pkmn"))
             self.match.fainted(side, match.group("pkmn"))
             self._expectedActionCause[side][self._slot] = ActionCause.FAINT
@@ -1895,9 +1895,9 @@ class PBREngine():
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search(
-            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string, 11)
+            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
         if match:
-            side = self._get_side_from_player_name(match.group("player"))
+            side = self._get_side_from_player_name(match.group("player"), 11)
             self.match.draggedOut(side, match.group(2))
             return
 
