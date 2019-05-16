@@ -1877,16 +1877,15 @@ class PBREngine():
         # CASE 1: Someone fainted.
         if self._language.code == "de":
             # has an extra space after player name, for some reason
-            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?)\s\swurde besiegt!$", string, 11)
         elif self._language.code == "es":
-            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string)
+            match = re.search(r"^¡El (?P<pkmn>.+?) de (?P<player>.+?) se debilitó!$", string, 11)
         elif self._language.code == "fr":
-            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string, 11)
         elif self._language.code == "it":
-            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string, 11)
         else:
-            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$",
-                              string)
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$", string, 11)
         if match:
             side = self._get_side_from_player_name(match.group("player"))
             self.match.getSlotFromIngamename(side, match.group("pkmn"))
@@ -1896,20 +1895,29 @@ class PBREngine():
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         match = re.search(
-            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
+            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string, 11)
         if match:
             side = self._get_side_from_player_name(match.group("player"))
             self.match.draggedOut(side, match.group(2))
             return
 
-    def _get_side_from_player_name(self, player):
-        if player == self.avatars["blue"]["NAME"]:
-            return "blue"
-        elif player == self.avatars["red"]["NAME"]:
-            return "red"
+    def _get_side_from_player_name(self, player, truncate=None):
+        if truncate:
+            if player == self.avatars["blue"]["NAME"][:truncate]:
+                return "blue"
+            elif player == self.avatars["red"]["NAME"][:truncate]:
+                return "red"
+            else:
+                raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
+                                 (player, self.avatars, truncate))
         else:
-            raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
-                             (player, self.avatars))
+            if player == self.avatars["blue"]["NAME"]:
+                return "blue"
+            elif player == self.avatars["red"]["NAME"]:
+                return "red"
+            else:
+                raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
+                                 (player, self.avatars, truncate))
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
