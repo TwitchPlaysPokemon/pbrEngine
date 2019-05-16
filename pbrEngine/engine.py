@@ -1910,8 +1910,10 @@ class PBREngine():
         else:
             blue_name = self.avatars["blue"]["NAME"]
             red_name = self.avatars["red"]["NAME"]
-        blue_name.replace("_", "　")
-        red_name.replace("_", "　")
+
+        blue_name = blue_name.replace("_", "　")
+        red_name = red_name.replace("_", "　")
+
         if player == blue_name:
             return "blue"
         elif player == red_name:
