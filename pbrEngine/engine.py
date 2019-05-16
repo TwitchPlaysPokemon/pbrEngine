@@ -1903,21 +1903,21 @@ class PBREngine():
 
     def _get_side_from_player_name(self, player, truncate=None):
         if truncate:
-            if player == self.avatars["blue"]["NAME"][:truncate]:
-                return "blue"
-            elif player == self.avatars["red"]["NAME"][:truncate]:
-                return "red"
-            else:
-                raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
-                                 (player, self.avatars, truncate))
+            blue_name = self.avatars["blue"]["NAME"][:truncate]
+            red_name = self.avatars["red"]["NAME"][:truncate]
         else:
-            if player == self.avatars["blue"]["NAME"]:
-                return "blue"
-            elif player == self.avatars["red"]["NAME"]:
-                return "red"
-            else:
-                raise ValueError("Unrecognized player name: `%s` Avatars: %s" %
-                                 (player, self.avatars, truncate))
+            blue_name = self.avatars["blue"]["NAME"]
+            red_name = self.avatars["red"]["NAME"]
+        blue_name.replace("_", " ")
+        red_name.replace("_", " ")
+        if player == blue_name:
+            return "blue"
+        elif player == red_name:
+            return "red"
+        else:
+            raise ValueError(
+                "Unrecognized player name: `{}` Avatars: {} String Length: {}".format(player, self.avatars,
+                                                                                      truncate))
 
     def _distinguishGui(self, gui):
         # Might be None if the guiStateDistinguisher didn't recognize the value.
