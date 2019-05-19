@@ -4,10 +4,11 @@ Created on 04.09.2015
 @author: Felk
 '''
 
-import struct
 import inspect
-import gevent
 import logging
+import struct
+
+import gevent
 
 logger = logging.getLogger("pbrEngine")
 
@@ -107,6 +108,19 @@ def sanitizeTeamIngamenames(teams):
             existing.add(name)
 
 
+def sanitizeAvatarNames(name1, name2):
+    name1 = sanitizeName(name1)
+    name2 = sanitizeName(name2)
+    counter = 2
+    while name1 == name2:
+        appendix = "-{:d}".format(counter)
+        name2 = name2[:- len(appendix)] + appendix
+        counter += 1
+        # shouldn't be possible
+        assert counter < 999, "Failed to make avatar names distincs: %s and %s" % (name1, name2)
+    return name1, name2
+
+
 def sanitizeName(name):
     new_name = ""
     for char in name:
@@ -128,51 +142,62 @@ def isCharValid(char):
     return 32 <= oval and oval <= 126  # Disallow non-printing chars
 
 
+_decode_replacements = {
+    ord("\u3328"): "\u2642",  # ? -> male sign
+    ord("\u3329"): "\u2640",  # ? -> female sign
+    ord("\u201d"): "\"",  # right double quotation mark -> regular quotation mark
+}
+
+
 def bytesToString(data):
     '''
     Helper method to turn a list of bytes stripped from PBR's memory
     into a string, removing unknown/invalid characters
     and stopping at the first "0", because they are c-strings.
-    0xfe gets replaced with a space,
-    because it represents (part of) a line break.
+    control character 0xfffe gets replaced with a line break.
+    other control characters get dropped, as they are unsupported (yet).
     '''
     chars = []
+    control_char_signal = False
     for i in range(0, len(data), 2):
         character = bytes(data[i:i+2]).decode("utf-16be")
-        if character == '\x00':
-            break  # end of string
-        _replacements = {
-            "\uffff": "",
-            "\ufffe": " ",
-            "\u3328": "\u2642", # ? -> male sign
-            "\u3329": "\u2640", # ? -> female sign
-            "\u201d": "\"",     # right double quotation mark -> regular quotation mark
-        }
-        for needle, replacement in _replacements.items():
-            character = character.replace(needle, replacement)
-        chars.append(character)
+        was_control_char_signal = control_char_signal
+        control_char_signal = False
+        if was_control_char_signal:
+            if character == "\ufffe":
+                chars.append("\n")
+            else:
+                logger.error("not decoding unsupported control character: %r", character)
+        else:
+            if character == '\x00':
+                break  # end of string
+            elif character == "\uffff":
+                control_char_signal = True
+            else:
+                chars.append(character.translate(_decode_replacements))
     return "".join(chars)
 
 
-def stringToBytes(string):
+def stringToBytes(string, pkmn_name_replacement=False, encode_errors="replace"):
     '''
     Helper method to turn a string into a PBR-string.
     see bytesToString() for more insight.
     '''
     data = []
+    previous = None
     for c in string:
         if c == "\n":
             # this is a line break, which is similar to line breaks in https://bulbapedia.bulbagarden.net/wiki/Character_encoding_in_Generation_III
             data += [0xff, 0xff, 0xff, 0xfe]
-        # `<>` are illegal ingamename characters, but we use them in
-        # catchphrases as a placeholder for the Pokemon name.
-        elif c == "<":
-            data += [0xff, 0xff]
-        elif c == ">":
-            data += [0x00, 0x15]
+        elif c == ">" and previous == "<" and pkmn_name_replacement:
+            # we use `<>` them in  catchphrases as a placeholder for the Pokemon name.
+            # remove previous bytes and add control character instead.
+            del data[-2:]
+            data += [0xff, 0xff, 0x00, 0x15]
         else:
-            # add padding. each character has 2 bytes
-            data += [0x00, ord(c)]
+            b1, b2 = c.encode("utf-16be", errors=encode_errors)
+            data += [b1, b2]
+        previous = c
     # end with 0, because pbr uses c-strings.
     data += [0x00, 0x00]
     return data
