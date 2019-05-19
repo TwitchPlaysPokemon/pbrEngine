@@ -51,6 +51,12 @@ class DolphinIO:
                 gevent.sleep(0.01)  # Sleep a bit between read batches
         return results
 
+    def _check(self, mode, val):
+        '''Checks that the value is in bound for the given mode/number of bits.'''
+        if val >= 2**mode:
+            raise ValueError("Value {} is greater than {}, which is the maximum value for {}-bit value mode."
+                             .format(val, 2**mode, mode))
+
     def write8(self, addr, val, **kwargs):
         self.write(8, addr, val, **kwargs)
 
@@ -61,6 +67,7 @@ class DolphinIO:
         self.write(32, addr, val, **kwargs)
 
     def write(self, mode, addr, val, **kwargs):
+        self._check(mode, val)
         self.writeMulti([(mode, addr, val)], **kwargs)
 
     def writeMulti(self, writeTuplesList, maxAttempts=5, writesPerAttempt=5,
@@ -86,6 +93,8 @@ class DolphinIO:
                 for mode, addr, val in writes_needed:
                     if mode not in (8, 16, 32):
                         raise ValueError("Mode must be 8, 16, or 32, got {}".format(mode))
+                    self._check(mode, val)
+                    # check if the value is within bounds
                     self._dolphin.write(mode, addr, val)
                 if write_i < writesPerAttempt - 1:
                     gevent.sleep(0.01)  # Sleep a bit between write batches

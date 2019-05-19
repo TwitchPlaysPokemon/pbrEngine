@@ -29,7 +29,7 @@ from .memorymap.values import WiimoteButton, CursorOffsets, CursorPosMenu, Curso
     GuiMatchInputExecute, DefaultValues, RulesetOffsets, FieldEffects, GuiPositionGroups, getLanguage
 from .guiStateDistinguisher import Distinguisher
 from .states import PbrGuis, EngineStates
-from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent
+from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent, sanitizeAvatarNames
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
 from .avatars import generateDefaultAvatars, CATCHPHRASE_BYTE_LIMITS
@@ -881,6 +881,9 @@ class PBREngine():
 
     def _injectAvatars(self):
         writes = []
+        # santitize avatar names
+        self.avatars["blue"]["NAME"], self.avatars["red"]["NAME"] = sanitizeAvatarNames(
+            self.avatars["blue"]["NAME"], self.avatars["red"]["NAME"])
         for side, side_offset, avatar in (
                 ("blue", LoadedBPOffsets.BP_BLUE.value.addr, self.avatars["blue"]),
                 ("red", LoadedBPOffsets.BP_RED.value.addr, self.avatars["red"])):
@@ -898,7 +901,7 @@ class PBREngine():
             # onscreen for a few ms. To minimize that, we inject catchphrases here too
             # (but with a character limit).
             for _id, text in avatar["CATCHPHRASES"].items():
-                bytes = stringToBytes(text)[:CATCHPHRASE_BYTE_LIMITS[_id]] + [0, 0]
+                bytes = stringToBytes(text, pkmn_name_replacement=True)[:CATCHPHRASE_BYTE_LIMITS[_id]] + [0, 0]
                 addr = teamAddr + LoadedBPOffsets[_id].value.addr
                 writes += [(8, addr + i, byte) for i, byte in enumerate(bytes)]
                 logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
@@ -1629,7 +1632,7 @@ class PBREngine():
 
     def _injectCatchphrase(self, addr, text, side, catchphrase_id):
         # inject catchphrase
-        bytes = stringToBytes(text)
+        bytes = stringToBytes(text, pkmn_name_replacement=True)
         writes = [(8, addr + i, byte) for i, byte in enumerate(bytes)]
         logger.debug("Injecting catchphrase: {} {} at {:0X}, text `{}`. \nWrites: {}"
                      .format(side, catchphrase_id, addr, text, writes))
@@ -1805,7 +1808,7 @@ class PBREngine():
             return
         # move gui back into place. Don't hide this even with hide_gui set
         self.setGuiPositionGroup(self._gui_group)
-        text = bytesToString(data)
+        text = bytesToString(data).replace("\n", " ")
         # skip text invalidations
         if text.startswith("##"):
             return
@@ -1865,7 +1868,7 @@ class PBREngine():
         if self.state != EngineStates.MATCH_RUNNING:
             return
 
-        string = bytesToString(data)
+        string = bytesToString(data).replace("\n", " ")
 
         # skip text invalidation
         if string.startswith("##"):
