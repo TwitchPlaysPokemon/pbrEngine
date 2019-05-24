@@ -167,7 +167,7 @@ def bytesToString(data):
             if character == "\ufffe":
                 chars.append("\n")
             else:
-                logger.error("not decoding unsupported control character: %r", character)
+                logger.warning("not decoding unsupported control character: %r", character)
         else:
             if character == '\x00':
                 break  # end of string
