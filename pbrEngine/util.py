@@ -117,7 +117,7 @@ def sanitizeAvatarNames(name1, name2):
         name2 = name2[:- len(appendix)] + appendix
         counter += 1
         # shouldn't be possible
-        assert counter < 999, "Failed to make avatar names distincs: %s and %s" % (name1, name2)
+        assert counter < 999, "Failed to make avatar names distinct: %s and %s" % (name1, name2)
     return name1, name2
 
 
@@ -125,7 +125,7 @@ def sanitizeName(name):
     new_name = ""
     for char in name:
         new_name += char if isCharValid(char) else "?"
-    return new_name[0:10]
+    return new_name[0:13]
 
 
 def isNameValid(name):
