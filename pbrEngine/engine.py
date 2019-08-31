@@ -198,6 +198,8 @@ class PBREngine():
 
         self._matchVolume = 100
         self._fMatchAnnouncer = True
+        self.musicEnabled = False
+        self._musicCurrentlyEnabled = False
         self._matchFov = 0.5
         self._matchEmuSpeed = 1.0
         self._matchAnimSpeed = 1.0
@@ -343,6 +345,9 @@ class PBREngine():
         self._newRng()  # avoid patterns. Unknown which patterns this avoids, if any.
         self._setState(EngineStates.INIT)
         self._lastInput = WiimoteButton.TWO  # to be able to click through the menu
+        if not self.musicEnabled:
+            self.disableMusic()
+            self._musicCurrentlyEnabled = False
 
     def _subscribe(self, loc, callback):
         self._dolphin._subscribe(loc.length * 8, loc.addr, callback)
@@ -407,6 +412,9 @@ class PBREngine():
 
         self._win_result_addr = None
         self._win_result = "draw"
+        if not self.musicEnabled and self._connected:
+            self.disableMusic()
+            self._musicCurrentlyEnabled = False
         self._language = getLanguage("english")
         # Leave entries blank for default values
         self._battleText = {
@@ -426,7 +434,7 @@ class PBREngine():
     ####################################################
 
     def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0,
-                     gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
+                     gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None, music=False):
         '''
         Starts to prepare a new match.
         If we are not waiting for a new match-setup to be initiated
@@ -466,6 +474,7 @@ class PBREngine():
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
         self._language = language
+        self._musicCurrentlyEnabled = music
         if battleText:
             self._battleText = battleText
 
@@ -596,7 +605,7 @@ class PBREngine():
         Does not influence loading times.
         Is automatically increased during match setup as a speed improvement.
         Is automatically reset to self.matchStartAnimSpeed when a match begins.
-        :param v: float describing speed
+        :param speed: float describing speed
         '''
         if speed == 1.0:
             self._resetAnimSpeed()
@@ -670,6 +679,55 @@ class PBREngine():
             self._dolphin.write32(getattr(Locations, pos_name).value.addr,
                                   floatToIntRepr(pos_val))
 
+    def disableMusic(self):
+        """
+        Disables the music in the game for the sections that pbrEngine usually navigates
+        """
+        self._disableTitleMusic()
+        self._disableWaterfallMusic()
+        self._disableMagmaMusic()
+        self._disableCourtyardMusic()
+        self._disableSunnyParkMusic()
+        self._disableSunsetMusic()
+        self._disableStargazerMusic()
+        self._disableGatewayMusic()
+        self._disableNeonMusic()
+        self._disableMainStreetMusic()
+        self._disableCrystalMusic()
+        self._disableLagoonMusic()
+        self._disableFanfareVar1()
+        self._disableFanfareVar3()
+        self._disableFanfareVar5()
+        self._disableFanfareCompleted()
+        self._disableColosseumSelectionMusic()
+        self._disableReceptionMusic()
+        self._disableMonSelectionMusic()
+        self._disableControlsMusic()
+
+    def enableMusic(self):  # todo change relevant music to boss for boss battles
+        """
+        Enables the music in the game for the sections that pbrEngine usually navigates
+        """
+        self._enableTitleMusic()
+        self._enableWaterfallMusic()
+        self._enableMagmaMusic()
+        self._enableCourtyardMusic()
+        self._enableSunnyParkMusic()
+        self._enableSunsetMusic()
+        self._enableStargazerMusic()
+        self._enableGatewayMusic()
+        self._enableNeonMusic()
+        self._enableMainStreetMusic()
+        self._enableCrystalMusic()
+        self._enableLagoonMusic()
+        self._enableFanfareVar1()
+        self._enableFanfareVar3()
+        self._enableFanfareVar5()
+        self._enableFanfareCompleted()
+        self._enableColosseumSelectionMusic()
+        self._enableReceptionMusic()
+        self._enableMonSelectionMusic()
+
     #######################################################
     #             Below are helper functions.             #
     # They are just bundling or abstracting functionality #
@@ -690,6 +748,257 @@ class PBREngine():
         '''
         self._dolphin.write32(Locations.BLUR1.value.addr, DefaultValues["BLUR1"])
         self._dolphin.write32(Locations.BLUR2.value.addr, DefaultValues["BLUR2"])
+
+    def _disableTitleMusic(self):
+        """
+        Disables the music on the title screen.
+        """
+        self._disableSong(Locations.SONG_TITLE, 6)
+
+    def _disableWaterfallMusic(self):
+        """
+        Disables the music for the Waterfall Colosseum. (Battletopia01)
+        """
+        self._disableSong(Locations.SONG_WATERFALL, 8)
+
+    def _disableMagmaMusic(self):
+        """
+        Disables the music for the Magma Colosseum. (Battletopia02)
+        """
+        self._disableSong(Locations.SONG_MAGMA, 8)
+
+    def _disableCourtyardMusic(self):
+        """
+        Disables the music for the Courtyard Colosseum. (Battletopia03)
+        """
+        self._disableSong(Locations.SONG_COURTYARD, 8)
+
+    def _disableSunnyParkMusic(self):
+        """
+        Disables the music for the Sunny Park Colosseum. (Battletopia04)
+        """
+        self._disableSong(Locations.SONG_SUNNY_PARK, 8)
+
+    def _disableSunsetMusic(self):
+        """
+        Disables the music for the Sunset Colosseum. (Battletopia05)
+        """
+        self._disableSong(Locations.SONG_SUNSET, 8)
+
+    def _disableStargazerMusic(self):
+        """
+        Disables the music for the Stargazer Colosseum. (Battletopia06)
+        """
+        self._disableSong(Locations.SONG_STARGAZER, 8)
+
+    def _disableGatewayMusic(self):
+        """
+        Disables the music for the Gateway Colosseum. (Battletopia07)
+        """
+        self._disableSong(Locations.SONG_GATEWAY, 8)
+
+    def _disableNeonMusic(self):
+        """
+        Disables the music for the Neon Colosseum. (Battletopia08)
+        """
+        self._disableSong(Locations.SONG_NEON, 8)
+
+    def _disableMainStreetMusic(self):
+        """
+        Disables the music for the Main Street Colosseum. (Battletopia09)
+        """
+        self._disableSong(Locations.SONG_MAIN_STREET, 8)
+
+    def _disableCrystalMusic(self):
+        """
+        Disables the music for the Crystal Colosseum. (Battletopia10)
+        """
+        self._disableSong(Locations.SONG_CRYSTAL, 8)
+
+    def _disableLagoonMusic(self):
+        """
+        Disables the music for the Lagoon Colosseum.
+        """
+        self._disableSong(Locations.SONG_LAGOON, 8)
+
+    def _disableFanfareVar1(self):
+        """
+        Disables the first variation of the fanfare. (ME_Fan01)
+        """
+        self._disableSong(Locations.SONG_FANFARE_VAR1, 7)
+
+    def _disableFanfareVar3(self):
+        """
+        Disables the third variation of the fanfare. (ME_Fan03)
+        """
+        self._disableSong(Locations.SONG_FANFARE_VAR3, 7)
+
+    def _disableFanfareVar5(self):
+        """
+        Disables the fifth variation of the fanfare. (ME_Fan05)
+        """
+        self._disableSong(Locations.SONG_FANFARE_VAR5, 7)
+
+    def _disableFanfareCompleted(self):
+        """
+        Disables the fanfare that plays when you have completed a colosseum. (ME_Fin)
+        """
+        self._disableSong(Locations.SONG_FANFARE_COMPLETED, 7)
+
+    def _disableColosseumSelectionMusic(self):
+        """
+        Disables the music for the Colosseum Selection screen. (System01)
+        """
+        self._disableSong(Locations.SONG_COLOSSEUM_SELECTION, 7)
+
+    def _disableReceptionMusic(self):
+        """
+        Disables the music for the Reception screen. (System03)
+        """
+        self._disableSong(Locations.SONG_RECEPTION, 7)
+
+    def _disableMonSelectionMusic(self):
+        """
+        Disables the music for the Pokemon Selection screen. (System05)
+        """
+        self._disableSong(Locations.SONG_MON_SELECTION, 7)
+        
+    def _disableControlsMusic(self):
+        """
+        Disables the music for the Controls screen. (System09)
+        """
+        self._disableSong(Locations.SONG_CONTROLS, 7)
+
+    def _enableTitleMusic(self):
+        """
+        Enables the music on the title screen.
+        """
+        self._enableSong(Locations.SONG_TITLE, "sound/Title.brstm")
+
+    def _enableWaterfallMusic(self):
+        """
+        Enables the music for the Waterfall Colosseum. (Battletopia01)
+        """
+        self._enableSong(Locations.SONG_WATERFALL, "sound/Battletopia01.brstm")
+
+    def _enableMagmaMusic(self):
+        """
+        Enables the music for the Magma Colosseum. (Battletopia02)
+        """
+        self._enableSong(Locations.SONG_MAGMA, "sound/Battletopia02.brstm")
+
+    def _enableCourtyardMusic(self):
+        """
+        Enables the music for the Courtyard Colosseum. (Battletopia03)
+        """
+        self._enableSong(Locations.SONG_COURTYARD, "sound/Battletopia03.brstm")
+
+    def _enableSunnyParkMusic(self):
+        """
+        Enables the music for the Sunny Park Colosseum. (Battletopia04)
+        """
+        self._enableSong(Locations.SONG_SUNNY_PARK, "sound/Battletopia04.brstm")
+
+    def _enableSunsetMusic(self):
+        """
+        Enables the music for the Sunset Colosseum. (Battletopia05)
+        """
+        self._enableSong(Locations.SONG_SUNSET, "sound/Battletopia05.brstm")
+
+    def _enableStargazerMusic(self):
+        """
+        Enables the music for the Stargazer Colosseum. (Battletopia06)
+        """
+        self._enableSong(Locations.SONG_STARGAZER, "sound/Battletopia06.brstm")
+
+    def _enableGatewayMusic(self):
+        """
+        Enables the music for the Gateway Colosseum. (Battletopia07)
+        """
+        self._enableSong(Locations.SONG_GATEWAY, "sound/Battletopia07.brstm")
+
+    def _enableNeonMusic(self):
+        """
+        Enables the music for the Neon Colosseum. (Battletopia08)
+        """
+        self._enableSong(Locations.SONG_NEON, "sound/Battletopia08.brstm")
+
+    def _enableMainStreetMusic(self):
+        """
+        Enables the music for the Main Street Colosseum. (Battletopia09)
+        """
+        self._enableSong(Locations.SONG_MAIN_STREET, "sound/Battletopia09.brstm")
+
+    def _enableCrystalMusic(self):
+        """
+        Enables the music for the Crystal Colosseum. (Battletopia10)
+        """
+        self._enableSong(Locations.SONG_CRYSTAL, "sound/Battletopia10.brstm")
+
+    def _enableLagoonMusic(self):
+        """
+        Enables the music for the Lagoon Colosseum.
+        """
+        self._enableSong(Locations.SONG_LAGOON, "sound/pokerev_music_demo_v2.brstm")
+
+    def _enableFanfareVar1(self):
+        """
+        Enables the first variation of the fanfare. (ME_Fan01)
+        """
+        self._enableSong(Locations.SONG_FANFARE_VAR1, "sound/ME_Fan01.brstm")
+
+    def _enableFanfareVar3(self):
+        """
+        Enables the third variation of the fanfare. (ME_Fan03)
+        """
+        self._enableSong(Locations.SONG_FANFARE_VAR3, "sound/ME_Fan03.brstm")
+
+    def _enableFanfareVar5(self):
+        """
+        Enables the fifth variation of the fanfare. (ME_Fan05)
+        """
+        self._enableSong(Locations.SONG_FANFARE_VAR5, "sound/ME_Fan05.brstm")
+
+    def _enableFanfareCompleted(self):
+        """
+        Enables the fanfare that plays when you have completed a colosseum. (ME_Fin)
+        """
+        self._enableSong(Locations.SONG_FANFARE_COMPLETED, "sound/ME_Fin.brstm")
+
+    def _enableColosseumSelectionMusic(self):
+        """
+        Enables the music for the Colosseum Selection screen. (System01)
+        """
+        self._enableSong(Locations.SONG_COLOSSEUM_SELECTION, "sound/System01.brstm")
+
+    def _enableReceptionMusic(self):
+        """
+        Enables the music for the Reception screen. (System03)
+        """
+        self._enableSong(Locations.SONG_RECEPTION, "sound/System03.brstm")
+
+    def _enableMonSelectionMusic(self):
+        """
+        Enables the music for the Pokemon Selection screen. (System05)
+        """
+        self._enableSong(Locations.SONG_MON_SELECTION, "sound/System05.brstm")
+
+    def _enableControlsMusic(self):
+        """
+        Enables the music for the Controls screen. (System09)
+        """
+        self._enableSong(Locations.SONG_CONTROLS, "sound/System09.brstm")
+
+    def _disableSong(self, loc, count):
+        writes = []
+        for i in range(count):
+            writes.append((32, loc.value.addr + 0x4 * i, 0))
+        self._dolphinIO.writeMulti(writes)
+
+    def _enableSong(self, loc, path):
+        bytes = path.encode()
+        for i, byte in enumerate(bytes):
+            self._dolphin.write(8, loc.value.addr + i, byte)
 
     def _resetAnimSpeed(self):
         '''
@@ -1177,6 +1486,8 @@ class PBREngine():
         '''
         logger.info("Starting PBR match")
         self._injectAvatars()
+        if self._musicCurrentlyEnabled:
+            self.enableMusic()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         # In about 2 seconds, PBR will set the size of the HP bars (the ones that show
@@ -1229,6 +1540,9 @@ class PBREngine():
         logger.debug("Quitting match")
         self._resetBlur()
         self.setVolume(0)  # Mute match setup beeping
+        if not self.musicEnabled:
+            self.disableMusic()
+            self._musicCurrentlyEnabled = False
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
