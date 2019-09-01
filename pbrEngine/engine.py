@@ -989,6 +989,36 @@ class PBREngine():
         """
         self._enableSong(Locations.SONG_CONTROLS, "sound/System09.brstm")
 
+    def _enableBossMusic(self):
+        path = ""
+        side = None
+        if self.avatars["blue"]["APPEARANCE"]["CHARACTER_STYLE"] > 6:
+            side = "blue"
+        elif self.avatars["red"]["APPEARANCE"]["CHARACTER_STYLE"] > 6:
+            side = "red"
+        if not side:
+            return
+        if self.avatars[side]["APPEARANCE"]["CHARACTER_STYLE"] in [7, 8]:
+            path = "sound/Battleboss01.brstm"
+        elif self.avatars[side]["APPEARANCE"]["CHARACTER_STYLE"] == 9:
+            path = "sound/Battleboss03.brstm"
+        elif self.avatars[side]["APPEARANCE"]["CHARACTER_STYLE"] == 10:
+            path = "sound/Battleboss04.brstm"
+        elif self.avatars[side]["APPEARANCE"]["CHARACTER_STYLE"] == 11:
+            path = "sound/Battleboss02.brstm"
+        elif self.avatars[side]["APPEARANCE"]["CHARACTER_STYLE"] == 12:
+            path = "sound/Battlelastboss.brstm"
+
+        addrs = [Locations.SONG_WATERFALL, Locations.SONG_MAGMA, Locations.SONG_COURTYARD, Locations.SONG_SUNNY_PARK,
+                 Locations.SONG_SUNSET, Locations.SONG_STARGAZER, Locations.SONG_GATEWAY, Locations.SONG_NEON,
+                 Locations.SONG_MAIN_STREET, Locations.SONG_CRYSTAL, Locations.SONG_LAGOON]
+        for addr in addrs:
+            self._enableSong(addr, path)
+
+        self._enableSong(Locations.SONG_FANFARE_VAR1, "sound/ME_Fan02.brstm")  # set boss fanfares
+        self._enableSong(Locations.SONG_FANFARE_VAR3, "sound/ME_Fan04.brstm")
+        self._enableSong(Locations.SONG_FANFARE_VAR5, "sonnd/ME_Fan06.brstm")
+
     def _disableSong(self, loc, count):
         writes = []
         for i in range(count):
@@ -1488,6 +1518,9 @@ class PBREngine():
         self._injectAvatars()
         if self._musicCurrentlyEnabled:
             self.enableMusic()
+            if (self.avatars["blue"]["APPEARANCE"]["CHARACTER_STYLE"] > 6 or
+                    self.avatars["red"]["APPEARANCE"]["CHARACTER_STYLE"] > 6):
+                self._enableBossMusic()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         # In about 2 seconds, PBR will set the size of the HP bars (the ones that show
