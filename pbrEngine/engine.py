@@ -1013,10 +1013,14 @@ class PBREngine():
                  Locations.SONG_SUNSET, Locations.SONG_STARGAZER, Locations.SONG_GATEWAY, Locations.SONG_NEON,
                  Locations.SONG_MAIN_STREET, Locations.SONG_CRYSTAL, Locations.SONG_LAGOON]
         for addr in addrs:
+            self._disableSong(addr, 8)
             self._enableSong(addr, path)
 
-        self._enableSong(Locations.SONG_FANFARE_VAR1, "sound/ME_Fan02.brstm")  # set boss fanfares
+        self._disableSong(Locations.SONG_FANFARE_VAR1, 7)  # set boss fanfares
+        self._enableSong(Locations.SONG_FANFARE_VAR1, "sound/ME_Fan02.brstm")
+        self._disableSong(Locations.SONG_FANFARE_VAR3, 7)
         self._enableSong(Locations.SONG_FANFARE_VAR3, "sound/ME_Fan04.brstm")
+        self._disableSong(Locations.SONG_FANFARE_VAR5, 7)
         self._enableSong(Locations.SONG_FANFARE_VAR5, "sonnd/ME_Fan06.brstm")
 
     def _disableSong(self, loc, count):
