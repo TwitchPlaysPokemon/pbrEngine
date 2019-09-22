@@ -369,6 +369,9 @@ class PBREngine():
         if not self.musicEnabled:
             self.disableMusic()
             self._musicCurrentlyEnabled = False
+        else:
+            self.enableMusic()
+            self._musicCurrentlyEnabled = True
 
     def _subscribe(self, loc, callback):
         self._dolphin._subscribe(loc.length * 8, loc.addr, callback)
@@ -1329,6 +1332,9 @@ class PBREngine():
         if not self.musicEnabled:
             self.disableMusic()
             self._musicCurrentlyEnabled = False
+        else:
+            self.enableMusic()
+            self._musicCurrentlyEnabled = True
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
         self._setEmuSpeed(1.0)  # Avoid possible timing issues?
