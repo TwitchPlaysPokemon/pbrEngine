@@ -148,6 +148,27 @@ class Locations(Enum):
     FOV              = Loc(0x6426a0, 4)  # default 0.5
     ANNOUNCER_FLAG   = Loc(0xc076a0, 1)  # TODO
 
+    SONG_TITLE       = Loc(0x909A0E04, 0x18)
+    SONG_WATERFALL   = Loc(0x9098E180, 0x20)
+    SONG_MAGMA       = Loc(0x9098DBA4, 0x20)
+    SONG_COURTYARD   = Loc(0x9098DC10, 0x20)
+    SONG_SUNNY_PARK  = Loc(0x9098DC4C, 0x20)
+    SONG_SUNSET      = Loc(0x9098DD18, 0x20)
+    SONG_STARGAZER   = Loc(0x9098D934, 0x20)
+    SONG_GATEWAY     = Loc(0x9098D970, 0x20)
+    SONG_NEON        = Loc(0x9098D9AC, 0x20)
+    SONG_MAIN_STREET = Loc(0x9098DA78, 0x20)
+    SONG_CRYSTAL     = Loc(0x9098E144, 0x20)
+    SONG_LAGOON      = Loc(0x909AF600, 0x20)
+    SONG_FANFARE_VAR1 = Loc(0x909C863C, 0x1C)
+    SONG_FANFARE_VAR3 = Loc(0x909C86AC, 0x1C)
+    SONG_FANFARE_VAR5 = Loc(0x909C86E4, 0x1C)
+    SONG_FANFARE_COMPLETED = Loc(0x909BCAB8, 0x1C)
+    SONG_COLOSSEUM_SELECTION = Loc(0x909A6FE8, 0x1C)
+    SONG_RECEPTION   = Loc(0x909A70C8, 0x1C)
+    SONG_MON_SELECTION = Loc(0x909A6FB0, 0x1C)
+    SONG_CONTROLS    = Loc(0x909A7100, 0x1C)
+
     # Default values are in GuiPositions in values.py
     GUI_POS_X        = Loc(0x642350, 4)
     GUI_POS_Y        = Loc(0x642354, 4)
