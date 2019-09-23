@@ -1277,6 +1277,8 @@ class PBREngine():
             if (self.avatars["blue"]["APPEARANCE"]["CHARACTER_STYLE"] > 6 or
                     self.avatars["red"]["APPEARANCE"]["CHARACTER_STYLE"] > 6):
                 self._enableBossMusic()  # if the avatar is a special avatar (style above 6), enable the boss battle music
+        else:
+            self.disableMusic()
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         # In about 2 seconds, PBR will set the size of the HP bars (the ones that show
