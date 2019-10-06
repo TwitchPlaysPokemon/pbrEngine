@@ -56,17 +56,17 @@ class NestedLoc(object):
 
 
 class Locations(Enum):
-    RNG_SEED         = Loc(0x6405e0, 4)
+    RNG_SEED         = Loc(0x806405e0, 4)
 
     # Change this value along with WHICH_MOVE or WHICH_PKMN in order to execute
     # a silent input.
-    INPUT_EXECUTE    = Loc(0x478498, 4)
+    INPUT_EXECUTE    = Loc(0x80478498, 4)
 
     # This value may need to be changed along with INPUT_EXECUTE.
-    INPUT_EXECUTE2   = Loc(0x4784ba, 1)
+    INPUT_EXECUTE2   = Loc(0x804784ba, 1)
 
     # Which move; used for silent inputting. Change this value to the button's index.
-    WHICH_MOVE       = Loc(0x47849d, 1)
+    WHICH_MOVE       = Loc(0x8047849d, 1)
 
     # Which pkmn (switch/target); used for silent inputting.
     # For a switch, change this value to the button's index.
@@ -75,78 +75,78 @@ class Locations(Enum):
     #   if targeting foe team's slot 0: 2
     #   if targeting own team's slot 1: 4
     #   if targeting foe team's slot 1: 8
-    WHICH_PKMN       = Loc(0x47849f, 1)
+    WHICH_PKMN       = Loc(0x8047849f, 1)
 
     # An unconventional turn counter:
     # 0 at first move selection.  Increments immediately after all move selections
     # (and any associated pkmn selections) have completed for a given turn.
     # Unconventional because normally one would increment the counter after all attacks,
     # switches, etc. have completed for the turn, not merely all *move selections*.
-    CURRENT_TURN     = Loc(0x63f203, 1)
+    CURRENT_TURN     = Loc(0x8063f203, 1)
 
     # Side of the pkmn currently making an input selection.
     # Changes to 0 when CURRENT_TURN is incremented.
-    CURRENT_SIDE     = Loc(0x478477, 1)  # 0 = blue, 1 = red
+    CURRENT_SIDE     = Loc(0x80478477, 1)  # 0 = blue, 1 = red
 
     # Slot of the pkmn currently making an input selection.
     # Changes to 0 when CURRENT_TURN is incremented.
-    CURRENT_SLOT     = Loc(0x47846d, 1)
+    CURRENT_SLOT     = Loc(0x8047846d, 1)
 
-    # PNAME_BLUE       = Loc(0x47850c, 20)
-    # PNAME_RED        = Loc(0x478f7c, 20)
-    PNAME_BLUE       = Loc(0xc83452, 20)
-    PNAME_RED        = Loc(0xc83486, 20)
-    PNAME_BLUE2      = Loc(0xc834BA, 20)
-    PNAME_RED2       = Loc(0xc834EE, 20)
-    # PP_BLUE          = Loc(0x478534, 4)  # TODO don't use yet, the addresses change, find the pattern
-    # PP_RED           = Loc(0x478f64, 4)  # ^
-    CURSOR_POS       = Loc(0x63eb9a, 2)
-    ATTACK_TEAM_TEXT = Loc(0x47a579, 1)
+    # PNAME_BLUE       = Loc(0x8047850c, 20)
+    # PNAME_RED        = Loc(0x80478f7c, 20)
+    PNAME_BLUE       = Loc(0x80c83452, 20)
+    PNAME_RED        = Loc(0x80c83486, 20)
+    PNAME_BLUE2      = Loc(0x80c834BA, 20)
+    PNAME_RED2       = Loc(0x80c834EE, 20)
+    # PP_BLUE          = Loc(0x80478534, 4)  # TODO don't use yet, the addresses change, find the pattern
+    # PP_RED           = Loc(0x80478f64, 4)  # ^
+    CURSOR_POS       = Loc(0x8063eb9a, 2)
+    ATTACK_TEAM_TEXT = Loc(0x8047a579, 1)
 
     # State of move/pkmn select menus.
     # Same location as INPUT_EXECUTE, but it helps to make a logical distinction between
     # the two.  This identifier is used for reading, while INPUT_EXECUTE is for writing.
-    GUI_STATE_MATCH  = Loc(0x478498, 4)
-    GUI_STATE_BP     = Loc(0x476948, 4)
-    GUI_STATE_MENU   = Loc(0x480e1e, 2)
-    GUI_STATE_RULES  = Loc(0x48118b, 1)
-    GUI_STATE_ORDER  = Loc(0x487445, 1)
-    GUI_STATE_BP_SELECTION = Loc(0x476973, 1)
-    GUI_TEMPTEXT     = Loc(0x4fd4a4, 72)
-    GUI_MATCH_OVER   = Loc(0x479f20, 4)
+    GUI_STATE_MATCH  = Loc(0x80478498, 4)
+    GUI_STATE_BP     = Loc(0x80476948, 4)
+    GUI_STATE_MENU   = Loc(0x80480e1e, 2)
+    GUI_STATE_RULES  = Loc(0x8048118b, 1)
+    GUI_STATE_ORDER  = Loc(0x80487445, 1)
+    GUI_STATE_BP_SELECTION = Loc(0x80476973, 1)
+    GUI_TEMPTEXT     = Loc(0x804fd4a4, 72)
+    GUI_MATCH_OVER   = Loc(0x80479f20, 4)
 
     # One byte per pkmn. The value is the pkmn's slot for the match, or 0 if not selected.
-    ORDER_BLUE       = Loc(0x48745c, 6)
-    ORDER_RED        = Loc(0x487468, 6)
+    ORDER_BLUE       = Loc(0x8048745c, 6)
+    ORDER_RED        = Loc(0x80487468, 6)
 
     # 0 if the team order is invalid
     # 1 if the team order is valid (at least 1 pokemon selected in singles, at least 2
     # pokemon selected in doubles)
     # A valid order is required in order to reach the order confirm gui (by pressing ONE)
     # After pressing ONE, this has value 2. After confirming, this has value 3.
-    ORDER_VALID_BLUE  = Loc(0x487462, 1)
-    ORDER_VALID_RED   = Loc(0x48746e, 1)
+    ORDER_VALID_BLUE  = Loc(0x80487462, 1)
+    ORDER_VALID_RED   = Loc(0x8048746e, 1)
 
-    TOOLTIP_TOGGLE   = Loc(0x63ec10, 1)
-    IDLE_TIMER       = Loc(0x476654, 2)
-    FRAMECOUNT       = Loc(0x63fc2c, 4)  # goes up by 60 per second
-    ATTACK_TEXT      = Loc(0x47a570, 0x80)  # 64 chars line1. 64 chars line2, maybe shorter.
-    POPUP_BOX        = Loc(0x4fd011, 1)  # seems to work, but weird
-    INFO_TEXT        = Loc(0x474f38, 150)  # 75 chars. maybe longer, but that's enough
-    EFFECTIVE_TEXT   = Loc(0x47a6a0, 0x50)  # "It's not very effective\0" must fit
+    TOOLTIP_TOGGLE   = Loc(0x8063ec10, 1)
+    IDLE_TIMER       = Loc(0x80476654, 2)
+    FRAMECOUNT       = Loc(0x8063fc2c, 4)  # goes up by 60 per second
+    ATTACK_TEXT      = Loc(0x8047a570, 0x80)  # 64 chars line1. 64 chars line2, maybe shorter.
+    POPUP_BOX        = Loc(0x804fd011, 1)  # seems to work, but weird
+    INFO_TEXT        = Loc(0x80474f38, 150)  # 75 chars. maybe longer, but that's enough
+    EFFECTIVE_TEXT   = Loc(0x8047a6a0, 0x50)  # "It's not very effective\0" must fit
                                             # up to 9 80-byte strings in total! this looks like a deque
-    # INFO_BOX_MON    = Loc(0x474f43, 1) # see above, "R" from "RED" or "B" from "BLUE"
-    # INFO_BOX_LINE2  = Loc(0x474f64, 4)
-    STATUS_BLUE      = Loc(0x47854f, 1)  # PSN2 PAR FRZ BRN PSN SLP SLP SLP
-    STATUS_RED       = Loc(0x478F9f, 1)  # -"-
-    STYLE_SELECTION  = Loc(0x63eedc, 1)
-    COLOSSEUM        = Loc(0x1302ac, 4)
-    DEFAULT_RULESET  = Loc(0x11DD8C, 4)
-    DEFAULT_BATTLE_STYLE = Loc(0x11dc04, 4)
-    SPEED_1          = Loc(0x642414, 4)
-    SPEED_2          = Loc(0x642418, 4)
-    FOV              = Loc(0x6426a0, 4)  # default 0.5
-    ANNOUNCER_FLAG   = Loc(0xc076a0, 1)  # TODO
+    # INFO_BOX_MON    = Loc(0x80474f43, 1) # see above, "R" from "RED" or "B" from "BLUE"
+    # INFO_BOX_LINE2  = Loc(0x80474f64, 4)
+    STATUS_BLUE      = Loc(0x8047854f, 1)  # PSN2 PAR FRZ BRN PSN SLP SLP SLP
+    STATUS_RED       = Loc(0x80478F9f, 1)  # -"-
+    STYLE_SELECTION  = Loc(0x8063eedc, 1)
+    COLOSSEUM        = Loc(0x801302ac, 4)
+    DEFAULT_RULESET  = Loc(0x8011DD8C, 4)
+    DEFAULT_BATTLE_STYLE = Loc(0x8011dc04, 4)
+    SPEED_1          = Loc(0x80642414, 4)
+    SPEED_2          = Loc(0x80642418, 4)
+    FOV              = Loc(0x806426a0, 4)  # default 0.5
+    ANNOUNCER_FLAG   = Loc(0x80c076a0, 1)  # TODO
 
     SONG_TITLE       = Loc(0x909A0E04, 0x18)
     SONG_WATERFALL   = Loc(0x9098E180, 0x20)
@@ -170,24 +170,24 @@ class Locations(Enum):
     SONG_CONTROLS    = Loc(0x909A7100, 0x1C)
 
     # Default values are in GuiPositions in values.py
-    GUI_POS_X        = Loc(0x642350, 4)
-    GUI_POS_Y        = Loc(0x642354, 4)
-    GUI_SIZE         = Loc(0x642358, 4)  # Preserves aspect ratio
-    GUI_WIDTH        = Loc(0x64235c, 4)
+    GUI_POS_X        = Loc(0x80642350, 4)
+    GUI_POS_Y        = Loc(0x80642354, 4)
+    GUI_SIZE         = Loc(0x80642358, 4)  # Preserves aspect ratio
+    GUI_WIDTH        = Loc(0x8064235c, 4)
 
-    BLUR1            = Loc(0x641e8c, 4)
-    BLUR2            = Loc(0x641e90, 4)
-    HP_BLUE          = Loc(0x478552, 2)
-    HP_RED           = Loc(0x478fa2, 2)
+    BLUR1            = Loc(0x80641e8c, 4)
+    BLUR2            = Loc(0x80641e90, 4)
+    HP_BLUE          = Loc(0x80478552, 2)
+    HP_RED           = Loc(0x80478fa2, 2)
 
-    FIELD_EFFECT_STRENGTH = Loc(0x493618, 4)   # default 1.0
-    ANIMATION_STRENGTH = Loc(0x6426b8, 4)  # default 1.0
+    FIELD_EFFECT_STRENGTH = Loc(0x80493618, 4)   # default 1.0
+    ANIMATION_STRENGTH = Loc(0x806426b8, 4)  # default 1.0
 
     # E.g., Waterfall Colosseum / 2-Player Battle
-    BATTLE_OPENING_TEXT = Loc(0x479f44, 0xa0)
-    BATTLE_RESULT_TEXT = Loc(0x479fe4, 0x50)
+    BATTLE_OPENING_TEXT = Loc(0x80479f44, 0xa0)
+    BATTLE_RESULT_TEXT = Loc(0x80479fe4, 0x50)
 
-    MESSAGE_DATA = Loc(0x63e90c, 0x4)  # If this breaks, try 0x4fcf20
+    MESSAGE_DATA = Loc(0x8063e90c, 0x4)  # If this breaks, try 0x4fcf20
 
     # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
@@ -207,15 +207,15 @@ class NestedLocations(Enum):
     RULESET                 = NestedLoc(0x918F4FFC, 4, [0x58a06])
 
     # Locations change between but not during matches.
-    FIELD_EFFECTS           = NestedLoc(0x6405C0, 4, [0x30, 0x180])
-    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x6405C0, 4, [0x30, 0x184])
+    FIELD_EFFECTS           = NestedLoc(0x806405C0, 4, [0x30, 0x180])
+    FIELD_EFFECTS_COUNTDOWN = NestedLoc(0x806405C0, 4, [0x30, 0x184])
 
     # Modifiable active pkmn data, including volatile conditions.  Order is:
     # blue slot 0 -> red slot 0 -> blue slot 1 -> red slot 1
     # Slot 1 mons are only present in doubles.
     # Location changes between but not during matches.
-    ACTIVE_PKMN        = NestedLoc(0x6405C0, 192, [0x30, 0x2D40])
-    ACTIVE_PKMN_SLOTS  = NestedLoc(0x6405C0, 192, [0x30, 0x219C])
+    ACTIVE_PKMN        = NestedLoc(0x806405C0, 192, [0x30, 0x2D40])
+    ACTIVE_PKMN_SLOTS  = NestedLoc(0x806405C0, 192, [0x30, 0x219C])
 
     # 00: match ongoing
     # 01: blue win
@@ -224,22 +224,22 @@ class NestedLocations(Enum):
     # 80: draw (both sides forfeited)
     # c1: red forfeited (injecting this doesn't work- pbr just ignores it)
     # c3: blue forfeited (injecting this doesn't work- pbr just ignores it)
-    WIN_RESULT         = NestedLoc(0x6405C0, 1, [0x23e4])
+    WIN_RESULT         = NestedLoc(0x806405C0, 1, [0x23e4])
 
     # Fixed-order non-volitile pkmn data.
     # Non-volatile means this data does not contain any bytes for volatile conditions like
     # confuse, transform effects, mimic effects, etc.
     # Modifiable for inactive mons only. A4 bytes per pkmn.
-    NON_VOLATILE_BLUE  = NestedLoc(0x6405C0, 0xA4, [0x68, 0x0])
-    NON_VOLATILE_RED   = NestedLoc(0x6405C0, 0xA4, [0x6C, 0x0])
+    NON_VOLATILE_BLUE  = NestedLoc(0x806405C0, 0xA4, [0x68, 0x0])
+    NON_VOLATILE_RED   = NestedLoc(0x806405C0, 0xA4, [0x6C, 0x0])
 
     # Fixed-order non-volitile pkmn data. Modifiable only after colosseum comes into view
     # and before the first mons get sent out.  A4 bytes per pkmn.
-    PRE_BATTLE_BLUE    = NestedLoc(0x6405f4, 0xA4, [0x4, 0x4, 0x0])
-    PRE_BATTLE_RED     = NestedLoc(0x6405f4, 0xA4, [0x4, 0x8, 0x0])
+    PRE_BATTLE_BLUE    = NestedLoc(0x806405f4, 0xA4, [0x4, 0x4, 0x0])
+    PRE_BATTLE_RED     = NestedLoc(0x806405f4, 0xA4, [0x4, 0x8, 0x0])
 
     # Points to move names in "Team blue's <> used <>", and also to onscreen catchphrases.
-    ONSCREEN_TEXT      = NestedLoc(0x487770, 1, [0])
+    ONSCREEN_TEXT      = NestedLoc(0x80487770, 1, [0])
 
 class BattleSettingsOffsets(Enum):
     RULESET         = Loc(0x04, 1)
