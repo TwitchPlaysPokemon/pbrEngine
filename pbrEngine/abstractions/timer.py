@@ -13,7 +13,7 @@ class Timer(object):
         self.connected = False
         self.frame = 0
         self._framePrev = 0
-        self._timerPrev = time.clock()
+        self._timerPrev = time.perf_counter()
         self.speed_plots = collections.deque([1.0], 20)
 
     def sleep(self, frames, raiseIfNotConnected=True):
@@ -49,7 +49,7 @@ class Timer(object):
         # measurements
         delta = framecount - self._framePrev
 
-        now = time.clock()
+        now = time.perf_counter()
         deltaReal = now - self._timerPrev
 
         self._framePrev = framecount
