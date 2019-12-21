@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 setup(
     name="pbrengine",
-    version="0.9.6.0",
+    version="0.9.6.1",
     packages=find_packages(),
     package_dir={"pbrEngine": "pbrEngine"},
     package_data={"pbrEngine": ["eps/libeps32.dll", "eps/libeps64.dll", "eps/libeps.so", "eps/template_pokemon.epsd"]},

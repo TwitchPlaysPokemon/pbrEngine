@@ -254,7 +254,7 @@ class PBREngine():
         '''
         self._dolphin.connect()
         self._stuckcrasher_start_greenlet = gevent.spawn_later(
-            40, self._stuckcrasher_start)
+            60, self._stuckcrasher_start)
         self._stuckcrasher_start_greenlet.link_exception(
             _logOnException)  # in a different statement, because link_exception returns nothing
 
@@ -514,7 +514,7 @@ class PBREngine():
         '''
         self._fWaitForNew = True  # Need to wait again after this match ends
         self._stuckcrasher_prepare_greenlet = gevent.spawn_later(
-            40, self._stuckcrasher_prepare)
+            60, self._stuckcrasher_prepare)
         self._stuckcrasher_prepare_greenlet.link_exception(_logOnException)
         self._dolphin.resume()  # We might be paused if we were at WAITING_FOR_NEW
         gevent.sleep(0.5)  # Just to make sure Free Battle gets selected properly. Don't know if this is necessary
