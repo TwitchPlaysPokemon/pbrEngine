@@ -1331,6 +1331,8 @@ class PBREngine():
         logger.debug("Quitting match")
         self._resetBlur()
         self.setVolume(0)  # Mute match setup beeping
+        self._matchFieldEffectStrength = 1.0
+        self._setFieldEffectStrength(self._matchFieldEffectStrength)
         if not self.musicEnabled:
             self.disableMusic()
             self._musicCurrentlyEnabled = False
