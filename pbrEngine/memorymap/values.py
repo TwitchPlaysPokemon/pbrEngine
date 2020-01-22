@@ -70,7 +70,7 @@ def getLanguage(text):
 
 
 WII_LANGUAGES = [
-    Language("Japanese", "ja", 0, False),  # Not PAL, so incompatible with pbrEngine
+    Language("Japanese", "ja", 0, True),  # PAL language replacement has been provided
     Language("English", "en", 1, True),
     Language("German", "de", 2, True),
     Language("French", "fr", 3, True),
