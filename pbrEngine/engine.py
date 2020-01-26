@@ -1285,8 +1285,10 @@ class PBREngine():
         # damage reduction immediately as a pokemon gets injured) according to the
         # current FOV. After that, changes to the FOV will not affect the HP bar size.
         # So we set the fov right now.  This does not affect the size of the HP bars in
-        # the input selection guis.
+        # the input selection guis. Field effect strength can also change the FOV so set
+        # that now.
         gevent.spawn(self._setFov, self._matchFov).link_exception(_logOnException)
+        gevent.spawn(self._setFieldEffectStrength, self._matchFieldEffectStrength).link_exception(_logOnException)
         self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
         self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
         self.timer.spawn_later(300, self._setupPreBattleTeams).link_exception(self._crashOnException)
@@ -1300,7 +1302,6 @@ class PBREngine():
         self._setEmuSpeed(self._matchEmuSpeed)
         self._setAnimSpeed(self._matchAnimSpeed)
         self._setAnnouncer(self._fMatchAnnouncer)
-        self._setFieldEffectStrength(self._matchFieldEffectStrength)
         self._setAnimationStrength(self._matchAnimationStrength)
 
     def _matchOver(self, winner):
