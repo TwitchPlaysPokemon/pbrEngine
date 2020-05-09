@@ -1940,6 +1940,7 @@ class PBREngine():
         # convert, then remove "!"
         moveName = bytesToString(data[0x40:]).strip()[:-1]
 
+        # todo fix this, idk how to go about it but... wow
         match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
         if match:
             # invalidate the little info boxes here.
@@ -2010,8 +2011,19 @@ class PBREngine():
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
-        match = re.search(
-            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
+        if self._language.code == "de":
+            match = re.search(r"^(.+?) von (?P<player>.+?)\s\s(\(Gegner\))? wurde\nausgewählt!$", string)
+        elif self._language.code == "es":
+            match = re.search(r"^¡(El )?(.+?) de (?P<player>.+?) (enemigo )?fue(\n|\s)arrastrado(\s|\n)al combate!$",
+                              string)
+        elif self._language.code == "fr":
+            match = re.search(r"^(.+?) de (?P<player>.+?) (ennemi )?est traîné de force\nau combat!$", string)
+        elif self._language.code == "it":
+            match = re.search(r"^(.+?) di (?P<player>.+?) (nemico )?è tirato dentro!$", string)
+        elif self._language.code == "ja":
+            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(.+?)は　せんとうに\nひきずりだされた！$", string)
+        else:
+            match = re.search(r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
         if match:
             side = self._get_side_from_player_name(match.group("player"), 11)
             self.match.draggedOut(side, match.group(2))
