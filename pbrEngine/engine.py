@@ -1998,6 +1998,8 @@ class PBREngine():
             match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
         elif self._language.code == "it":
             match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
+        elif self._language.code == "ja":
+            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(?P<pkmn>.+?)は　たおれた！$", string)
         else:
             match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$", string)
         if match:
