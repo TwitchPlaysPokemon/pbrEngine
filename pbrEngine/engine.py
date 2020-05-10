@@ -1940,7 +1940,8 @@ class PBREngine():
         # convert, then remove "!"
         moveName = bytesToString(data[0x40:]).strip()[:-1]
 
-        match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
+        # todo fix this, idk how to go about it but... wow
+        match = re.search(r"^(.*?)'s (.*?) use(d)", line)
         if match:
             # invalidate the little info boxes here.
             # I think there will always be an attack declared between 2
@@ -1951,7 +1952,7 @@ class PBREngine():
             # "used" => "uses", so we get the event again if something changes!
             self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 1 +
                                  2 * match.start(3), 0x73)
-            side = match.group(1).lower()
+            side = self._get_side_from_player_name(match.group(1))
             slot = self.match.getSlotFromIngamename(side, match.group(2))
             self.match.setLastMove(side, moveName)
             # reset fails counter
@@ -1998,6 +1999,8 @@ class PBREngine():
             match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) est K.O.!$", string)
         elif self._language.code == "it":
             match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) è esausto!$", string)
+        elif self._language.code == "ja":
+            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(?P<pkmn>.+?)は　たおれた！$", string)
         else:
             match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) fainted!$", string)
         if match:
@@ -2008,11 +2011,22 @@ class PBREngine():
             return
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
-        match = re.search(
-            r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
+        if self._language.code == "de":
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?) (\(Gegner\) )?wurde ausgewählt!$", string)
+        elif self._language.code == "es":
+            match = re.search(r"^¡(El )?(?P<pkmn>.+?) de (?P<player>.+?) (enemigo )?fue arrastrado al combate!$",
+                              string)
+        elif self._language.code == "fr":
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) (ennemi )?est traîné de force au combat!$", string)
+        elif self._language.code == "it":
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) (nemico )?è tirato dentro!$", string)
+        elif self._language.code == "ja":
+            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(?P<pkmn>.+?)は　せんとうに ひきずりだされた！$", string)
+        else:
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) was dragged out!$", string)
         if match:
             side = self._get_side_from_player_name(match.group("player"), 11)
-            self.match.draggedOut(side, match.group(2))
+            self.match.draggedOut(side, match.group("pkmn"))
             return
 
     def _get_side_from_player_name(self, player, truncate=None):

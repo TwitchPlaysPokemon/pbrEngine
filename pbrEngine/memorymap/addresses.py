@@ -284,6 +284,7 @@ class ActivePkmnOffsets(Enum):
     # STAGE_EVA       = Loc(0x1f, 1)
     TYPE0           = Loc(0x24, 1)
     TYPE1           = Loc(0x25, 1)
+    FORM            = Loc(0x26, 1)  # form number * 8
     ABILITY         = Loc(0x27, 1)
     PP0             = Loc(0x2c, 1)
     PP1             = Loc(0x2d, 1)

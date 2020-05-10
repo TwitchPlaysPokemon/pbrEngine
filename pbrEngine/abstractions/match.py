@@ -155,4 +155,5 @@ class Match(object):
         self.on_switch(side=side, slot_active=slot_active, slot_inactive=slot_inactive)
 
     def draggedOut(self, side, pkmn_name):
+        logger.info("{}'s {} was dragged out.".format(side, pkmn_name))
         pass
