@@ -2012,21 +2012,21 @@ class PBREngine():
 
         # CASE 2: Roar or Whirlwind caused a undetected pokemon switch!
         if self._language.code == "de":
-            match = re.search(r"^(.+?) von (?P<player>.+?)\s\s(\(Gegner\))? wurde ausgewählt!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) von (?P<player>.+?) (\(Gegner\) )?wurde ausgewählt!$", string)
         elif self._language.code == "es":
-            match = re.search(r"^¡(El )?(.+?) de (?P<player>.+?) (enemigo )?fue arrastrado al combate!$",
+            match = re.search(r"^¡(El )?(?P<pkmn>.+?) de (?P<player>.+?) (enemigo )?fue arrastrado al combate!$",
                               string)
         elif self._language.code == "fr":
-            match = re.search(r"^(.+?) de (?P<player>.+?) (ennemi )?est traîné de force au combat!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) de (?P<player>.+?) (ennemi )?est traîné de force au combat!$", string)
         elif self._language.code == "it":
-            match = re.search(r"^(.+?) di (?P<player>.+?) (nemico )?è tirato dentro!$", string)
+            match = re.search(r"^(?P<pkmn>.+?) di (?P<player>.+?) (nemico )?è tirato dentro!$", string)
         elif self._language.code == "ja":
-            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(.+?)は　せんとうに ひきずりだされた！$", string)
+            match = re.search(r"^(やせいの　|あいての　)?(?P<player>.+?)の(?P<pkmn>.+?)は　せんとうに ひきずりだされた！$", string)
         else:
-            match = re.search(r"^(?P<player>.+?)'s (.+?) was dragged out!$", string)
+            match = re.search(r"^(?P<player>.+?)'s (?P<pkmn>.+?) was dragged out!$", string)
         if match:
             side = self._get_side_from_player_name(match.group("player"), 11)
-            self.match.draggedOut(side, match.group(2))
+            self.match.draggedOut(side, match.group("pkmn"))
             return
 
     def _get_side_from_player_name(self, player, truncate=None):
