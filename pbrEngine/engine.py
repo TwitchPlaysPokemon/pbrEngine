@@ -1941,7 +1941,7 @@ class PBREngine():
         moveName = bytesToString(data[0x40:]).strip()[:-1]
 
         # todo fix this, idk how to go about it but... wow
-        match = re.search(r"^Team (Blue|Red)'s (.*?) use(d)", line)
+        match = re.search(r"^(.*?)'s (.*?) use(d)", line)
         if match:
             # invalidate the little info boxes here.
             # I think there will always be an attack declared between 2
@@ -1952,7 +1952,7 @@ class PBREngine():
             # "used" => "uses", so we get the event again if something changes!
             self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 1 +
                                  2 * match.start(3), 0x73)
-            side = match.group(1).lower()
+            side = self._get_side_from_player_name(match.group(1))
             slot = self.match.getSlotFromIngamename(side, match.group(2))
             self.match.setLastMove(side, moveName)
             # reset fails counter
