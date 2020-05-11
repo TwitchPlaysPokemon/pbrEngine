@@ -39,6 +39,7 @@ class ActivePkmn:
         self.fields["ITEM"] = startingPokeset["item"]["id"]
         self.fields["STATUS"] = 0
         self.fields["TOXIC_COUNTUP"] = 0
+        self.fields["FORM"] = 0
 
         for i in range(0, 4):
             try:
