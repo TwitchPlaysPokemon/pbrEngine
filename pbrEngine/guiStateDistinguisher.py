@@ -102,15 +102,16 @@ _map_start = {
     "Wii Remote Control Sideways": PbrGuis.START_WIIMOTE_INFO,
 
     # This is the only one currently needed
-    "Choose a Game Mode"         : PbrGuis.START_MENU,
-    "Selección de modo de juego" : PbrGuis.START_MENU,  # es
-    "Choisir un mode de jeu"     : PbrGuis.START_MENU,  # fr
-    "Spielmodus wählen"          : PbrGuis.START_MENU,  # de
-    "Scegli una modalità di gioco": PbrGuis.START_MENU,  # de
+    "Choose a Game Mode"                 : PbrGuis.START_MENU,
+    "Selección de modo de juego"         : PbrGuis.START_MENU,  # es
+    "Choisir un mode de jeu"             : PbrGuis.START_MENU,  # fr
+    "Spielmodus wählen"                  : PbrGuis.START_MENU,  # de
+    "Scegli una modalità di gioco"       : PbrGuis.START_MENU,  # it
+    "ゲームモードを　えらんでください"         : PbrGuis.START_MENU,  # ja
 
-    "Choose Options"             : PbrGuis.START_OPTIONS,
-    "Save the changed options settings?": PbrGuis.START_OPTIONS_SAVE,
-    "Announcer's Voice"          : PbrGuis.START_VOICE,
-    "Colosseum Mode"             : PbrGuis.START_MODE,
-    "Continue"                   : PbrGuis.START_SAVEFILE, # doesn't work, but relying on unstucker anyway
+    "Choose Options"                     : PbrGuis.START_OPTIONS,
+    "Save the changed options settings?" : PbrGuis.START_OPTIONS_SAVE,
+    "Announcer's Voice"                  : PbrGuis.START_VOICE,
+    "Colosseum Mode"                     : PbrGuis.START_MODE,
+    "Continue"                           : PbrGuis.START_SAVEFILE, # doesn't work, but relying on unstucker anyway
 }
