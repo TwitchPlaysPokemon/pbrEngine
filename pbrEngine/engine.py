@@ -1878,10 +1878,14 @@ class PBREngine():
         self._numMoveSelections = 0  # reset fails counter
 
     def _distinguishName(self, data, side, slot):
+        logger.debug(f"Received name data: {side} slot {slot}: {data}")
         if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
+            logger.debug(f"Ignoring name data. State {self.state},"
+                         f" battle ready status: {self._fBattleStateReady}")
             return
         assert 0 <= slot and slot <= 1
         if not self._fDoubles and slot == 1:
+            logger.debug("Ignoring name data on second slot for a singles battle")
             return  # No second pokemon in singles.
         name = bytesToString(data)
         self.match.switched(side, slot, name)

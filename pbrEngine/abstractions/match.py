@@ -10,7 +10,6 @@ from copy import deepcopy
 from ..util import invertSide, swap, EventHook, sanitizeTeamIngamenames
 
 logger = logging.getLogger("pbrEngine")
-dlogger = logging.getLogger("pbrDebug")
 
 class Match(object):
     def __init__(self, timer):
@@ -125,8 +124,6 @@ class Match(object):
         # Returns the slot of the pokemon with this name.
         for i, v in enumerate(self.teams[side]):
             if v["ingamename"] == pkmn_name:
-                # dlogger.info("{}'s {} successfully recognized."
-                #              .format(side, pkmn_name))
                 return i
         raise ValueError("Didn't recognize pokemon name: <{}> ({}) {}"
                          .format(pkmn_name, side, self.teams[side]))
@@ -139,9 +136,10 @@ class Match(object):
         one swap applied. Note: In a double KO, trainers select their new slot 0 and sends
         it out, then do the same for their new slot 1.  So it is still one swap at a time.
         '''
+        logger.debug(f"Detected switch: {side}, {pkmn_name} in active slot {slot_active}")
         slot_inactive = self.getSlotFromIngamename(side, pkmn_name)
         if slot_inactive == slot_active:
-            dlogger.error("Detected switch, but active Pokemon are unchanged.")
+            logger.error("Detected switch, but active Pokemon are unchanged.")
             return
         if self.areFainted[side][slot_inactive]:
             raise ValueError("Fainted {} pokemon {} at new ingame slot_active {} swapped"
