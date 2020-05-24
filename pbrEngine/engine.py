@@ -1956,7 +1956,7 @@ class PBREngine():
             # "used" => "uses", so we get the event again if something changes!
             self._dolphin.write8(Locations.ATTACK_TEXT.value.addr + 1 +
                                  2 * match.start(3), 0x73)
-            side = self._get_side_from_player_name(match.group(1))
+            side = self._get_side_from_player_name(match.group(1), 11)
             slot = self.match.getSlotFromIngamename(side, match.group(2))
             self.match.setLastMove(side, moveName)
             # reset fails counter
