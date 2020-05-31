@@ -99,19 +99,85 @@ _map_match = {
 
 # start menu
 _map_start = {
-    "Wii Remote Control Sideways": PbrGuis.START_WIIMOTE_INFO,
+    "Wii Remote Control Sideways":
+        PbrGuis.START_WIIMOTE_INFO,
+    "Configuración horizontal del mando de Wii":
+        PbrGuis.START_WIIMOTE_INFO,  # es
+    "Type de commandes horizontal":
+        PbrGuis.START_WIIMOTE_INFO,  # fr
+    "Steuerung C":
+        PbrGuis.START_WIIMOTE_INFO,  # de
+    "Telecomando Wii - Orizzontale":
+        PbrGuis.START_WIIMOTE_INFO,  # it
+    "Ｗｉｉリモコン「よこ」":
+        PbrGuis.START_WIIMOTE_INFO,  # ja
 
     # This is the only one currently needed
-    "Choose a Game Mode"                 : PbrGuis.START_MENU,
-    "Selección de modo de juego"         : PbrGuis.START_MENU,  # es
-    "Choisir un mode de jeu"             : PbrGuis.START_MENU,  # fr
-    "Spielmodus wählen"                  : PbrGuis.START_MENU,  # de
-    "Scegli una modalità di gioco"       : PbrGuis.START_MENU,  # it
-    "ゲームモードを　えらんでください"         : PbrGuis.START_MENU,  # ja
+    "Choose a Game Mode":
+        PbrGuis.START_MENU,
+    "Selección de modo de juego":
+        PbrGuis.START_MENU,  # es
+    "Choisir un mode de jeu":
+        PbrGuis.START_MENU,  # fr
+    "Spielmodus wählen":
+        PbrGuis.START_MENU,  # de
+    "Scegli una modalità di gioco":
+        PbrGuis.START_MENU,  # it
+    "ゲームモードを　えらんでください":
+        PbrGuis.START_MENU,  # ja
 
-    "Choose Options"                     : PbrGuis.START_OPTIONS,
-    "Save the changed options settings?" : PbrGuis.START_OPTIONS_SAVE,
-    "Announcer's Voice"                  : PbrGuis.START_VOICE,
-    "Colosseum Mode"                     : PbrGuis.START_MODE,
-    "Continue"                           : PbrGuis.START_SAVEFILE, # doesn't work, but relying on unstucker anyway
+    "Choose Options":
+        PbrGuis.START_OPTIONS,
+    "Selección de opciones":
+        PbrGuis.START_OPTIONS,  # es
+    "Options":
+        PbrGuis.START_OPTIONS,  # fr
+    "Optionen wählen":
+        PbrGuis.START_OPTIONS,  # de
+    "Scegli opzione":
+        PbrGuis.START_OPTIONS,  # it
+    "せっていを　えらんでください":
+        PbrGuis.START_OPTIONS,  # ja
+
+    "Save the changed options settings?":
+        PbrGuis.START_OPTIONS_SAVE,
+    "¿Guardar la nueva configuración?":
+        PbrGuis.START_OPTIONS_SAVE,  # es
+    "Sauvegarder les nouveaux paramètres?":
+        PbrGuis.START_OPTIONS_SAVE,  # fr
+    "Änderungen übernehmen?":
+        PbrGuis.START_OPTIONS_SAVE,  # de
+    "Vuoi salvare le modifiche alle impostazioni?":
+        PbrGuis.START_OPTIONS_SAVE,  # it
+    "せっていが　へんこうされました。\nゲームデータをセーブしますか？":
+        PbrGuis.START_OPTIONS_SAVE,  # ja
+    
+    "Colosseum Mode":
+        PbrGuis.START_MODE,
+    "Modo Reto Coliseo":
+        PbrGuis.START_MODE,  # es
+    "Mode Colosseum":
+        PbrGuis.START_MODE,  # fr
+    "Colosseum-Modus":
+        PbrGuis.START_MODE,  # de
+    "Modalità Arena":
+        PbrGuis.START_MODE,  # it
+    "コロシアムモード":
+        PbrGuis.START_MODE,  # ja
+
+    # todo verify if it actually doesn't work
+    # doesn't work, but relying on unstucker anyway
+    "Continue":
+        PbrGuis.START_SAVEFILE,
+    "Continuar":
+        PbrGuis.START_SAVEFILE,  # es
+    "Continuer":
+        PbrGuis.START_SAVEFILE,  # fr
+    "Fortfahren":
+        PbrGuis.START_SAVEFILE,  # de
+    "Continua":
+        PbrGuis.START_SAVEFILE,  # it
+    "つづきから　はじめる":
+        PbrGuis.START_SAVEFILE,  # ja
+
 }
