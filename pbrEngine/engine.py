@@ -410,6 +410,8 @@ class PBREngine():
         self.nonvolatileSO = {"blue": [], "red": []}
         self.nonvolatileMoveOffsetsSO = {"blue": [], "red": []}
 
+        self.distinguishedNames = {"blue": ["", ""], "red": ["", ""]}
+
         # Move selection: expect REGULAR, set next to OTHER
         # Fainted: set next to FAINTED.
         self._expectedActionCause = {"blue": [ActionCause.OTHER] * 2,
@@ -901,10 +903,18 @@ class PBREngine():
             self._setupWinResultDetection()
             if self._startingWeather:
                 self._setStartingWeather()
+            self._validateDistinguishedNames()
             self._setupActivePkmn()
             self._setupNonvolatilePkmn()
         except Exception:
             self._crash("Battle state setup failed")
+
+    def _validateDistinguishedNames(self):
+        """Ensure the distinguished names are being read correctly."""
+        logger.debug(self.match.teams['blue'][0]['ingamename'])
+        logger.debug(self.distinguishedNames['blue'][0])
+        if self.match.teams['blue'][0]['ingamename'] != self.distinguishedNames['blue'][0]:
+            self._crash("Failed to distinguish pkmn names")  # possible but highly unlikely
 
     def _setupWinResultDetection(self):
         self._win_result_addr = self._dolphinIO.readNestedAddr(NestedLocations.WIN_RESULT)
@@ -1879,6 +1889,8 @@ class PBREngine():
 
     def _distinguishName(self, data, side, slot):
         logger.debug(f"Received name data: {side} slot {slot}: {data}")
+        name = bytesToString(data)
+        self.distinguishedNames[side][slot] = name
         if self.state != EngineStates.MATCH_RUNNING or not self._fBattleStateReady:
             logger.debug(f"Ignoring name data. State {self.state},"
                          f" battle ready status: {self._fBattleStateReady}")
@@ -1887,7 +1899,6 @@ class PBREngine():
         if not self._fDoubles and slot == 1:
             logger.debug("Ignoring name data on second slot for a singles battle")
             return  # No second pokemon in singles.
-        name = bytesToString(data)
         self.match.switched(side, slot, name)
 
     def _distinguishHp(self, val, side):
