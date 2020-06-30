@@ -20,6 +20,7 @@ class EngineStates(IntEnum):
 
     MATCH_RUNNING        = 7
     MATCH_ENDED          = 8
+    BLACK_SCREEN         = 9
 
 
 @unique

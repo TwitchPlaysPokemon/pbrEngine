@@ -463,11 +463,6 @@ class PBREngine():
                      gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
         '''
         Starts to prepare a new match.
-        If we are not waiting for a new match-setup to be initiated
-        (state != WAITING_FOR_NEW), it will load the savestate anyway.
-        If that fails, it will try to start preparing as soon as possible.
-        CAUTION: issues a cancel() call first if the preparation reached
-                 the "point of no return".
         :param colosseum: colosseum enum, choose from pbrEngine.Colosseums
         :param pkmn_blue: array with dictionaries of team blue's pokemon
         :param pkmn_red: array with dictionaries of team red's pokemon
@@ -483,7 +478,7 @@ class PBREngine():
             logger.warning("PBR is not yet ready for a new match")
             gevent.sleep(1)
 
-        if self.state > EngineStates.WAITING_FOR_NEW:
+        if self.state > EngineStates.WAITING_FOR_NEW and self.state != EngineStates.BLACK_SCREEN:
             logger.warning("Invalid match preparation state: {}. Crashing"
                            .format(self.state))
             self._crash("Early preparation start")
@@ -506,8 +501,9 @@ class PBREngine():
         if self.state == EngineStates.WAITING_FOR_NEW:
             self._selectFreeBattle()
         else:
-            assert self.state < EngineStates.WAITING_FOR_NEW
-            self._fWaitForNew = False
+            # The engine is either on a black screen or still working its way past the start menus.
+            self._dolphin.resume()  # Resume in case we're paused on a black screen.
+            self._fWaitForNew = False  # When we get to PbrGuis.MENU_BATTLE_TYPE, proceed with setup.
 
     def _selectFreeBattle(self):
         '''
@@ -1363,7 +1359,18 @@ class PBREngine():
         # Wait a bit, because manually selecting forfeit will set the cursor to 1 a bit
         # prematurely (only relevant when debugging)
         logger.info("Selecting quit in 30 frames")
-        self._selectLater(30, 3)  # Select Quit
+        self.timer.spawn_later(30, self._quitAndPause).link_exception(_logOnException)
+        # self._selectLater(30, 3)  # Select Quit
+
+    def _quitAndPause(self):
+        self._select(3)  # Select quit
+        # Sleep a few frames so pbr gets paused on a black screen.
+        # On my i5, anywhere between 45 and 100 works.  The timing is not affected by whether the
+        # match had an increased animation speed.
+        self.timer.sleep(70)
+        self._dolphin.pause()
+        self._setState(EngineStates.BLACK_SCREEN)
+
 
     def _nextPkmn(self):
         '''
