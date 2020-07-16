@@ -2,10 +2,10 @@
 from setuptools import setup, find_packages
 setup(
     name="pbrengine",
-    version="0.9.7.6",
+    version="0.9.8.0",
     packages=find_packages(),
     package_dir={"pbrEngine": "pbrEngine"},
-    package_data={"pbrEngine": ["eps/libeps32.dll", "eps/libeps64.dll", "eps/libeps.so", "eps/template_pokemon.epsd"]},
+    package_data={"pbrEngine": ["eps/libeps32.dll", "eps/libeps64.dll", "eps/libeps.so", "eps/template_pokemon.epsd", "data/*"]},
     install_requires=['dolphinWatch>=0.3'],
 
     author="Felk",

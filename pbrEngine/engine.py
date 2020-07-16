@@ -21,6 +21,15 @@ from contextlib import suppress
 from copy import deepcopy
 from datetime import datetime, timedelta
 
+try:
+    import importlib.resources as pkg_resources
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as pkg_resources
+
+# relative-import the *package* containing data, such as type effectiveness chart bytes
+from . import data as pbrData
+
 from .eps import get_pokemon_from_data
 
 from .memorymap.addresses import Locations, NestedLocations, NonvolatilePkmnOffsets, BattleSettingsOffsets, \
@@ -460,7 +469,8 @@ class PBREngine():
     ####################################################
 
     def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0,
-                     gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None):
+                     gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None,
+                     effectiveness='normal'):
         '''
         Starts to prepare a new match.
         :param colosseum: colosseum enum, choose from pbrEngine.Colosseums
@@ -495,6 +505,7 @@ class PBREngine():
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
         self._language = language
+        self._effectiveness = effectiveness
         if battleText:
             self._battleText = battleText
 
@@ -1295,12 +1306,21 @@ class PBREngine():
         # that now.
         gevent.spawn(self._setFov, self._matchFov).link_exception(_logOnException)
         gevent.spawn(self._setFieldEffectStrength, self._matchFieldEffectStrength).link_exception(_logOnException)
+        gevent.spawn(self._setEffectiveness, self._effectiveness).link_exception(_logOnException)
         self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
         self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
         self.timer.spawn_later(300, self._setupPreBattleTeams).link_exception(self._crashOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
         self.lastStartTime = datetime.utcnow()
+
+    def _setEffectiveness(self, effectiveness):
+        # Offset is calculated from these assembly instructions so that this will yield the
+        # correct type matchup address- even if Stars decides to move the address later.
+        addr = (self._dolphinIO.read16(0x803be7c6, numAttempts=1) << 16 |
+                self._dolphinIO.read16(0x803be7cA, numAttempts=1))
+        effectivenessBytes = pkg_resources.read_binary(pbrData, f'effectiveness-{effectiveness}.bin')
+        self._dolphin.writeMulti(addr, bytearray(effectivenessBytes))
 
     def _matchStartDelayed(self):
         # just after the "whoosh" sound, and right before the colosseum becomes visible
