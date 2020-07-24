@@ -141,7 +141,7 @@ class DolphinIO:
                     break
                 faultyPath = LocPath(path)
                 faultyPath.append(val + offset)
-                logger.error("Location detection for {} failed attempt {}/{}. Path: {}"
+                logger.warning("Location detection for {} failed attempt {}/{}. Path: {}"
                              .format(nestedLocation.name, i, maxAttempts, faultyPath))
                 gevent.sleep(0.1 * (i + 1))  # Sleep a bit, this helps a lot with bad reads
             loc = val + offset

@@ -1028,9 +1028,9 @@ class PBREngine():
         moveReads = []
         side_addresses = (
             ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE,
-                                                    readsPerAttempt=1)),
+                                                    maxAttempts=50, readsPerAttempt=1)),
             ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED,
-                                                   readsPerAttempt=1)))
+                                                   maxAttempts=5, readsPerAttempt=1)))
         for side, preBattleLoc in side_addresses:
             for slotSO, pokeset in enumerate(self.match.teams[side]):
                 self.nonvolatileMoveOffsetsSO[side].append(None)
@@ -1309,7 +1309,7 @@ class PBREngine():
         gevent.spawn(self._setEffectiveness, self._effectiveness).link_exception(_logOnException)
         self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
         self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
-        self.timer.spawn_later(300, self._setupPreBattleTeams).link_exception(self._crashOnException)
+        self.timer.spawn_later(250, self._setupPreBattleTeams).link_exception(self._crashOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
         self.lastStartTime = datetime.utcnow()
