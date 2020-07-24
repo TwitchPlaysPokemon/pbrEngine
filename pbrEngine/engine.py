@@ -987,6 +987,8 @@ class PBREngine():
         self._dolphin.pause()
         gevent.sleep(0.1)
         self._dolphinIO.writeMulti(writes)
+        gevent.sleep(0.5)
+        self._dolphinIO.writeMulti(writes)  # Inject again, hopefully prevents bad eggs?
         gevent.sleep(0.1)
         self._dolphin.resume()
         self.timer.sleep(20)
