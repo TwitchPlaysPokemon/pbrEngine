@@ -837,7 +837,7 @@ class PBREngine():
         while True:
             self.timer.sleep(20, raiseIfNotConnected=False)
             if self.state in (EngineStates.MATCH_RUNNING, EngineStates.WAITING_FOR_NEW,
-                              EngineStates.WAITING_FOR_START):
+                              EngineStates.WAITING_FOR_START, EngineStates.MATCH_ENDED):
                 continue
             if self.state == EngineStates.INIT:
                 limit = 45  # Spam A to get us through a bunch of menus
