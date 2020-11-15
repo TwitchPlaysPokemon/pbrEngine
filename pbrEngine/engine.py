@@ -1030,7 +1030,7 @@ class PBREngine():
         moveReads = []
         side_addresses = (
             ("blue", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_BLUE,
-                                                    maxAttempts=50, readsPerAttempt=1)),
+                                                    maxAttempts=15, readsPerAttempt=1)),
             ("red", self._dolphinIO.readNestedAddr(NestedLocations.PRE_BATTLE_RED,
                                                    maxAttempts=5, readsPerAttempt=1)))
         for side, preBattleLoc in side_addresses:
@@ -1298,6 +1298,7 @@ class PBREngine():
                 self._enableBossMusic()  # if the avatar is a special avatar (style above 6), enable the boss battle music
         else:
             self.disableMusic()
+
         self._pressTwo()  # Confirms red's order selection, which starts the match
         self._setAnimSpeed(1.0)
         # In about 2 seconds, PBR will set the size of the HP bars (the ones that show
@@ -1309,9 +1310,15 @@ class PBREngine():
         gevent.spawn(self._setFov, self._matchFov).link_exception(_logOnException)
         gevent.spawn(self._setFieldEffectStrength, self._matchFieldEffectStrength).link_exception(_logOnException)
         gevent.spawn(self._setEffectiveness, self._effectiveness).link_exception(_logOnException)
-        self.timer.spawn_later(330, self._matchStartDelayed).link_exception(_logOnException)
-        self.timer.spawn_later(450, self._disableBlur).link_exception(_logOnException)
-        self.timer.spawn_later(250, self._setupPreBattleTeams).link_exception(self._crashOnException)
+
+        # Add some more presses since this match occasionally doesn't start with just one press.
+        for _ in range(5):
+            self._pressTwo()  # Confirms red's order selection, which starts the match
+            self.timer.sleep(5)
+
+        self.timer.spawn_later(300, self._matchStartDelayed).link_exception(_logOnException)
+        self.timer.spawn_later(420, self._disableBlur).link_exception(_logOnException)
+        self.timer.spawn_later(220, self._setupPreBattleTeams).link_exception(self._crashOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
         self.lastStartTime = datetime.utcnow()
