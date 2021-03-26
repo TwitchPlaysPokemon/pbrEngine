@@ -158,7 +158,7 @@ class PBREngine():
         arg4: <success> whether the move is successful.
               I.e., it doesn't miss or fail.  For a move with multiple targets, this is 
               true if the move succeeds against at least one target.
-        arg4: <obj> object originally returned by the action-callback that led
+        arg5: <obj> object originally returned by the action-callback that led
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
         self.on_attack = EventHook(side=str, slot=int, moveindex=int, movename=str,
@@ -1734,8 +1734,6 @@ class PBREngine():
     def _distinguishMoveSuccess(self, val):
         if self.state != EngineStates.MATCH_RUNNING:
             return
-        if val not in (0x80BD9478, 0):
-            logger.info(f"move success was {val:x}")
         self._nextMoveSuccess = val == 0x80BD9478
 
     def _distinguishBattleResultText(self, val):

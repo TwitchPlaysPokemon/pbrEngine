@@ -40,8 +40,8 @@ class AnnouncerWatch:
         self._channelVal = [NO_TRACK, NO_TRACK]          # Most recently seen value on each channel.
         self._prevChannelVal = [NO_TRACK, NO_TRACK]      # Value prior to the most recently seen value on each channel.
         self._isChannelPlaying = [False, False]          # Most recently seen value on each channel flag.
-        self._trackPlayDetections = [-1, -1]             # Which tracks we've detected as playing on each channel.
-                                                         #   We return this value to None when a track is unloaded.
+        self._trackPlayDetections = [NO_TRACK, NO_TRACK] # Which tracks we've detected as playing on each channel.
+                                                         #   We return this value to NO_TRACK when a track is unloaded.
         self._tracks = {}                                # All PBR tracks (as Track objects) by their infoindex.
 
         self_path = os.path.dirname(os.path.abspath(__file__))
@@ -93,7 +93,7 @@ class AnnouncerWatch:
             # Clear play detection for this track.  That way if it gets loaded and played again,
             # we won't mistakenly assume we've already detected this track to have played already.
             # PBR has brief (~.4s) silent tracks that it does occasionally load and play again in this fashion.
-            self._trackPlayDetections[channel] = -1
+            self._trackPlayDetections[channel] = NO_TRACK
             if curVal == 0 and prevVal == NO_TRACK:
                 # Ignore- returning to NO_TRACK after brief invalid read value.
                 logChannelValue(newVal, channel, "NEW_VAL_IGNORE")
