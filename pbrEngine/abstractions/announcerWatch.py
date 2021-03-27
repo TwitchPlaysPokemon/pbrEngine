@@ -164,7 +164,7 @@ class AnnouncerWatch:
             else:
                 if infoindex == self._trackPlayDetections[channel]:
                     # Ignore- already queued this track for playing.
-                    # I don't think this ever happens, but better to keep it in.
+                    # Occurs if the flag turns off briefly due to an invalid 0 read value.
                     logChannelValue(infoindex, channel, "FLAG_PLAY_REDUNDANT")
                 else:
                     # Assume PBR is playing the track on this channel.
