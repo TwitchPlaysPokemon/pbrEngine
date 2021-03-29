@@ -379,7 +379,7 @@ class PBREngine():
             self.disableMusic()
             self._musicCurrentlyEnabled = False
         else:
-            self.enableMusic()
+            self.enableMusic(False)
             self._musicCurrentlyEnabled = True
 
     def _subscribe(self, loc, callback):
@@ -451,6 +451,7 @@ class PBREngine():
             self.disableMusic()
             self._musicCurrentlyEnabled = False
         self._language = getLanguage("english")
+        self._defeatist = False
         # Leave entries blank for default values
         self._battleText = {
             "OPENING_LINE1": "",  # Defaults to "<> Colosseum"
@@ -470,7 +471,7 @@ class PBREngine():
 
     def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0,
                      gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None,
-                     effectiveness='normal'):
+                     effectiveness='normal', defeatist=False):
         '''
         Starts to prepare a new match.
         :param colosseum: colosseum enum, choose from pbrEngine.Colosseums
@@ -505,6 +506,7 @@ class PBREngine():
         self._inputTimer = inputTimer
         self._battleTimer = battleTimer
         self._language = language
+        self._defeatist = defeatist
         self._effectiveness = effectiveness
         if battleText:
             self._battleText = battleText
@@ -720,13 +722,15 @@ class PBREngine():
             loc, count, path = song
             self._disableSong(loc, count)
 
-    def enableMusic(self):
+    def enableMusic(self, defeatist):
         """
         Enables the music in the game for the sections that pbrEngine usually navigates
         """
         for song in self.music:
             loc, count, path = song
             self._enableSong(loc, path)
+        if defeatist:
+            self._enableSong(Locations.SONG_FANFARE_COMPLETED, "/sound/ME_Loose.brstm")
 
     #######################################################
     #             Below are helper functions.             #
@@ -1292,7 +1296,7 @@ class PBREngine():
         logger.info("Starting PBR match")
         self._injectAvatars()
         if self._musicCurrentlyEnabled:
-            self.enableMusic()
+            self.enableMusic(self._defeatist)
             if (self.avatars["blue"]["APPEARANCE"]["CHARACTER_STYLE"] > 6 or
                     self.avatars["red"]["APPEARANCE"]["CHARACTER_STYLE"] > 6):
                 self._enableBossMusic()  # if the avatar is a special avatar (style above 6), enable the boss battle music
@@ -1371,7 +1375,7 @@ class PBREngine():
             self.disableMusic()
             self._musicCurrentlyEnabled = False
         else:
-            self.enableMusic()
+            self.enableMusic(False)
             self._musicCurrentlyEnabled = True
         self._setAnnouncer(True)  # Or it might not work for next match
         self._setAnimSpeed(self._increasedSpeed)  # To move through menus quickly
