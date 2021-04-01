@@ -7,11 +7,7 @@ Created on 09.09.2015
 import gevent
 import random
 import re
-import logging
 import logging.handlers
-import os
-import traceback
-import socket
 import dolphinWatch
 import pokecat
 from dolphinWatch import DisconnectReason, DolphinNotConnected
@@ -19,7 +15,7 @@ from functools import partial
 from enum import Enum
 from contextlib import suppress
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 
 try:
     import importlib.resources as pkg_resources
@@ -41,6 +37,7 @@ from .states import PbrGuis, EngineStates
 from .util import bytesToString, stringToBytes, floatToIntRepr, EventHook, killUnlessCurrent, sanitizeAvatarNames
 from .abstractions import timer, cursor, match
 from .abstractions.dolphinIO import DolphinIO
+from .abstractions.announcerWatch import AnnouncerWatch
 from .avatars import generateDefaultAvatars, CATCHPHRASE_BYTE_LIMITS
 from .activePkmn import ActivePkmn
 from .nonvolatilePkmn import NonvolatilePkmn
@@ -130,6 +127,7 @@ class PBREngine():
         self.match = match.Match(self.timer)
         self.match.on_switch += self._switched
         self.match.on_faint += self._match_faint
+
         # event callbacks
         '''
         Event of the winner being determined.
@@ -157,11 +155,26 @@ class PBREngine():
               CAUTION: broken- needs fixing or removal
         arg3: <movename> name of the move used.
               CAUTION: The attacking pkmn might not have this attack (e.g. Metronome)
-        arg4: <obj> object originally returned by the action-callback that led
+        arg4: <success> whether the move is successful.
+              I.e., it doesn't miss or fail.  For a move with multiple targets, this is 
+              true if the move succeeds against at least one target.
+        arg5: <obj> object originally returned by the action-callback that led
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
-        self.on_attack = EventHook(side=str, slot=int, moveindex=int,
-                                   movename=str, teams=dict, obj=object)
+        self.on_attack = EventHook(side=str, slot=int, moveindex=int, movename=str,
+                                   success=bool, teams=dict, obj=object)
+
+        '''
+        Event of the announcer speaking a line.
+        arg0: <infoindex> Announcer lines are stored as individual tracks in the PBR ISO's 
+              pbr_sounds.brsar archive. The infoIndex of a track corresponds to the track's 
+              unique index in the INFO table of this archive.
+        arg1: <duration> Duration of the announcer line in seconds.
+        arg2: <transcription> English transcription of the announcer line.
+        arg3: <path> Relative path of the WAV sound, as per brawlbox extraction.
+        '''
+        self.on_announcer_line = EventHook(infoindex=int, duration=float,
+                                           transcription=str, path=str)
         '''
         Event of a pokemon fainting.
         arg0: <side> "blue" "red"
@@ -201,6 +214,8 @@ class PBREngine():
         self.on_stat_update = EventHook(type=str, data=dict)
         self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
+        self._announcerWatch = AnnouncerWatch(self.on_announcer_line)
+
         self._increasedSpeed = 20.0
         self._lastInputFrame = 0
         self._lastInput = 0
@@ -225,6 +240,7 @@ class PBREngine():
         self._inputTimer = 0  # no limit
         self._battleTimer = 0  # no limit
         self._fConnected = False
+
         self.reset()
 
         self.music = [(Locations.SONG_TITLE, 6, "sound/Title.brstm"),
@@ -330,6 +346,14 @@ class PBREngine():
         self._subscribe(Locations.CURRENT_SLOT.value, self._distinguishSlot)
         self._subscribeMulti(Locations.ATTACK_TEXT.value, self._distinguishAttack)
         self._subscribeMulti(Locations.INFO_TEXT.value, self._distinguishInfo)
+
+        self._subscribe(Locations.ANNOUNCER_CHANNEL0.value, partial(self._distinguishAnnouncerChannel, channel=0))
+        self._subscribe(Locations.ANNOUNCER_CHANNEL1.value, partial(self._distinguishAnnouncerChannel, channel=1))
+        self._subscribe(Locations.ANNOUNCER_CHANNEL0_IS_PLAYING.value,
+                        partial(self._distinguishAnnouncerChannelIsPlaying, channel=0))
+        self._subscribe(Locations.ANNOUNCER_CHANNEL1_IS_PLAYING.value,
+                        partial(self._distinguishAnnouncerChannelIsPlaying, channel=1))
+        self._subscribe(Locations.MOVE_WILL_SUCCEED.value, self._distinguishMoveSuccess)
         self._subscribe(Locations.HP_BLUE.value,
                         partial(self._distinguishHp, side="blue"))
         self._subscribe(Locations.HP_RED.value,
@@ -414,6 +438,7 @@ class PBREngine():
         self._fDoubles = False
         self._move_select_followup = None
         self._bpGroupsLoc = None
+        self._nextMoveSuccess = False
 
         self.active = {"blue": [], "red": []}
         self.nonvolatileSO = {"blue": [], "red": []}
@@ -508,6 +533,7 @@ class PBREngine():
         self._language = language
         self._loseFanfare = loseFanfare
         self._effectiveness = effectiveness
+        self._announcerWatch.enabled = self._language.code == "en"
         if battleText:
             self._battleText = battleText
 
@@ -1698,6 +1724,23 @@ class PBREngine():
     #          certain value changes.            #
     ##############################################
 
+    def _distinguishAnnouncerChannel(self, val, channel):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if self._announcerWatch:
+            self._announcerWatch.onNewTrackValue(val, channel)
+
+    def _distinguishAnnouncerChannelIsPlaying(self, val, channel):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        if self._announcerWatch:
+            self._announcerWatch.onNewTrackPlayingFlag(bool(val), channel)
+
+    def _distinguishMoveSuccess(self, val):
+        if self.state != EngineStates.MATCH_RUNNING:
+            return
+        self._nextMoveSuccess = val == 0x80BD9478
+
     def _distinguishBattleResultText(self, val):
         logger.debug("Detected battle result text: %s" % val)
         if self.state != EngineStates.MATCH_RUNNING or self._writingBattleResultText:
@@ -2017,6 +2060,7 @@ class PBREngine():
                            slot=slot,
                            moveindex=0,  # FIXME or remove me
                            movename=moveName,
+                           success=self._nextMoveSuccess,
                            teams=self.match.teamsCopy(),
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None

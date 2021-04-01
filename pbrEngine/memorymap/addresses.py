@@ -189,10 +189,20 @@ class Locations(Enum):
 
     MESSAGE_DATA = Loc(0x8063e90c, 0x4)  # If this breaks, try 0x4fcf20
 
+    ANNOUNCER_CHANNEL0 = Loc(0x90A96224, 0x4)
+    ANNOUNCER_CHANNEL1 = Loc(0x90A963F8, 0x4)
+    ANNOUNCER_CHANNEL0_IS_PLAYING = Loc(0x90A96211, 0x1)
+    ANNOUNCER_CHANNEL1_IS_PLAYING = Loc(0x90A963E5, 0x1)
+
+    # 80BD9478 when a move will succeed, 0 when it won't.
+    # Read this to tell if a move will work when "Team x used Y" appears (but before "x missed/failed/etc" appears)
+    MOVE_WILL_SUCCEED = Loc(0x80C7E0AC, 0x4)
+
     # POINTER_BP_STRUCT = Loc(0x918F4FFC, 4)
 
     # PRE_BATTLE_BLUE = Loc(0x922b8bc0, 4)
     # PRE_BATTLE_RED = Loc(0x922b8bc0, 4)
+
 
 class NestedLocations(Enum):
     # Pointer to the first of three groups of battle passes.
