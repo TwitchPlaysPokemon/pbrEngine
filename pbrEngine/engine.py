@@ -496,7 +496,7 @@ class PBREngine():
 
     def matchPrepare(self, teams, colosseum, fDoubles=False, startingWeather=None, inputTimer=0, battleTimer=0,
                      gui_group=GuiPositionGroups.MAIN, language=getLanguage("english"), battleText=None,
-                     effectiveness='normal', loseFanfare=False):
+                     effectiveness='normal', loseFanfare=False, blurRemovalEnabled=True):
         '''
         Starts to prepare a new match.
         :param colosseum: colosseum enum, choose from pbrEngine.Colosseums
@@ -533,6 +533,7 @@ class PBREngine():
         self._language = language
         self._loseFanfare = loseFanfare
         self._effectiveness = effectiveness
+        self._blurRemovalEnabled = blurRemovalEnabled
         self._announcerWatch.enabled = self._language.code == "en"
         if battleText:
             self._battleText = battleText
@@ -1348,7 +1349,8 @@ class PBREngine():
             self.timer.sleep(5)
 
         self.timer.spawn_later(300, self._matchStartDelayed).link_exception(_logOnException)
-        self.timer.spawn_later(420, self._disableBlur).link_exception(_logOnException)
+        if self._blurRemovalEnabled:
+            self.timer.spawn_later(420, self._disableBlur).link_exception(_logOnException)
         self.timer.spawn_later(220, self._setupPreBattleTeams).link_exception(self._crashOnException)
         # match is running now
         self._setState(EngineStates.MATCH_RUNNING)
