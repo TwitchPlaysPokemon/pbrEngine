@@ -75,7 +75,7 @@ def onState(state):
         pbr.matchStart()
 
 
-def onAttack(side, slot, moveindex, movename, teams, obj):
+def onAttack(side, slot, moveindex, movename, success, teams, obj):
     mon = pbr.match.teams[side][slot]
     display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
