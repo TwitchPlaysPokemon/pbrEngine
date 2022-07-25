@@ -149,20 +149,25 @@ class PBREngine():
         Event of a pokemon attacking.
         arg0: <side> "blue" "red"
         arg1: <slot> team index of the pokemon attacking.
-        arg2: <moveindex> 0-3, index of move used.
-              CAUTION: broken- needs fixing or removal
-        arg3: <movename> name of the move used.
+        arg2: <movename> name of the move used.
               CAUTION: The attacking pkmn might not have this attack (e.g. Metronome)
-        arg4: <success> whether the move is successful.
+        arg3: <success> whether the move is successful.
               I.e., it doesn't miss or fail.  For a move with multiple targets, this is 
               true if the move succeeds against at least one target.
-        arg5: <teams> Dict of `side: team` for both blue and red sides, where each
+        arg4: <teams> Dict of `side: team` for both blue and red sides, where each
                 team is a list of that team's pokesets in ingame order at callback time.
+        arg5: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
         arg6: <obj> object originally returned by the action-callback that led
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
+              
+        Currently only works for matches displaying English "<team>'s <pkmn> used <move>" text.
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
-        self.on_attack = EventHook(side=str, slot=int, moveindex=int, movename=str,
-                                   success=bool, teams=dict, obj=object)
+        self.on_attack = EventHook(side=str, slot=int, movename=str, success=bool,
+                                   teams=dict, slotConvert=callable, obj=object)
 
         '''
         Event of the announcer speaking a line.
@@ -2065,7 +2070,7 @@ class PBREngine():
         # convert, then remove "!"
         moveName = bytesToString(data[0x40:]).strip()[:-1]
 
-        # todo fix this, idk how to go about it but... wow
+        # Only works for English.
         match = re.search(r"^(.*?)'s (.*?) use(d)", line)
         if match:
             # invalidate the little info boxes here.
@@ -2084,10 +2089,10 @@ class PBREngine():
             self._numMoveSelections = 0
             self.on_attack(side=side,
                            slot=slot,
-                           moveindex=0,  # FIXME or remove me
                            movename=moveName,
                            success=self._nextMoveSuccess,
                            teams=self.match.teamsCopy(),
+                           slotConvert=self.match.getFrozenSlotConverter(),
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None
 
