@@ -4,6 +4,7 @@ Created on 09.09.2015
 @author: Felk
 '''
 
+import os
 import gevent
 import random
 import re
@@ -53,7 +54,8 @@ class ActionCause(Enum):
 
 
 class PBREngine():
-    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000):
+    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000,
+                 savestateDir="pbr_savestates"):
         '''
         :param actionCallback:
             Will be called when a player action needs to be determined.
@@ -121,6 +123,8 @@ class PBREngine():
         self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
         self._dolphin.onDisconnect(self._onDisconnect)
+        self._savestateDir = os.path.abspath(savestateDir)
+        os.makedirs(self._savestateDir, exist_ok=True)
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
@@ -759,6 +763,23 @@ class PBREngine():
             self._enableSong(loc, path)
         if loseFanfare:
             self._enableSong(Locations.SONG_FANFARE_COMPLETED, "/sound/ME_Loose.brstm")
+
+    def savestate(self, title=None):
+        """Take a savestate.
+
+        :param title: optional string title to include in the filename.
+                      Must not include the following characters: :?"<>|
+
+        These are saved in the savestateDir passed to PBREngine.__init__.
+        Filenames are prepended with the current UTC datetime.
+        """
+        filename = datetime.utcnow().strftime("%Y-%m-%d_%H.%M.%SZ")
+        if title:
+            filename += "_" + title
+        filename += ".sav"
+        filepath = os.path.abspath(os.path.join(self._savestateDir, filename))
+        logger.info("Saving pbr savestate to " + filepath)
+        self._dolphin.save(filepath)
 
     #######################################################
     #             Below are helper functions.             #
