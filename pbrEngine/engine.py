@@ -220,7 +220,6 @@ class PBREngine():
         "2"}
             if status is "slp", the field "rounds" (remaining slp) will be included too
         '''
-        self.on_stat_update = EventHook(type=str, data=dict)
         self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
         self._announcerWatch = AnnouncerWatch(self.on_announcer_line)
@@ -363,14 +362,6 @@ class PBREngine():
         self._subscribe(Locations.ANNOUNCER_CHANNEL1_IS_PLAYING.value,
                         partial(self._distinguishAnnouncerChannelIsPlaying, channel=1))
         self._subscribe(Locations.MOVE_WILL_SUCCEED.value, self._distinguishMoveSuccess)
-        self._subscribe(Locations.HP_BLUE.value,
-                        partial(self._distinguishHp, side="blue"))
-        self._subscribe(Locations.HP_RED.value,
-                        partial(self._distinguishHp, side="red"))
-        self._subscribe(Locations.STATUS_BLUE.value,
-                        partial(self._distinguishStatus, side="blue"))
-        self._subscribe(Locations.STATUS_RED.value,
-                        partial(self._distinguishStatus, side="red"))
         self._subscribeMulti(Locations.PNAME_BLUE.value,
                              partial(self._distinguishName, side="blue", slot=0))
         self._subscribeMulti(Locations.PNAME_BLUE2.value,
@@ -2024,31 +2015,6 @@ class PBREngine():
             logger.debug("Ignoring name data on second slot for a singles battle")
             return  # No second pokemon in singles.
         self.match.switched(side, slot, name)
-
-    def _distinguishHp(self, val, side):
-        return
-        # if val == 0 or self.state != EngineStates.MATCH_RUNNING:
-        #     return
-        # self.on_stat_update(type="hp", data={"hp": val, "side": side,
-        #                                      "slot": ???})
-
-    def _distinguishStatus(self, val, side):
-        # status = {
-        #     0x00: None,
-        #     0x08: "psn",
-        #     0x10: "brn",
-        #     0x20: "frz",
-        #     0x40: "par",
-        #     0x80: "tox"  # badly poisoned
-        # }.get(val, "slp")  # slp can be 0x01-0x07
-        # if status == "slp":
-        #     # include rounds remaining on sleep
-        #     self.on_stat_update(type="status", data={"status": status, "side": side, "rounds": val,
-        #                                              "slot": current_slot})
-        # else:
-        #     self.on_stat_update(type="status", data={"status": status, "side": side,
-        #                                              "slot": current_slot})
-        return
 
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"
