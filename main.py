@@ -23,7 +23,7 @@ from pbrEngine.states import EngineStates
 from pbrEngine import Colosseums
 
 with open("testpkmn.yaml", encoding="utf-8") as f:
-    yaml_data = yaml.load_all(f)
+    yaml_data = yaml.safe_load_all(f)
     data = [pokecat.instantiate_pokeset(pokecat.populate_pokeset(single_set)) for single_set in yaml_data]
     # reduce by shinies
     #data = [d for d in data if not d["shiny"]]
