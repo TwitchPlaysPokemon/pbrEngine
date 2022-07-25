@@ -125,12 +125,17 @@ class PBREngine():
         self._dolphin.onDisconnect(self._onDisconnect)
         self._savestateDir = os.path.abspath(savestateDir)
         os.makedirs(self._savestateDir, exist_ok=True)
+        self._lastAnnouncerChannel = 0
+        self._lastAnnouncerChannelPlayStreak = 0
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
         self.match.on_switch += self._switched
         self.match.on_faint += self._match_faint
+        # Flag to take a savestate if only once channel has been playing
+        # Should help resolve github issue #26
+        self.debugAnnouncerStreaks = False
 
         # event callbacks
         '''
@@ -1758,6 +1763,18 @@ class PBREngine():
             return
         if self._announcerWatch:
             self._announcerWatch.onNewTrackPlayingFlag(bool(val), channel)
+
+            if self.debugAnnouncerStreaks and val == 1:
+                if self._lastAnnouncerChannel == channel:
+                    self._lastAnnouncerChannelPlayStreak += 1
+                    # Get a few savestates for redundancy
+                    if self._lastAnnouncerChannelPlayStreak in (25, 30, 40, 50, 70):
+                        logger.error(f"PBR audio channel {channel} appears to be the only one working. "
+                                     f"Taking a savestate")
+                        self.savestate(f"chan{channel}streak{self._lastAnnouncerChannelPlayStreak}")
+                else:
+                    self._lastAnnouncerChannelPlayStreak = 0
+                    self._lastAnnouncerChannel = channel
 
     def _distinguishMoveSuccess(self, val):
         if self.state != EngineStates.MATCH_RUNNING:
