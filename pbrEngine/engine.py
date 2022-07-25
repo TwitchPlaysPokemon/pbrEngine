@@ -73,22 +73,11 @@ class PBREngine():
                 <fainted> List of booleans indicating which mons are fainted. Ingame order.
                 <teams> Dict of `side: team` for both blue and red sides, where each
                     team is a list of that team's pokesets in ingame order.
-                <slotConvert> Function to convert from starting order to ingame order,
-                    and vice versa.
-                    Args:
-                        <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
-                        <slotOrTeamOrTeams> This arg is not modified. It is either:
-                            slot: An integer team index.
-                            team: A list of pokesets in a team.
-                            teams: A dict containing a `blue` team and a `red` team.
-                        <side> `blue` or `red`, indicating the side of the slot or team
-                            that was passed as <slotOrTeamOrTeams>.  Not applicable if
-                            the `teams` dict was passed.
-                    Returns:
-                        If a slot was passed: An integer team index.
-                        If a team was passed: A shallow copy of the re-ordered team.
-                        If a teams dict was passed: A new dict with shallow copies of
-                            both re-ordered teams.
+                <slotConvert> Function to convert from starting order to ingame order, and
+                    vice versa, according to the game state at time of callback.
+                    See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotConverter`.
+            Data in these arguments is not live- it is all snapshotted at the time of callback, with
+            the exception of individual pokeset data in <teams>.
 
             Returns: A tuple (action, target, obj) where:
                 <action> Action. Permits 1-char string or int. One of:
@@ -167,7 +156,9 @@ class PBREngine():
         arg4: <success> whether the move is successful.
               I.e., it doesn't miss or fail.  For a move with multiple targets, this is 
               true if the move succeeds against at least one target.
-        arg5: <obj> object originally returned by the action-callback that led
+        arg5: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order at callback time.
+        arg6: <obj> object originally returned by the action-callback that led
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
         '''
         self.on_attack = EventHook(side=str, slot=int, moveindex=int, movename=str,
@@ -188,16 +179,38 @@ class PBREngine():
         Event of a pokemon fainting.
         arg0: <side> "blue" "red"
         arg1: <slot> team index of the fainted pokemon
+        arg2: <fainted> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's fainted status (bool) in ingame order.
+        arg3: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg4: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
         self.on_faint = EventHook(side=str, slot=int, fainted=list, teams=dict,
                                   slotConvert=callable)
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
-        arg1: <old_slot> team index of the pokemon called back.
-        arg2: <new_slot> team index of the pokemon now fighting.
-        arg3: <obj> object originally returned by the action-callback that lead
+        arg1: <slot_active> Ingame slot of the pokemon that was sent out.
+              0 in singles, 0 or 1 in doubles.
+        arg2: <slot_inactive> Ingame slot of the pokemon that was recalled.
+              1+ in singles, 2+ in doubles.
+        arg3: <pokeset_sentout> Pokeset of the pokemon that was sent out.
+        arg4: <pokeset_recalled> Pokeset of the pokemon that was recalled.
+        arg5: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
+        arg6: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg7: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
         self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
                                    pokeset_sentout=dict, pokeset_recalled=dict,
@@ -210,15 +223,23 @@ class PBREngine():
         '''
         self.on_infobox = EventHook(text=str)
         '''
-        Event of some stats getting updated.
-        arg0: <type> what stat type got updated (e.g. "hp")
-        arg1: <data> dictionary containing information on the new stat
-        Examples:
-        hp: {"hp": 123, "side": "blue", "slot": 0}
-        pp: {"pp": 13, "side": "red", "slot": 1}  # pp currently not supported :(
-        status: {"status": "brn/par/frz/slp/psn/tox", "side": "blue", "slot": 
-        "2"}
-            if status is "slp", the field "rounds" (remaining slp) will be included too
+        Event of pokesets getting updated.
+        arg0: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg1: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Updates are pushed:
+        - When the pokemon selection menu appears
+        - When the first move selection menu of the turn appears
+        - When the game end is detected
+        - When a pokemon faints, but only updates that pokemon's HP
+        - 1.4 seconds after a move is used, but only updates PP for the pokemon using the move
+            (English-texted PBR only)
+        
+        See pbrEngine.[activePkmn|nonvolatilePkmn].updatePokeset for what gets updated.
+        
         '''
         self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
@@ -1470,9 +1491,8 @@ class PBREngine():
             self._move_select_followup = None  # reset
         else:  # Here from faint / baton pass / etc.
             logger.debug("Updating teams (after faint / baton pass / etc)")
-            # this doesn't work- if two mons faint and need switch selections,
-            # active data is not in a valid state in between
-            # (it waits until all switches are selected before updating state)
+            # this doesn't work perfectly- if two mons faint and need switch selections,
+            # active data is not in an updated state until all switches have been selected
             self._updateLiveTeams()
             from_move_select = False
             recorded_state = self._getInputState()

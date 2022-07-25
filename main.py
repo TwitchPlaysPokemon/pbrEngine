@@ -131,6 +131,8 @@ def onCrash(reason):
     checker.reset()
 
 
+# FIXME: Add operating instructions and make this work. How does it
+#  start Dolphin?  Some other parts have probably fallen out of date too.
 def main():
     global checker, display, pbr
     #logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
