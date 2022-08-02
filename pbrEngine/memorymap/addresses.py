@@ -268,7 +268,7 @@ class NonvolatilePkmnOffsets(Enum):
     PP2             = Loc(0xA, 1)
     PP3             = Loc(0xB, 1)
 
-    TOXIC_COUNTUP   = Loc(0x92, 1)
+    #TOXIC_COUNTUP   = Loc(0x92, 1)
     STATUS          = Loc(0x93, 1)
     CURR_HP         = Loc(0x96, 2)
     MAX_HP          = Loc(0x98, 2)

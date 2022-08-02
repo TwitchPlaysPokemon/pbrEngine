@@ -35,7 +35,6 @@ class NonvolatilePkmn:
         # the match.
         self.fields["MAX_HP"] = starting_pokeset["stats"]["hp"]
         self.fields["CURR_HP"] = starting_pokeset["curr_hp"]
-        self.fields["TOXIC_COUNTUP"] = 0
         self.fields["STATUS"] = 0
         for i in range(0, 4):
             try:
