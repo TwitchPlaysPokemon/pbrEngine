@@ -4,6 +4,7 @@ Created on 09.09.2015
 @author: Felk
 '''
 
+import os
 import gevent
 import random
 import re
@@ -53,7 +54,8 @@ class ActionCause(Enum):
 
 
 class PBREngine():
-    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000):
+    def __init__(self, actionCallback, crashCallback, host="localhost", port=6000,
+                 savestateDir="pbr_savestates"):
         '''
         :param actionCallback:
             Will be called when a player action needs to be determined.
@@ -71,22 +73,11 @@ class PBREngine():
                 <fainted> List of booleans indicating which mons are fainted. Ingame order.
                 <teams> Dict of `side: team` for both blue and red sides, where each
                     team is a list of that team's pokesets in ingame order.
-                <slotConvert> Function to convert from starting order to ingame order,
-                    and vice versa.
-                    Args:
-                        <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
-                        <slotOrTeamOrTeams> This arg is not modified. It is either:
-                            slot: An integer team index.
-                            team: A list of pokesets in a team.
-                            teams: A dict containing a `blue` team and a `red` team.
-                        <side> `blue` or `red`, indicating the side of the slot or team
-                            that was passed as <slotOrTeamOrTeams>.  Not applicable if
-                            the `teams` dict was passed.
-                    Returns:
-                        If a slot was passed: An integer team index.
-                        If a team was passed: A shallow copy of the re-ordered team.
-                        If a teams dict was passed: A new dict with shallow copies of
-                            both re-ordered teams.
+                <slotConvert> Function to convert from starting order to ingame order, and
+                    vice versa, according to the game state at time of callback.
+                    See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotConverter`.
+            Data in these arguments is not live- it is all snapshotted at the time of callback, with
+            the exception of individual pokeset data in <teams>.
 
             Returns: A tuple (action, target, obj) where:
                 <action> Action. Permits 1-char string or int. One of:
@@ -121,12 +112,19 @@ class PBREngine():
         self._reconnectAttempts = 0
         self._dolphin.onConnect(self._initDolphinWatch)
         self._dolphin.onDisconnect(self._onDisconnect)
+        self._savestateDir = os.path.abspath(savestateDir)
+        os.makedirs(self._savestateDir, exist_ok=True)
+        self._lastAnnouncerChannel = 0
+        self._lastAnnouncerChannelPlayStreak = 0
 
         self.timer = timer.Timer()
         self.cursor = cursor.Cursor(self._dolphin)
         self.match = match.Match(self.timer)
         self.match.on_switch += self._switched
         self.match.on_faint += self._match_faint
+        # Flag to take a savestate if only once channel has been playing
+        # Should help resolve github issue #26
+        self.debugAnnouncerStreaks = False
 
         # event callbacks
         '''
@@ -151,18 +149,25 @@ class PBREngine():
         Event of a pokemon attacking.
         arg0: <side> "blue" "red"
         arg1: <slot> team index of the pokemon attacking.
-        arg2: <moveindex> 0-3, index of move used.
-              CAUTION: broken- needs fixing or removal
-        arg3: <movename> name of the move used.
+        arg2: <movename> name of the move used.
               CAUTION: The attacking pkmn might not have this attack (e.g. Metronome)
-        arg4: <success> whether the move is successful.
+        arg3: <success> whether the move is successful.
               I.e., it doesn't miss or fail.  For a move with multiple targets, this is 
               true if the move succeeds against at least one target.
-        arg5: <obj> object originally returned by the action-callback that led
+        arg4: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order at callback time.
+        arg5: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        arg6: <obj> object originally returned by the action-callback that led
               to this event. None if the callback wasn't called (e.g. 2nd turn Rollout)
+              
+        Currently only works for matches displaying English "<team>'s <pkmn> used <move>" text.
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
-        self.on_attack = EventHook(side=str, slot=int, moveindex=int, movename=str,
-                                   success=bool, teams=dict, obj=object)
+        self.on_attack = EventHook(side=str, slot=int, movename=str, success=bool,
+                                   teams=dict, slotConvert=callable, obj=object)
 
         '''
         Event of the announcer speaking a line.
@@ -179,16 +184,38 @@ class PBREngine():
         Event of a pokemon fainting.
         arg0: <side> "blue" "red"
         arg1: <slot> team index of the fainted pokemon
+        arg2: <fainted> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's fainted status (bool) in ingame order.
+        arg3: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg4: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
         self.on_faint = EventHook(side=str, slot=int, fainted=list, teams=dict,
                                   slotConvert=callable)
         '''
         Event of a pokemon getting sent out.
         arg0: <side> "blue" "red"
-        arg1: <old_slot> team index of the pokemon called back.
-        arg2: <new_slot> team index of the pokemon now fighting.
-        arg3: <obj> object originally returned by the action-callback that lead
+        arg1: <slot_active> Ingame slot of the pokemon that was sent out.
+              0 in singles, 0 or 1 in doubles.
+        arg2: <slot_inactive> Ingame slot of the pokemon that was recalled.
+              1+ in singles, 2+ in doubles.
+        arg3: <pokeset_sentout> Pokeset of the pokemon that was sent out.
+        arg4: <pokeset_recalled> Pokeset of the pokemon that was recalled.
+        arg5: <obj> object originally returned by the action-callback that lead
               to this event. None if the callback wasn't called (e.g. death)
+        arg6: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg7: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Data in these arguments is not live- it is all snapshotted at the time of 
+        callback, with the exception of individual pokeset data in <teams>.
         '''
         self.on_switch = EventHook(side=str, slot_active=int, slot_inactive=int,
                                    pokeset_sentout=dict, pokeset_recalled=dict,
@@ -201,17 +228,24 @@ class PBREngine():
         '''
         self.on_infobox = EventHook(text=str)
         '''
-        Event of some stats getting updated.
-        arg0: <type> what stat type got updated (e.g. "hp")
-        arg1: <data> dictionary containing information on the new stat
-        Examples:
-        hp: {"hp": 123, "side": "blue", "slot": 0}
-        pp: {"pp": 13, "side": "red", "slot": 1}  # pp currently not supported :(
-        status: {"status": "brn/par/frz/slp/psn/tox", "side": "blue", "slot": 
-        "2"}
-            if status is "slp", the field "rounds" (remaining slp) will be included too
+        Event of pokesets getting updated.
+        arg0: <teams> Dict of `side: team` for both blue and red sides, where each
+                team is a list of that team's pokesets in ingame order.
+        arg1: <slotConvert> Function to convert from starting order to ingame order, and 
+              vice versa, according to the game state at time of callback.
+              See :obj:`pbrEngine.abstractions.match.getFrozenSlotConverter.frozenSlotCoverter`.
+        
+        Updates are pushed:
+        - When the pokemon selection menu appears
+        - When the first move selection menu of the turn appears
+        - When the game end is detected
+        - When a pokemon faints, but only updates that pokemon's HP
+        - 1.4 seconds after a move is used, but only updates PP for the pokemon using the move
+            (English-texted PBR only)
+        
+        See pbrEngine.[activePkmn|nonvolatilePkmn].updatePokeset for what gets updated.
+        
         '''
-        self.on_stat_update = EventHook(type=str, data=dict)
         self.on_teams_update = EventHook(teams=dict, slotConvert=callable)
 
         self._announcerWatch = AnnouncerWatch(self.on_announcer_line)
@@ -354,14 +388,6 @@ class PBREngine():
         self._subscribe(Locations.ANNOUNCER_CHANNEL1_IS_PLAYING.value,
                         partial(self._distinguishAnnouncerChannelIsPlaying, channel=1))
         self._subscribe(Locations.MOVE_WILL_SUCCEED.value, self._distinguishMoveSuccess)
-        self._subscribe(Locations.HP_BLUE.value,
-                        partial(self._distinguishHp, side="blue"))
-        self._subscribe(Locations.HP_RED.value,
-                        partial(self._distinguishHp, side="red"))
-        self._subscribe(Locations.STATUS_BLUE.value,
-                        partial(self._distinguishStatus, side="blue"))
-        self._subscribe(Locations.STATUS_RED.value,
-                        partial(self._distinguishStatus, side="red"))
         self._subscribeMulti(Locations.PNAME_BLUE.value,
                              partial(self._distinguishName, side="blue", slot=0))
         self._subscribeMulti(Locations.PNAME_BLUE2.value,
@@ -759,6 +785,23 @@ class PBREngine():
             self._enableSong(loc, path)
         if loseFanfare:
             self._enableSong(Locations.SONG_FANFARE_COMPLETED, "/sound/ME_Loose.brstm")
+
+    def savestate(self, title=None):
+        """Take a savestate.
+
+        :param title: optional string title to include in the filename.
+                      Must not include the following characters: :?"<>|
+
+        These are saved in the savestateDir passed to PBREngine.__init__.
+        Filenames are prepended with the current UTC datetime.
+        """
+        filename = datetime.utcnow().strftime("%Y-%m-%d_%H.%M.%SZ")
+        if title:
+            filename += "_" + title
+        filename += ".sav"
+        filepath = os.path.abspath(os.path.join(self._savestateDir, filename))
+        logger.info("Saving pbr savestate to " + filepath)
+        self._dolphin.save(filepath)
 
     #######################################################
     #             Below are helper functions.             #
@@ -1453,9 +1496,8 @@ class PBREngine():
             self._move_select_followup = None  # reset
         else:  # Here from faint / baton pass / etc.
             logger.debug("Updating teams (after faint / baton pass / etc)")
-            # this doesn't work- if two mons faint and need switch selections,
-            # active data is not in a valid state in between
-            # (it waits until all switches are selected before updating state)
+            # this doesn't work perfectly- if two mons faint and need switch selections,
+            # active data is not in an updated state until all switches have been selected
             self._updateLiveTeams()
             from_move_select = False
             recorded_state = self._getInputState()
@@ -1738,6 +1780,18 @@ class PBREngine():
         if self._announcerWatch:
             self._announcerWatch.onNewTrackPlayingFlag(bool(val), channel)
 
+            if self.debugAnnouncerStreaks and val == 1:
+                if self._lastAnnouncerChannel == channel:
+                    self._lastAnnouncerChannelPlayStreak += 1
+                    # Get a few savestates for redundancy
+                    if self._lastAnnouncerChannelPlayStreak in (25, 30, 40, 50, 70):
+                        logger.error(f"PBR audio channel {channel} appears to be the only one working. "
+                                     f"Taking a savestate")
+                        self.savestate(f"chan{channel}streak{self._lastAnnouncerChannelPlayStreak}")
+                else:
+                    self._lastAnnouncerChannelPlayStreak = 0
+                    self._lastAnnouncerChannel = channel
+
     def _distinguishMoveSuccess(self, val):
         if self.state != EngineStates.MATCH_RUNNING:
             return
@@ -1987,31 +2041,6 @@ class PBREngine():
             return  # No second pokemon in singles.
         self.match.switched(side, slot, name)
 
-    def _distinguishHp(self, val, side):
-        return
-        # if val == 0 or self.state != EngineStates.MATCH_RUNNING:
-        #     return
-        # self.on_stat_update(type="hp", data={"hp": val, "side": side,
-        #                                      "slot": ???})
-
-    def _distinguishStatus(self, val, side):
-        # status = {
-        #     0x00: None,
-        #     0x08: "psn",
-        #     0x10: "brn",
-        #     0x20: "frz",
-        #     0x40: "par",
-        #     0x80: "tox"  # badly poisoned
-        # }.get(val, "slp")  # slp can be 0x01-0x07
-        # if status == "slp":
-        #     # include rounds remaining on sleep
-        #     self.on_stat_update(type="status", data={"status": status, "side": side, "rounds": val,
-        #                                              "slot": current_slot})
-        # else:
-        #     self.on_stat_update(type="status", data={"status": status, "side": side,
-        #                                              "slot": current_slot})
-        return
-
     def _distinguishEffective(self, data):
         # Just for the logging. Can also be "critical hit"
         if self.state != EngineStates.MATCH_RUNNING:
@@ -2041,7 +2070,7 @@ class PBREngine():
         # convert, then remove "!"
         moveName = bytesToString(data[0x40:]).strip()[:-1]
 
-        # todo fix this, idk how to go about it but... wow
+        # Only works for English.
         match = re.search(r"^(.*?)'s (.*?) use(d)", line)
         if match:
             # invalidate the little info boxes here.
@@ -2060,10 +2089,10 @@ class PBREngine():
             self._numMoveSelections = 0
             self.on_attack(side=side,
                            slot=slot,
-                           moveindex=0,  # FIXME or remove me
                            movename=moveName,
                            success=self._nextMoveSuccess,
                            teams=self.match.teamsCopy(),
+                           slotConvert=self.match.getFrozenSlotConverter(),
                            obj=self._actionCallbackObjStore[side][slot])
             self._actionCallbackObjStore[side][slot] = None
 

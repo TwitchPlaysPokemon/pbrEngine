@@ -49,12 +49,57 @@ class Match(object):
         return {"blue": list(self.teamsLive["blue"]), "red": list(self.teamsLive["red"])}
 
     def getFrozenSlotConverter(self):
+        """Return a slot converter function for the game state at current time."""
         slotSOMap = deepcopy(self.slotSOMap)
+
         def frozenSlotConverter(convertTo, slotOrTeamOrTeams, side=None):
+            """Function to convert from starting order to ingame order, and vice versa.
+
+            Args:
+                <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
+                <slotOrTeamOrTeams> This arg is not modified. It is either:
+                    slot: An integer team index.
+                    team: A list of pokesets in a team.
+                    teams: A dict containing a `blue` team and a `red` team.
+                <side> `blue` or `red`, indicating the side of the slot or team
+                    that was passed as <slotOrTeamOrTeams>.  Not applicable if
+                    the `teams` dict was passed.
+
+            Returns:
+                If a slot was passed: An integer team index.
+                If a team was passed: A shallow copy of the re-ordered team.
+                If a teams dict was passed: A new dict with shallow copies of
+                    both re-ordered teams.
+            """
             return self.slotConvert(convertTo, slotOrTeamOrTeams, side, slotSOMap)
         return frozenSlotConverter
 
     def slotConvert(self, convertTo, slotOrTeamOrTeams, side=None, slotSOMap=None):
+        """Function to convert from starting order to ingame order, and vice versa.
+
+        Args:
+            <convertTo> Either `SO` (starting order) or `IGO` (ingame order)
+            <slotOrTeamOrTeams> This arg is not modified. It is either:
+                slot: An integer team index.
+                team: A list of pokesets in a team.
+                teams: A dict containing a `blue` team and a `red` team.
+            <side> `blue` or `red`, indicating the side of the slot or team
+                that was passed as <slotOrTeamOrTeams>.  Not applicable if
+                the `teams` dict was passed.
+            <slotSOMap> Slot map to use for the conversion. If not provided, this
+                function uses self.slotSOMap for this value, which converts
+                ordering according to the LIVE game state.
+
+                To convert ordering according to game state at time X, deepcopy
+                self.slotSOMap at time X and pass that as this argument. Equivalently,
+                call getFrozenSlotConverter at time X and use the function returned.
+
+        Returns:
+            If a slot was passed: An integer team index.
+            If a team was passed: A shallow copy of the re-ordered team.
+            If a teams dict was passed: A new dict with shallow copies of
+                both re-ordered teams.
+        """
         convertTo = convertTo.upper()
         convertTo = ("SO" if convertTo == "STARTING" else
                      "IGO" if convertTo == "INGAME" else convertTo)
@@ -137,6 +182,7 @@ class Match(object):
         it out, then do the same for their new slot 1.  So it is still one swap at a time.
         '''
         logger.debug(f"Detected switch: {side}, {pkmn_name} in active slot {slot_active}")
+        # The inactive slot is whatever slot <pkmn_name> was in prior to the switch.
         slot_inactive = self.getSlotFromIngamename(side, pkmn_name)
         if slot_inactive == slot_active:
             logger.error("Detected switch, but active Pokemon are unchanged.")

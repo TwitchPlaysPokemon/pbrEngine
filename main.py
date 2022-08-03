@@ -23,7 +23,7 @@ from pbrEngine.states import EngineStates
 from pbrEngine import Colosseums
 
 with open("testpkmn.yaml", encoding="utf-8") as f:
-    yaml_data = yaml.load_all(f)
+    yaml_data = yaml.safe_load_all(f)
     data = [pokecat.instantiate_pokeset(pokecat.populate_pokeset(single_set)) for single_set in yaml_data]
     # reduce by shinies
     #data = [d for d in data if not d["shiny"]]
@@ -75,7 +75,7 @@ def onState(state):
         pbr.matchStart()
 
 
-def onAttack(side, slot, moveindex, movename, success, teams, obj):
+def onAttack(side, slot, movename, success, teams, slotConvert, obj):
     mon = pbr.match.teams[side][slot]
     display.addEvent("%s (%s) uses %s." % (mon["ingamename"], side, movename))
 
@@ -131,6 +131,8 @@ def onCrash(reason):
     checker.reset()
 
 
+# FIXME: Add operating instructions and make this work. How does it
+#  start Dolphin?  Some other parts have probably fallen out of date too.
 def main():
     global checker, display, pbr
     #logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)

@@ -40,6 +40,24 @@ class ActivePkmn:
         self.fields["STATUS"] = 0
         self.fields["TOXIC_COUNTUP"] = 0
         self.fields["FORM"] = 0
+        ivs = startingPokeset["ivs"]["hp"]
+        ivs <<= 5
+        ivs += startingPokeset["ivs"]["atk"]
+        ivs <<= 5
+        ivs += startingPokeset["ivs"]["def"]
+        ivs <<= 5
+        ivs += startingPokeset["ivs"]["spe"]
+        ivs <<= 5
+        ivs += startingPokeset["ivs"]["spA"]
+        ivs <<= 5
+        ivs += startingPokeset["ivs"]["spD"]
+        ivs <<= 2
+        self.fields["IVS_COMBINED"] = ivs
+        self.fields["STAT_ATK"] = startingPokeset["stats"]["atk"]
+        self.fields["STAT_DEF"] = startingPokeset["stats"]["def"]
+        self.fields["STAT_SPE"] = startingPokeset["stats"]["spe"]
+        self.fields["STAT_SPA"] = startingPokeset["stats"]["spA"]
+        self.fields["STAT_SPD"] = startingPokeset["stats"]["spD"]
 
         for i in range(0, 4):
             try:
@@ -181,6 +199,34 @@ class ActivePkmn:
             nonvolatile["tox"] = (1 + self.fields["TOXIC_COUNTUP"]
                                   if bool(stByte & 0x80) else 0)
 
+        if "IVS_COMBINED" in self.fields:
+            ivsCombined = self.fields["IVS_COMBINED"]
+            ivs = pokeset["ivs"]
+
+            ivsCombined >>= 2
+            ivs["spD"] = ivsCombined & 31
+            ivsCombined >>= 5
+            ivs["spA"] = ivsCombined & 31
+            ivsCombined >>= 5
+            ivs["spe"] = ivsCombined & 31
+            ivsCombined >>= 5
+            ivs["def"] = ivsCombined & 31
+            ivsCombined >>= 5
+            ivs["atk"] = ivsCombined & 31
+            ivsCombined >>= 5
+            ivs["hp"] = ivsCombined & 31
+
+        stats = pokeset["stats"]
+        if "STAT_ATK" in self.fields:
+            stats["atk"] = self.fields["STAT_ATK"]
+        if "STAT_DEF" in self.fields:
+            stats["def"] = self.fields["STAT_DEF"]
+        if "STAT_SPE" in self.fields:
+            stats["spe"] = self.fields["STAT_SPE"]
+        if "STAT_SPA" in self.fields:
+            stats["spA"] = self.fields["STAT_SPA"]
+        if "STAT_SPD" in self.fields:
+            stats["spD"] = self.fields["STAT_SPD"]
 
         # pokeset["status"] = {
         #     "slp": 0,
